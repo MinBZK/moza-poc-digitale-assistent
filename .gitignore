@@ -1,0 +1,53 @@
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtuele omgevingen
+.venv/
+venv/
+env/
+
+# Test- / lint-caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Environment
+.env
+.env.local
+*.local
+
+# Logs
+*.log
+
+# Structurizr Lite (gegenereerd)
+docs/architecture/.structurizr/
+docs/architecture/workspace.json
+
+# Dependencies
+node_modules/
+
+# Claude Code (lokaal)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Coredumps (root only — ignoreert geen toekomstige core/ source-map)
+/core

@@ -1,0 +1,42 @@
+[project]
+name = "moza-poc-digitale-assistent"
+version = "0.1.0"
+description = "PoC Digitale Assistent voor MijnOverheid Zakelijk (MOZa)"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "EUPL-1.2"
+dependencies = [
+    "anthropic>=0.39.0",
+    "openai>=1.50.0",
+    "mcp>=1.1.0",
+    "python-dotenv>=1.0.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+    "lxml>=5.0.0",
+    "httpx>=0.27.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.7",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["services/cli"]
+
+[tool.ruff.lint]
+# Initieel beperkt tot Pyflakes (F) + kritieke Pycodestyle errors (E9). Pre-existing
+# code uit moza-poc voldoet nog niet aan strenger regime; uitbreiden in vervolg-PR.
+select = ["E9", "F"]
+
+[tool.pytest.ini_options]
+testpaths = ["services/host/tests"]
+pythonpath = ["services/host"]
+asyncio_mode = "auto"

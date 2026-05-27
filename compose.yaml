@@ -1,0 +1,18 @@
+services:
+  # Host-service: FastAPI met LLM-orkestratie (Claude of VLAM) + MCP-clients.
+  # MCP-servers worden als subprocessen vanuit de host gestart via stdio
+  # (zie services/host/mcp_client.py). Daarom is er hier geen aparte service per
+  # MCP-server — de scripts worden meegekopieerd in het host-image.
+  host:
+    build:
+      context: .
+      dockerfile: services/host/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./services/host/.env
+    environment:
+      MCP_SERVER_KVK: /app/services/mcp/kvk/server.py
+      MCP_SERVER_KOOP: /app/services/mcp/koop/server.py
+      MCP_SERVER_REGELRECHT: /app/services/mcp/regelrecht/server.py
+      MCP_SERVER_RVO: /app/services/mcp/rvo/server.py

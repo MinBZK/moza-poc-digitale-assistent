@@ -1,0 +1,86 @@
+publiccodeYmlVersion: "0.5"
+name: PoC MOZa Digitale Assistent
+url: https://github.com/MinBZK/moza-poc-digitale-assistent
+landingURL: https://mijnoverheidzakelijk.nl
+platforms:
+  - web
+categories:
+  - digital-citizenship
+organisation:
+  uri: https://www.rijksoverheid.nl/ministeries/ministerie-van-binnenlandse-zaken-en-koninkrijksrelaties
+  name: Ministerie van Binnenlandse Zaken en Koninkrijksrelaties
+fundedBy:
+  - name: Ministerie van Binnenlandse Zaken en Koninkrijksrelaties
+    uri: https://www.rijksoverheid.nl/ministeries/ministerie-van-binnenlandse-zaken-en-koninkrijksrelaties
+developmentStatus: development
+softwareType: standalone/web
+intendedAudience:
+  countries:
+    - NL
+  scope:
+    - government
+description:
+  nl:
+    localisedName: MOZa Digitale Assistent
+    shortDescription: >-
+      PoC Digitale Assistent voor MijnOverheid Zakelijk (MOZa).
+    longDescription: >
+      De MOZa Digitale Assistent is een Proof of Concept voor een
+      AI-gestuurde assistent die ondernemers helpt bij vragen over
+      overheidsdienstverlening. De assistent ontsluit bronnen zoals
+      KvK, KOOP (wet- en regelgeving), RegelRecht en RVO via het
+      Model Context Protocol (MCP) en biedt:
+
+      - Een FastAPI-host die gespreksverloop en LLM-orkestratie verzorgt
+
+      - Per bron een MCP-server (KvK, KOOP, RegelRecht, RVO)
+
+      - Equivalente CLI-tools voor on-demand gebruik en als fallback
+
+
+      Deze repository bevat de broncode van de PoC Digitale Assistent.
+      Het MOZa-project bestaat uit meerdere repositories binnen de
+      MinBZK-organisatie, te herkennen aan de moza- prefix of het
+      topic mijnoverheidzakelijk.
+    features:
+      - Conversatie met LLM (Claude of VLAM)
+      - Ontsluiten van overheidsbronnen via MCP-servers
+      - CLI-tools als alternatief voor MCP
+  en:
+    shortDescription: >-
+      PoC Digital Assistant for "MijnOverheid Zakelijk" (MOZa).
+    longDescription: >
+      The MOZa Digital Assistant is a Proof of Concept for an
+      AI-driven assistant that helps entrepreneurs with questions
+      about government services. The assistant exposes sources such
+      as KvK, KOOP (legislation), RegelRecht and RVO via the Model
+      Context Protocol (MCP) and offers:
+
+      - A FastAPI host that handles conversation flow and LLM orchestration
+
+      - Per source an MCP server (KvK, KOOP, RegelRecht, RVO)
+
+      - Equivalent CLI tools for on-demand use and as a fallback
+
+
+      This repository contains the source code of the PoC Digital
+      Assistant. The MOZa project consists of multiple repositories
+      within the MinBZK organisation, identifiable by the moza- prefix
+      or the mijnoverheidzakelijk topic.
+    features:
+      - Conversation with LLM (Claude or VLAM)
+      - Exposing government sources via MCP servers
+      - CLI tools as an alternative to MCP
+legal:
+  license: EUPL-1.2
+  mainCopyrightOwner: Ministerie van Binnenlandse Zaken en Koninkrijksrelaties
+maintenance:
+  type: internal
+  contacts:
+    - name: MijnOverheid Zakelijk Team
+      email: moza@minbzk.nl
+      affiliation: Ministerie van Binnenlandse Zaken en Koninkrijksrelaties
+localisation:
+  localisationReady: false
+  availableLanguages:
+    - nl
