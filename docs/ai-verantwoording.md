@@ -112,13 +112,14 @@ blijven relevant.
 
 #### a. Voldoen aan de EU AI-verordening
 
-Wij maken geen AI-systeem maar gebruiken bestaande AI-modellen: als
-ontwikkelgereedschap (Claude Code) en als runtime-component (Claude API of een
-via VLAM beschikbaar gesteld model). De verplichtingen vallen primair op de
-aanbieder. Anthropic is ondertekenaar van de
-[General Purpose AI Code of Practice](https://digital-strategy.ec.europa.eu/en/policies/contents-code-gpai)
-van de EU. We houden bij welke AI-assistant en modellen we gebruiken en
-markeren de met AI gegenereerde output als zodanig.
+Wij ontwikkelen zelf geen AI-modellen, maar integreren bestaande modellen van
+derden in onze toepassing: Claude Code als ontwikkelgereedschap, en op runtime
+Claude (Anthropic) of een via VLAM beschikbaar gesteld model. Voor de gebruikte
+modellen rusten de verplichtingen primair op de aanbieder; voor het AI-systeem
+dat wij daarmee bouwen zijn wijzelf verantwoordelijk. Anthropic is ondertekenaar
+van de [General Purpose AI Code of Practice](https://digital-strategy.ec.europa.eu/en/policies/contents-code-gpai)
+van de EU. We houden bij welke AI-assistant en modellen we gebruiken en markeren
+de met AI gegenereerde output als zodanig.
 
 #### b. AVG en DPIA
 

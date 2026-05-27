@@ -51,3 +51,6 @@ node_modules/
 
 # Coredumps (root only: ignoreert geen toekomstige core/ source-map)
 /core
+
+# Next steps set-up repo
+NEXT_STEPS.md
