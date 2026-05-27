@@ -65,11 +65,15 @@ VLAM_TIMEOUT = int(os.getenv("VLAM_TIMEOUT", "30"))
 CLAUDE_TIMEOUT = int(os.getenv("CLAUDE_TIMEOUT", "60"))
 
 # Security: CORS-origins en API-key overrides
-# ALLOWED_ORIGINS: komma-gescheiden lijst, leeg = "*" (dev-default).
-#   Voorbeeld prod: "https://moza.overheid.nl,https://moza-test.overheid.nl"
+# ALLOWED_ORIGINS: komma-gescheiden lijst, leeg = geen CORS toegestaan
+# (browser-toegang van een andere origin wordt geweigerd). Zet expliciet
+# `ALLOWED_ORIGINS=*` voor lokale dev, of een whitelist voor productie:
+#   ALLOWED_ORIGINS=https://moza.overheid.nl,https://moza-test.overheid.nl
+# Voorheen viel een lege/ontbrekende waarde stilletjes terug op "*"; dat is
+# bewust verwijderd zodat een vergeten env-var niet onbedoeld de API openzet.
 _origins_raw = os.getenv("ALLOWED_ORIGINS", "").strip()
 ALLOWED_ORIGINS: list[str] = (
-    [o.strip() for o in _origins_raw.split(",") if o.strip()] if _origins_raw else ["*"]
+    [o.strip() for o in _origins_raw.split(",") if o.strip()] if _origins_raw else []
 )
 # ALLOW_API_KEY_OVERRIDE: als true (PoC-default), worden x-vlam-api-key en
 # x-claude-api-key headers uit de UI gerespecteerd. Zet expliciet op "false"

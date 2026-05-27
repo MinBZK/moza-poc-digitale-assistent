@@ -249,6 +249,13 @@ print(json.dumps(results, ensure_ascii=False))
 regeling_get() {
     local bwb_id="$1"
 
+    # Valideer BWB-id-format: alleen hoofdletters + cijfers (1-30 chars).
+    # Een BWB-id ziet er uit als "BWBR0001840" of "BWBV0006253".
+    if [[ ! "$bwb_id" =~ ^[A-Z0-9]{1,30}$ ]]; then
+        echo '{"error":"INVALID_INPUT","message":"Ongeldig BWB-id format (verwacht: hoofdletters/cijfers, 1-30 chars)"}' >&2
+        exit 2
+    fi
+
     if [[ "$OPT_DRY_RUN" == "true" ]]; then
         echo "[dry-run] SRU lookup: $bwb_id -> toestand URL"
         echo "[dry-run] GET https://wetten.overheid.nl/..."
@@ -271,12 +278,15 @@ regeling_get() {
         exit 2
     fi
 
-    # Extract toestand URL en haal de volledige XML op
+    # Extract toestand URL en haal de volledige XML op. bwb_id wordt via een
+    # env-var doorgegeven zodat bash hem niet in de Python-heredoc expandeert
+    # (defense in depth bovenop de input-validatie hierboven).
     local response
-    response=$(python3 -c "
-import sys, json
+    response=$(BWB_ID="$bwb_id" python3 -c "
+import os, sys, json
 from xml.etree import ElementTree as ET
 
+bwb_id = os.environ['BWB_ID']
 xml_str = sys.stdin.read()
 root = ET.fromstring(xml_str)
 
@@ -295,7 +305,7 @@ for record in root.iter('{http://docs.oasis-open.org/ns/search-ws/sruResponse}re
         break
 
 if not xml_url:
-    print(json.dumps({'error': 'NIET_GEVONDEN', 'message': f'Geen toestand gevonden voor BWB-ID: $bwb_id'}))
+    print(json.dumps({'error': 'NIET_GEVONDEN', 'message': 'Geen toestand gevonden voor BWB-ID: ' + bwb_id}))
     sys.exit(0)
 
 # Haal de volledige regeling op
@@ -305,7 +315,7 @@ with urllib.request.urlopen(req, timeout=15) as resp:
     reg_xml = resp.read()
 
 reg_root = ET.fromstring(reg_xml)
-result = {'bwb_id': '$bwb_id'}
+result = {'bwb_id': bwb_id}
 
 # Titel
 for tag in ['intitule', '{*}intitule']:

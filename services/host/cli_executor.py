@@ -39,9 +39,19 @@ async def _run_cli(cmd: list[str]) -> str:
     logger.info("  response: %d bytes", len(stdout_str))
 
     if proc.returncode != 0:
-        error_msg = stderr_str or f"CLI exit code {proc.returncode}"
-        logger.error("  FOUT (exit %d): %s", proc.returncode, error_msg)
-        return json.dumps({"error": "CLI_FOUT", "message": error_msg})
+        # Log de volledige stderr server-side (nuttig voor debug) maar geef de
+        # client alleen een generieke melding. Stderr kan API-keys, file-paden
+        # of stack traces uit subprocess-output bevatten die niet bij de
+        # frontend horen.
+        logger.error(
+            "  FOUT (exit %d): %s",
+            proc.returncode,
+            stderr_str or "(geen stderr)",
+        )
+        return json.dumps({
+            "error": "CLI_FOUT",
+            "message": f"CLI-tool faalde (exit {proc.returncode})",
+        })
 
     return stdout.decode().strip()
 
