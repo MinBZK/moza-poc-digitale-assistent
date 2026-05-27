@@ -3,7 +3,7 @@
 ![Project Status](https://img.shields.io/badge/life_cycle-pre_alpha-red)
 ![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/MinBZK/moza-poc-digitale-assistent/badge)
 
-Proof of Concept Digitale Assistent voor MijnOverheid Zakelijk (MOZa) — een
+Proof of Concept Digitale Assistent voor MijnOverheid Zakelijk (MOZa): een
 AI-gestuurde assistent die ondernemers helpt bij vragen over
 overheidsdienstverlening.
 
@@ -20,15 +20,15 @@ generatieve AI als runtime-component in een digitale overheidsdienst, conform
 de [MCP-standaard voor Generieke Interactieservices](https://gemmaonline.nl/index.php/MCP-standaard).
 De PoC bestaat uit de volgende onderdelen:
 
-- **host** — FastAPI-service met LLM-orkestratie (Claude of VLAM/Mistral) en MCP-clients
-- **mcp** — Vier MCP-servers (KvK, KOOP, RegelRecht, RVO)
-- **cli** — Equivalente CLI-tools voor on-demand gebruik en als fallback
+- **host**: FastAPI-service met LLM-orkestratie (Claude of VLAM/Mistral) en MCP-clients
+- **mcp**: Vier MCP-servers (KvK, KOOP, RegelRecht, RVO)
+- **cli**: Equivalente CLI-tools voor on-demand gebruik en als fallback
 
 ## Vereisten
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) (package/project manager)
-- Docker (optioneel — voor containerized draaien)
+- Docker (optioneel: voor containerized draaien)
 - `ANTHROPIC_API_KEY` of VLAM-credentials
 
 ## Snel starten
@@ -48,7 +48,7 @@ De assistent is bereikbaar op `http://localhost:8000`:
 
 | Endpoint | Doel |
 |----------|------|
-| `POST /chat` | Conversatie (streaming) — body `{ "message": "...", "mode": "claude" }` |
+| `POST /chat` | Conversatie (streaming): body `{ "message": "...", "mode": "claude" }` |
 | `GET /health` | Health-check van host en MCP-servers |
 | `GET /tools` | Lijst van beschikbare MCP-tools |
 | `DELETE /chat/{id}` | Wis sessie |

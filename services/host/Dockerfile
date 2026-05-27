@@ -5,7 +5,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /uvx /bin/
 
 WORKDIR /app
 
-# Project-manifest naar /app — verwacht context op repo-root (zie compose.yaml)
+# Project-manifest naar /app: verwacht context op repo-root (zie compose.yaml)
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 

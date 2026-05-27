@@ -79,8 +79,8 @@ borgen dat het resultaat eraan voldoet. AI wordt ingezet als gereedschap onder
 menselijke regie.
 
 Om de juiste expertise te betrekken streven we ernaar zo veel mogelijk
-betrokken partijen — waaronder beheerders en experts van de relevante
-standaarden — te laten meekijken met de PoC.
+betrokken partijen, waaronder beheerders en experts van de relevante
+standaarden, te laten meekijken met de PoC.
 
 ### 3) Creëer een (generatieve) AI-governance structuur
 
@@ -112,7 +112,7 @@ blijven relevant.
 
 #### a. Voldoen aan de EU AI-verordening
 
-Wij maken geen AI-systeem maar gebruiken bestaande AI-modellen — als
+Wij maken geen AI-systeem maar gebruiken bestaande AI-modellen: als
 ontwikkelgereedschap (Claude Code) en als runtime-component (Claude API of een
 via VLAM beschikbaar gesteld model). De verplichtingen vallen primair op de
 aanbieder. Anthropic is ondertekenaar van de
@@ -125,7 +125,7 @@ markeren de met AI gegenereerde output als zodanig.
 De PoC verwerkt geen persoonsgegevens; er wordt uitsluitend met fictieve/
 testdata gewerkt. Organisaties die deze code later in een pilot of productie
 zouden gebruiken, dienen op dat moment zelf te beoordelen welke AVG-
-verplichtingen van toepassing zijn, waaronder een eventuele DPIA — met name
+verplichtingen van toepassing zijn, waaronder een eventuele DPIA: met name
 omdat een digitale assistent in een productiecontext potentieel
 persoonsgegevens van eindgebruikers verwerkt.
 

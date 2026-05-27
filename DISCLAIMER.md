@@ -23,8 +23,8 @@ functioneel beproefd.
 
 ## Gebruik van generatieve AI
 
-Overheidsorganisaties die generatieve AI inzetten — waaronder het gebruik van
-deze code en de output die ermee wordt gegenereerd — dienen te voldoen aan het
+Overheidsorganisaties die generatieve AI inzetten, waaronder het gebruik van
+deze code en de output die ermee wordt gegenereerd, dienen te voldoen aan het
 [Overheidsbreed standpunt voor de inzet van generatieve AI](https://open.overheid.nl/documenten/bc03ce31-0cf1-4946-9c94-e934a62ebe73/file)
 en aan eigen beleid en kaders over AI.
 

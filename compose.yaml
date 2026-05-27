@@ -2,7 +2,7 @@ services:
   # Host-service: FastAPI met LLM-orkestratie (Claude of VLAM) + MCP-clients.
   # MCP-servers worden als subprocessen vanuit de host gestart via stdio
   # (zie services/host/mcp_client.py). Daarom is er hier geen aparte service per
-  # MCP-server — de scripts worden meegekopieerd in het host-image.
+  # MCP-server: de scripts worden meegekopieerd in het host-image.
   host:
     build:
       context: .
