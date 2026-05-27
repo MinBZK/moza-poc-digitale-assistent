@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Installeer uv (snel pip-vervanger)
 COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /uvx /bin/
