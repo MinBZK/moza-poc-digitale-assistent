@@ -48,14 +48,16 @@ De assistent is bereikbaar op `http://localhost:8000`:
 
 | Endpoint | Doel |
 |----------|------|
-| `POST /chat` | Conversatie (streaming): body `{ "message": "...", "mode": "claude" }` |
+| `POST /chat` | Conversatie (één response): body `{ "message": "...", "mode": "vlam" }` (`mode` is optioneel, default `vlam`; gebruik `claude` voor Anthropic) |
+| `POST /chat/stream` | Idem maar als Server-Sent Events stream |
 | `GET /health` | Health-check van host en MCP-servers |
 | `GET /tools` | Lijst van beschikbare MCP-tools |
-| `DELETE /chat/{id}` | Wis sessie |
+| `DELETE /chat/{session_id}` | Wis sessie |
 
 ### Met Docker
 
 ```bash
+cp services/host/.env.example services/host/.env   # eerste keer
 docker compose up --build
 ```
 
@@ -65,7 +67,8 @@ docker compose up --build
 uv run pytest
 ```
 
-Zie `services/host/tests/` voor scenario- en VLAM-toolcalling-tests.
+`services/host/tests/test_smoke.py` checkt importeerbaarheid; uitgebreide
+manuele scripts (vereisen API-keys) staan in `services/host/scripts/`.
 
 ### Lint
 
@@ -94,8 +97,10 @@ MCP_SERVER_RVO=../mcp/rvo/server.py
 
 ## Architectuur en beslissingen
 
-Architectuur- en ontwerpbeslissingen worden vastgelegd als Product Decision
-Records in [`MinBZK/moza-poc/services/decisions/`](https://github.com/MinBZK/moza-poc/tree/main/services/decisions).
+Architectuur- en routerings-beslisboom staan in
+[`docs/architecture.md`](docs/architecture.md). Ontwerpbeslissingen zijn
+vastgelegd als Product Decision Records in
+[`docs/decisions/`](docs/decisions/).
 
 ## Licentie
 

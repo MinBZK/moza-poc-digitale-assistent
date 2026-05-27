@@ -9,18 +9,18 @@ buiten pytest.
 import os
 
 
-def test_config_importeerbaar():
-    # Voorkom dat een lokaal .env de test beïnvloedt.
-    os.environ.setdefault("ANTHROPIC_API_KEY", "")
-    os.environ.setdefault("VLAM_API_KEY", "")
+def _force_no_keys():
+    os.environ["ANTHROPIC_API_KEY"] = ""
+    os.environ["VLAM_API_KEY"] = ""
 
+
+def test_config_importeerbaar():
+    _force_no_keys()
     import config  # noqa: F401
 
 
 def test_vlam_host_importeerbaar():
-    os.environ.setdefault("ANTHROPIC_API_KEY", "")
-    os.environ.setdefault("VLAM_API_KEY", "")
-
+    _force_no_keys()
     from vlam_host import VLAMHost
 
     host = VLAMHost()
