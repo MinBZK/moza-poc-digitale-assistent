@@ -128,5 +128,3 @@ Aandachtspunten:
   voor runtime-invoer van gebruikers.
 - Menselijke controle, monitoring en een terugkoppelkanaal.
 - Beoordeling tegen BIO (beveiliging) en AVG/DPIA (privacy).
-
-

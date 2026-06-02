@@ -1,0 +1,28 @@
+# Lokale kwaliteitschecks vóór elke commit. Sluit aan op .editorconfig en de
+# ruff-config in pyproject.toml (zelfde regels als de CI-stap in test.yml).
+#
+# Eenmalig installeren:   uv run pre-commit install
+# Handmatig over alles:   uv run pre-commit run --all-files
+# Versies bijwerken:      uv run pre-commit autoupdate
+default_language_version:
+  python: python3.12
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.14
+    hooks:
+      - id: ruff
+        args: [--fix]
