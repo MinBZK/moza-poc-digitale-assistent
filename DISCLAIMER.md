@@ -33,8 +33,16 @@ en aan eigen beleid en kaders over AI.
 De content wordt aangeboden zonder enige garantie van volledigheid, juistheid of
 actualiteit. Gebruik is op eigen risico.
 
-## Volledige verantwoording
+## Verantwoording
 
 Zie [`docs/ai-verantwoording.md`](docs/ai-verantwoording.md) voor de volledige
-verantwoording van het AI-gebruik in deze PoC, getoetst aan de Overheidsbrede
-handreiking voor de verantwoorde inzet van generatieve AI.
+verantwoording van het AI-gebruik bij de **ontwikkeling** van deze PoC, getoetst
+aan de Overheidsbrede handreiking voor de verantwoorde inzet van generatieve AI.
+
+Voor het **AI-systeem zelf** (de Digitale Assistent die op runtime een LLM
+aanroept) zijn aparte, voorbereidende governance-documenten opgesteld:
+- [`docs/preparation/ai-verordening.md`](docs/preparation/ai-verordening.md) (classificatie EU AI-verordening
+en Algoritmeregister).
+- [`docs/preparation/iama.md`](docs/preparation/iama.md) (startnotitie voor IAMA traject)
+
+Deze worden formeel vastgesteld vóór inzet in pilot of productie.

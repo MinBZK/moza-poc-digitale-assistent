@@ -1,6 +1,6 @@
 # Verantwoording inzet van Claude Code bij de ontwikkeling van de Digitale-Assistent-PoC
 
-**Verantwoording i.h.k.v. het Overheidsbreed Standpunt Generatieve AI, getoetst aan het stappenplan uit de bijbehorende handreiking**
+**Verantwoording i.h.k.v. het Overheidsbreed Standpunt Generatieve AI, getoetst aan het stappenplan uit de bijbehorende handreiking.**
 
 Dit document verantwoordt het gebruik van **Claude Code (Anthropic)** als
 ontwikkelgereedschap bij het bouwen van deze Proof of Concept (PoC). Voor een
@@ -18,14 +18,17 @@ documentatie, op basis van:
 
 - **IAMA** (Impact Assessment Mensenrechten en Algoritmen): brede mensenrechten-
   en kwaliteitsassessment voor algoritmische toepassingen door de overheid.
+  Zie de startnotitie [`iama.md`](preparation/iama.md).
 - **AI-verordening beslishulp**: bepaling van risicocategorie en bijbehorende
-  verplichtingen onder de EU AI Act voor het AI-systeem.
+  verplichtingen onder de EU AI Act voor het AI-systeem. Zie de voorlopige
+  classificatie in [`ai-verordening.md`](preparation/ai-verordening.md).
 - **Overheidsbreed Standpunt Generatieve AI** en bijbehorende handreiking,
   toegepast op het gebruik in het product (niet enkel in de ontwikkeling).
+  Zie de sectie "Overheidsbreed Standpunt" in [`ai-verordening.md`](preparation/ai-verordening.md).
 
-Die documenten worden los van dit bestand opgesteld zodra het AI-systeem
-verder uitgewerkt wordt. Verwijzingen verschijnen hier op het moment dat ze
-beschikbaar zijn.
+Deze documenten bestaan nu als **voorbereidende PoC-startnotities**; ze worden
+verder uitgewerkt en formeel vastgesteld zodra het AI-systeem richting pilot of
+productie gaat.
 
 ## Beschrijving van de PoC en de rol van AI
 
@@ -36,16 +39,14 @@ onderdelen.
 **Rol van AI in de ontwikkeling.** De code is grotendeels gegenereerd met de
 AI-assistant Claude Code (Anthropic). AI is ingezet voor codegeneratie en voor
 ondersteuning bij refactoring en review. Architectuur- en ontwerpbeslissingen
-worden vastgelegd in product decision records (zie
+worden vastgelegd in product decision records (PDR) (zie
 [`docs/decisions/`](decisions/)).
 
 **Menselijke review.** De review richt zich op de onderdelen die het gedrag en
 de kwaliteit van de PoC bepalen: het ontwerp (de PDR's) wordt inhoudelijk
 beoordeeld, en alle niet-testcode wordt door ontwikkelaars gereviewd voordat
 die in de hoofdbranch wordt opgenomen. Testcode wordt niet regel voor regel
-gereviewd; de werking wordt in plaats daarvan functioneel beproefd. Dit
-gebeurt via de pull-request-workflow met code-eigenaarschap (`CODEOWNERS`) en
-een CI-pijplijn met onder andere CodeQL-securityscanning en OpenSSF Scorecard.
+gereviewd; de werking wordt in plaats daarvan functioneel beproefd.
 De mens blijft eindverantwoordelijk; de AI is een hulpmiddel.
 
 Deze afbakening is een bewust onderdeel van de beproeving: we onderzoeken
@@ -54,7 +55,7 @@ die we daarbij toetsen, is dat de AI met voldoende review-stappen code van
 voldoende kwaliteit oplevert.
 
 **Gegevens.** Tijdens de ontwikkeling worden geen persoonsgegevens met de
-AI-assistant gedeeld. Er wordt uitsluitend gewerkt met fictieve en testgegevens.
+AI-assistant gedeeld. Er wordt uitsluitend gewerkt met openbare, fictieve en/of test-gegevens.
 
 **Scope-grens.** Deze verantwoording betreft uitsluitend de ontwikkeling van
 de PoC met behulp van een AI-assistant. Eventueel gebruik van de PoC in een
