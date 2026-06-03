@@ -1,0 +1,25 @@
+# Houd de build-context (en daarmee de image) klein en vrij van secrets.
+# De Dockerfile kopieert alleen pyproject.toml, uv.lock en services/{host,mcp,cli}.
+
+.git
+.github
+.venv
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# Secrets / lokale config — nooit in de image
+.env
+.env.*
+*.local
+
+# Gegenereerde frontend-mount (zie services/host/_site in .gitignore)
+_site
+services/host/_site
+
+# Niet nodig voor runtime
+docs
+node_modules
+.claude

@@ -1,0 +1,32 @@
+name: PR build check
+
+# De backend draait als ÉÉN gedeeld, intern component (`dabackend`) in deployment
+# `poc`, samen met de frontend-component `proef` (zie production.yml). Per-PR
+# preview-deploys van de backend hebben geen zin: het component is alleen in de
+# gedeelde deployments geregistreerd, en backend-PR-nummers komen niet overeen met
+# de frontend-preview-deployments. Daarom verifieert deze workflow op elke PR
+# alleen dat de backend-image bouwt (geen push, geen deploy, geen secrets).
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions: read-all
+
+concurrency:
+  group: pr-build-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Build backend image (verificatie, geen push)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: services/host/Dockerfile
+          push: false
