@@ -691,6 +691,11 @@ class VLAMHost:
     # ------------------------------------------------------------------
 
     async def _chat_claude(self, messages: list[dict]) -> str:
+        if not self.claude_client.api_key:
+            return (
+                "De Claude-backend is niet geconfigureerd. "
+                "Vul uw Claude API-sleutel in via het instellingenpaneel."
+            )
         tools = self.registry.get_anthropic_tools()
         system_prompt = get_system_prompt("claude", self.has_tools)
 

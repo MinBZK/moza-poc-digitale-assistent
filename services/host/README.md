@@ -8,7 +8,7 @@ De host is de tussenstap tussen browser en LLM. Eén proces, twee LLM-backends (
 
 | Bestand | Doel |
 |---|---|
-| `api.py` | FastAPI-applicatie. Endpoints: `POST /chat`, `POST /chat/stream`, `GET /health`, `GET /tools`, `DELETE /chat/{session_id}`, en `/<path>` voor het mounten van een statische frontend-build. |
+| `api.py` | FastAPI-applicatie. Endpoints: `POST /chat`, `POST /chat/stream`, `GET /health`, `GET /tools`, `DELETE /chat/{session_id}`. Standaard **API-only**; een statische frontend-build wordt alleen op `/` gemount als `STATIC_DIR` expliciet is gezet (zie hieronder). |
 | `vlam_host.py` | Orkestratie-laag: agentic loops voor Claude en VLAM, in MCP- en CLI-modus. Bevat ook `CLI_TOOL_DEFINITIONS_*` (zie waarschuwing hieronder). |
 | `mcp_client.py` | `MCPToolRegistry` en `MCPServerConnection`: onderhoudt verbindingen met de vier MCP-servers. |
 | `cli_executor.py` | Vertaalt `tool_use`-blokken naar CLI-commando's en voert ze uit als subprocess. |
@@ -48,6 +48,21 @@ Vereist `uv` en de repo `moza-mcp-standaard-poc` lokaal (default-pad: `../moza-m
 
 **Sync tussen `CLI_TOOL_DEFINITIONS_*` en `cli_executor.py`**: de CLI-modus gebruikt twee handmatige bronnen die op elkaar moeten passen: de tool-definities die het LLM ziet (`vlam_host.py`) en de commando-mapping die wordt uitgevoerd (`cli_executor.py`). MCP doet dit automatisch via `tools/list`. Zie [PDR-005, "CLI tool-definities zijn hardcoded"](../../docs/decisions/PDR-005-cli-vs-mcp-transport.md) en [PDR-006 § B](../../docs/decisions/PDR-006-feasibility-conclusie.md#b-synchronisatie-tussen-host-en-cli-is-niet-automatisch) voor de nu bekende sync-gaten.
 
-**`_site/` in deze map**: wordt aangemaakt door de FastAPI-mount op runtime, niet handmatig beheren. Staat in `.gitignore`.
+**API-only standaard / statische mount**: de host serveert standaard alleen de
+API. De frontend (Eleventy-site) draait apart en bereikt deze backend via een
+same-origin reverse proxy (zie de root-README). Wil je tóch een statische build
+laten meeserveren op `/`, zet dan `STATIC_DIR` naar een bestaande map; alleen dan
+mount `api.py` die map. Zonder `STATIC_DIR` logt de host "API-only".
+
+**`_site/` in deze map**: een eventueel lokaal gegenereerde frontend-build, alleen
+relevant als je `STATIC_DIR` hierheen wijst. Niet handmatig beheren; staat in
+`.gitignore`.
+
+**Deployment (ZAD)**: `.github/workflows/{preview,production}.yml` bouwen de image
+(`Dockerfile`, met MCP-servers én CLI-tools erin) en deployen naar ZAD-project
+`pm-5sj` via `RijksICTGilde/zad-actions`. De deployment is **internal-only** (geen
+publieke route) en draait **zonder LLM-sleutels**: gebruikers leveren een sleutel
+via de UI (`ALLOW_API_KEY_OVERRIDE=true`, de default). Enige vereiste secret:
+`ZAD_API_KEY`.
 
 **Streaming events**: de UI verwacht `status`, `tool`, `case`, `answer`, `error` en `done`. Zie de docstrings van `chat_stream` voor het exacte contract.

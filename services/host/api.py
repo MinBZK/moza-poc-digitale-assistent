@@ -182,13 +182,19 @@ async def health():
     }
 
 
-_default_static = Path(__file__).resolve().parent.parent.parent / "_site"
-_static_dir = Path(os.getenv("STATIC_DIR") or _default_static)
-if _static_dir.is_dir():
-    app.mount("/", StaticFiles(directory=_static_dir, html=True), name="site")
-    logging.getLogger("vlam.api").info("Statische site gemount vanuit %s", _static_dir)
+# Optionele statische frontend-mount. Standaard UIT: de host is API-only en de
+# frontend (Eleventy-site) draait apart en proxyt naar deze backend (zie README).
+# Alleen mounten als STATIC_DIR expliciet is gezet én naar een bestaande map wijst.
+_static_env = os.getenv("STATIC_DIR", "").strip()
+if _static_env and Path(_static_env).is_dir():
+    app.mount("/", StaticFiles(directory=_static_env, html=True), name="site")
+    logging.getLogger("vlam.api").info("Statische site gemount vanuit %s", _static_env)
+elif _static_env:
+    logging.getLogger("vlam.api").warning(
+        "STATIC_DIR=%s bestaat niet; host draait API-only", _static_env
+    )
 else:
-    logging.getLogger("vlam.api").warning("Geen statische site gevonden op %s", _static_dir)
+    logging.getLogger("vlam.api").info("Host draait API-only (geen STATIC_DIR gezet)")
 
 
 if __name__ == "__main__":
