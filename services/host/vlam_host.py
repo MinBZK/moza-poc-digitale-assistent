@@ -401,7 +401,7 @@ class VLAMHost:
                     timeout=CLAUDE_TIMEOUT,
                 )
                 _log_tokens("claude", response)
-            except (TimeoutError, anthropic.APIStatusError) as e:
+            except (TimeoutError, anthropic.APIError) as e:
                 logger.error("Claude-call mislukt: %s", e)
                 yield {
                     "type": "error",
@@ -468,7 +468,7 @@ class VLAMHost:
                     timeout=VLAM_TIMEOUT,
                 )
                 _log_tokens("vlam", response)
-            except (TimeoutError, openai.APIStatusError) as e:
+            except (TimeoutError, openai.APIError) as e:
                 logger.error("VLAM-call mislukt: %s", e)
                 yield {
                     "type": "error",
@@ -551,7 +551,7 @@ class VLAMHost:
                     timeout=CLAUDE_TIMEOUT,
                 )
                 _log_tokens("claude", response)
-            except (TimeoutError, anthropic.APIStatusError) as e:
+            except (TimeoutError, anthropic.APIError) as e:
                 logger.error("Claude-call (CLI-modus) mislukt: %s", e)
                 yield {
                     "type": "error",
@@ -633,7 +633,7 @@ class VLAMHost:
                     timeout=VLAM_TIMEOUT,
                 )
                 _log_tokens("vlam", response)
-            except (TimeoutError, openai.APIStatusError) as e:
+            except (TimeoutError, openai.APIError) as e:
                 logger.error("VLAM CLI-call mislukt: %s", e)
                 yield {
                     "type": "error",
@@ -716,7 +716,7 @@ class VLAMHost:
                     timeout=CLAUDE_TIMEOUT,
                 )
                 _log_tokens("claude", response)
-            except (TimeoutError, anthropic.APIStatusError) as e:
+            except (TimeoutError, anthropic.APIError) as e:
                 logger.error("Claude-call mislukt: %s", e)
                 return (
                     "De assistent is op dit moment niet bereikbaar. "
@@ -762,7 +762,7 @@ class VLAMHost:
                     timeout=VLAM_TIMEOUT,
                 )
                 _log_tokens("vlam", response)
-            except (TimeoutError, openai.APIStatusError) as e:
+            except (TimeoutError, openai.APIError) as e:
                 logger.error("VLAM-call mislukt: %s", e)
                 return (
                     "De assistent is op dit moment niet bereikbaar. "
