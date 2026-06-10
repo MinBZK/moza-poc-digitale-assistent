@@ -1,0 +1,8 @@
+# Code owners — verplichte review vóór merge.
+#
+# Routeert PR-reviews automatisch naar het MOZa-team. Onderbouwing van
+# "niet-testcode wordt menselijk gereviewd vóór merge": zie
+# docs/ai-verantwoording.md en CLAUDE.md.
+
+# Standaard: alles wordt door het MOZa-team gereviewd.
+*       @MinBZK/mijnoverheid-zakelijk
