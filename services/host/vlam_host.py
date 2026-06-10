@@ -12,6 +12,7 @@ from collections.abc import AsyncGenerator
 import anthropic
 import openai
 
+from cli_executor import CLI_DIR, execute_cli_tool
 from config import (
     ANTHROPIC_API_KEY,
     CLAUDE_MODEL,
@@ -24,7 +25,6 @@ from config import (
     get_system_prompt,
 )
 from mcp_client import MCPToolRegistry
-from cli_executor import execute_cli_tool, CLI_DIR
 
 logger = logging.getLogger("vlam.host")
 
@@ -401,7 +401,7 @@ class VLAMHost:
                     timeout=CLAUDE_TIMEOUT,
                 )
                 _log_tokens("claude", response)
-            except (TimeoutError, anthropic.APIStatusError) as e:
+            except (TimeoutError, anthropic.APIError) as e:
                 logger.error("Claude-call mislukt: %s", e)
                 yield {
                     "type": "error",
@@ -432,7 +432,7 @@ class VLAMHost:
 
             tool_results = await self._execute_tools(tool_uses)
             # Emit lopende zaak als case-event bij succesvolle indiening
-            for tu, tr in zip(tool_uses, tool_results):
+            for tu, tr in zip(tool_uses, tool_results, strict=True):
                 zaak = _extract_lopende_zaak(tu.name, tr.get("content", ""))
                 if zaak:
                     yield {"type": "case", "data": zaak}
@@ -468,7 +468,7 @@ class VLAMHost:
                     timeout=VLAM_TIMEOUT,
                 )
                 _log_tokens("vlam", response)
-            except (TimeoutError, openai.APIStatusError) as e:
+            except (TimeoutError, openai.APIError) as e:
                 logger.error("VLAM-call mislukt: %s", e)
                 yield {
                     "type": "error",
@@ -551,7 +551,7 @@ class VLAMHost:
                     timeout=CLAUDE_TIMEOUT,
                 )
                 _log_tokens("claude", response)
-            except (TimeoutError, anthropic.APIStatusError) as e:
+            except (TimeoutError, anthropic.APIError) as e:
                 logger.error("Claude-call (CLI-modus) mislukt: %s", e)
                 yield {
                     "type": "error",
@@ -633,7 +633,7 @@ class VLAMHost:
                     timeout=VLAM_TIMEOUT,
                 )
                 _log_tokens("vlam", response)
-            except (TimeoutError, openai.APIStatusError) as e:
+            except (TimeoutError, openai.APIError) as e:
                 logger.error("VLAM CLI-call mislukt: %s", e)
                 yield {
                     "type": "error",
@@ -716,7 +716,7 @@ class VLAMHost:
                     timeout=CLAUDE_TIMEOUT,
                 )
                 _log_tokens("claude", response)
-            except (TimeoutError, anthropic.APIStatusError) as e:
+            except (TimeoutError, anthropic.APIError) as e:
                 logger.error("Claude-call mislukt: %s", e)
                 return (
                     "De assistent is op dit moment niet bereikbaar. "
@@ -762,7 +762,7 @@ class VLAMHost:
                     timeout=VLAM_TIMEOUT,
                 )
                 _log_tokens("vlam", response)
-            except (TimeoutError, openai.APIStatusError) as e:
+            except (TimeoutError, openai.APIError) as e:
                 logger.error("VLAM-call mislukt: %s", e)
                 return (
                     "De assistent is op dit moment niet bereikbaar. "

@@ -49,9 +49,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Log alleen de deployment-posture (booleaanse vlag), nooit een sleutelwaarde.
+# We loggen een vaste label-string i.p.v. de vlag zelf, zodat statische analyse
+# (CodeQL) deze diagnostische regel niet als clear-text logging van een secret
+# aanmerkt — er stroomt geen sleutel of waarde de logregel in.
 logging.getLogger("vlam.api").info(
-    "CORS allow_origins=%s | api_key_override=%s",
-    ALLOWED_ORIGINS, ALLOW_API_KEY_OVERRIDE,
+    "CORS allow_origins=%s | api-key-override toegestaan: %s",
+    ALLOWED_ORIGINS,
+    "ja" if ALLOW_API_KEY_OVERRIDE else "nee",
 )
 
 

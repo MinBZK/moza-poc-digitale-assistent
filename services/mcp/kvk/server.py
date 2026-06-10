@@ -23,9 +23,9 @@ import asyncio
 import json
 import logging
 from datetime import UTC, datetime
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
-from urllib.error import HTTPError, URLError
 
 from mcp.server import Server
 from mcp.server.lowlevel.helper_types import ReadResourceContents

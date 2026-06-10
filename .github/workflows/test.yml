@@ -26,4 +26,4 @@ jobs:
       - name: Lint (ruff)
         run: uv run ruff check .
       - name: Test
-        run: uv run pytest
+        run: uv run pytest --cov=services/host --cov-report=term-missing

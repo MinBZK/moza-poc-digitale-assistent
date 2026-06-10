@@ -67,8 +67,9 @@ Volledig overzicht en de routerings-beslisboom: [`docs/architecture.md`](docs/ar
   `false` in productie). Zie `config.py`.
 - **`services/host/_site/`** wordt op runtime gemount; niet handmatig beheren
   (staat in `.gitignore`).
-- **Ruff** staat bewust beperkt op `E9` + `F` (zie `pyproject.toml`); breder
-  regime is een vervolg-PR.
+- **Ruff** dekt `E9, F, I, W, UP, B` (zie `pyproject.toml`); pycodestyle `E4`/`E7`
+  (o.a. bare-except `E722`) zijn bewust nog niet aan. Host-modules staan als
+  `known-first-party` voor importgroepering.
 - **Met AI gegenereerde commits** krijgen een `Co-Authored-By`-trailer.
 
 ## Verantwoorde inzet van AI
