@@ -13,6 +13,11 @@ import pytest
 
 
 def _reload_config(monkeypatch, **env):
+    # Stub load_dotenv: tests mogen niet afhangen van een lokale .env. Alle
+    # relevante waarden zetten we expliciet via monkeypatch hieronder.
+    import dotenv
+
+    monkeypatch.setattr(dotenv, "load_dotenv", lambda *a, **k: False)
     for key, value in env.items():
         if value is None:
             monkeypatch.delenv(key, raising=False)
@@ -60,3 +65,11 @@ def test_allowed_origins_leeg_betekent_geen_cors(monkeypatch):
 def test_allow_api_key_override_parsing(monkeypatch, raw, verwacht):
     cfg = _reload_config(monkeypatch, ALLOW_API_KEY_OVERRIDE=raw)
     assert cfg.ALLOW_API_KEY_OVERRIDE is verwacht
+
+
+def test_allow_api_key_override_default_is_true_when_unset(monkeypatch):
+    # PoC-default uit config.py / CLAUDE.md: niet gezet => true. Dit is de
+    # meest security-relevante default, dus expliciet borgen. conftest forceert
+    # alleen de LLM-keys leeg, daarom verwijderen we deze var hier zelf.
+    cfg = _reload_config(monkeypatch, ALLOW_API_KEY_OVERRIDE=None)
+    assert cfg.ALLOW_API_KEY_OVERRIDE is True
