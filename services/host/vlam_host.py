@@ -11,6 +11,7 @@ from collections.abc import AsyncGenerator
 
 import anthropic
 import openai
+
 from cli_executor import CLI_DIR, execute_cli_tool
 from config import (
     ANTHROPIC_API_KEY,

@@ -42,6 +42,12 @@ extend-exclude = ["services/cli"]
 # B   = flake8-bugbear (veelgemaakte bugs, bv. zip zonder strict=)
 select = ["E9", "F", "I", "W", "UP", "B"]
 
+[tool.ruff.lint.isort]
+# Host-modules draaien top-level op de pythonpath (services/host), dus ruff kan
+# ze niet vanzelf als first-party herkennen. Expliciet benoemen zodat ze in een
+# eigen importgroep komen i.p.v. tussen de third-party imports.
+known-first-party = ["config", "vlam_host", "cli_executor", "mcp_client", "prompts"]
+
 [tool.coverage.run]
 # Meet alleen broncode-dekking; testbestanden zelf tellen niet mee.
 omit = ["services/host/tests/*"]
