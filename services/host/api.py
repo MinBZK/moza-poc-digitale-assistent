@@ -11,13 +11,12 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from config import ALLOW_API_KEY_OVERRIDE, ALLOWED_ORIGINS, VLAM_HOST, VLAM_PORT
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-
-from config import ALLOW_API_KEY_OVERRIDE, ALLOWED_ORIGINS, VLAM_HOST, VLAM_PORT
 from vlam_host import VLAMHost
 
 logging.basicConfig(

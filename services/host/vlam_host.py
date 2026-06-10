@@ -11,7 +11,7 @@ from collections.abc import AsyncGenerator
 
 import anthropic
 import openai
-
+from cli_executor import CLI_DIR, execute_cli_tool
 from config import (
     ANTHROPIC_API_KEY,
     CLAUDE_MODEL,
@@ -24,7 +24,6 @@ from config import (
     get_system_prompt,
 )
 from mcp_client import MCPToolRegistry
-from cli_executor import execute_cli_tool, CLI_DIR
 
 logger = logging.getLogger("vlam.host")
 
@@ -432,7 +431,7 @@ class VLAMHost:
 
             tool_results = await self._execute_tools(tool_uses)
             # Emit lopende zaak als case-event bij succesvolle indiening
-            for tu, tr in zip(tool_uses, tool_results):
+            for tu, tr in zip(tool_uses, tool_results, strict=True):
                 zaak = _extract_lopende_zaak(tu.name, tr.get("content", ""))
                 if zaak:
                     yield {"type": "case", "data": zaak}

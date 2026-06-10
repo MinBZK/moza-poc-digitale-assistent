@@ -20,7 +20,7 @@ import sys
 import time
 
 from dotenv import load_dotenv
-from openai import OpenAI, APIError
+from openai import APIError, OpenAI
 
 load_dotenv()
 
