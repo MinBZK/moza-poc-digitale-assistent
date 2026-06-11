@@ -18,22 +18,24 @@ Assistent (na kvk__mijn_bedrijf, netbeheerder__verbruik en regelrecht__check):
 
 U hoeft dus niets op te zoeken. Om te bepalen wélke maatregelen voor uw zaak gelden, heb ik nog twee feitelijke vragen. Deze staan nergens geregistreerd — alleen u weet dit; het blijft een feit dat u aanlevert, geen juridische beoordeling. Uw antwoorden worden bewaard voor de volgende rapportageronde.
 
-1. Heeft u een koel- of vriesinstallatie?
-2. Heeft u een afzuiginstallatie?"
+1. Heeft het bedrijf een koel- of vriesinstallatie (koelcel, koelmeubel)?
+2. Heeft het bedrijf een afzuiginstallatie (keuken of ruimteventilatie)?"
+
+(De assistent heeft deze vragen afgelezen uit regelrecht__maatregelen: zonder feiten aangeroepen meldt de tool de benodigde_feiten — de vraagteksten komen uit de machine-uitvoerbare regel zelf.)
 
 Gebruiker: "Ja allebei."
 
-Assistent (na regelrecht__maatregelen met sbi_code=56102, koelinstallatie=true, afzuiginstallatie=true):
+Assistent (na regelrecht__maatregelen met feiten={"HEEFT_KOELINSTALLATIE": true, "HEEFT_AFZUIGINSTALLATIE": true}):
 
-"Dank u. Op basis van de Erkende Maatregelenlijst voor de horeca gelden voor Koffiezaak Noon 7 maatregelen. Kunt u per maatregel aangeven of deze is uitgevoerd?
+"Dank u. Op basis van de Erkende Maatregelenlijst (EML 2023) gelden voor Koffiezaak Noon 7 maatregelen. Kunt u per maatregel aangeven of deze is uitgevoerd?
 
-1. LED-verlichting in verblijfsruimten — uitgevoerd / niet uitgevoerd?
-2. Waterzijdig inregelen van het verwarmingssysteem — uitgevoerd / niet uitgevoerd?
-3. Deurdranger of automatische deursluiting buitendeur — uitgevoerd / niet uitgevoerd?
-4. Isolatie van koel- of vriescel — uitgevoerd / niet uitgevoerd?
-5. Nachtafdekking van koelmeubelen — uitgevoerd / niet uitgevoerd?
-6. Tijd- of aanwezigheidsschakeling op de afzuiginstallatie — uitgevoerd / niet uitgevoerd?
-7. Frequentieregeling op de afzuigventilator — uitgevoerd / niet uitgevoerd?"
+1. GC1 — Pas een klokregeling toe en regel deze in (ruimteverwarming) — uitgevoerd / niet uitgevoerd?
+2. GC3 — Pas een weersafhankelijke regeling toe — uitgevoerd / niet uitgevoerd?
+3. GF4 — Vervang gloei-, halogeen- en spaarlampen door LED-lampen — uitgevoerd / niet uitgevoerd?
+4. FD3 — Pas nachtafdekking toe bij semi-verticale koelmeubels — uitgevoerd / niet uitgevoerd?
+5. FD7 — Isoleer de wanden van koelcellen — uitgevoerd / niet uitgevoerd?
+6. FE4 — Pas een laagdebiet afzuigkap toe bij grootkeukens — uitgevoerd / niet uitgevoerd?
+7. GD1 — Pas een klokregeling toe op het ventilatiesysteem — uitgevoerd / niet uitgevoerd?"
 
 Gebruiker: "1 t/m 5 gedaan, 6 en 7 nog niet."
 
