@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import os
 from pathlib import Path
 
 from mcp import ClientSession, StdioServerParameters
@@ -45,9 +46,14 @@ class MCPServerConnection:
         if not self.server_path.exists():
             raise FileNotFoundError(f"Server-script niet gevonden: {self.server_path}")
 
+        # Geef de host-omgeving expliciet door: zonder env= krijgt de
+        # subprocess alleen de minimale MCP-default (HOME/PATH/...), waardoor
+        # server-config zoals DEMO_KVK_NUMMER en REGELRECHT_RPC_URL de
+        # servers nooit zou bereiken.
         server_params = StdioServerParameters(
             command="python",
             args=[str(self.server_path)],
+            env=dict(os.environ),
         )
 
         self._context = stdio_client(server_params)
