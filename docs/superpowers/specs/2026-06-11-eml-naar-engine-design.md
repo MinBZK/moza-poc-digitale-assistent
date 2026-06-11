@@ -2,144 +2,155 @@
 
 | Veld | Waarde |
 |---|---|
-| Datum | 2026-06-11 |
-| Status | Goedgekeurd ontwerp, implementatie vóór 18 juni 2026 (Dag van de Toekomst) |
+| Datum | 2026-06-11 (herzien: EML 2023-structuur, feiten uit engine) |
+| Status | Ontwerp ter review, implementatie vóór 18 juni 2026 (Dag van de Toekomst) |
 | Gerelateerd | PDR-007 (§3, "vervolgstap"), `services/mcp/regelrecht/server.py` |
 | Repo's | `MinBZK/poc-machine-law` (wet-YAML) + deze repo (omschakeling) |
 
 ## Context en doel
 
-De bepaling welke EML-maatregelen (Erkende Maatregelenlijst, subset Horeca)
-gelden staat nu als **lokale mock** in de RegelRecht-MCP-server
-(`EML_HORECA` + `_geldende_maatregelen()`). PDR-007 §3 benoemt als
-vervolgstap: verhuizen naar de poc-machine-law engine zodra die EML-regels
-ondersteunt, met gelijkblijvende tool-interface.
+De bepaling welke EML-maatregelen gelden staat nu als **lokale mock** in de
+RegelRecht-MCP-server (`EML_HORECA` + `_geldende_maatregelen()`), in de
+verouderde per-bedrijfstak-stijl en met de feitelijke vragen hardcoded in
+de tool-description. PDR-007 §3 benoemt als vervolgstap: verhuizen naar de
+poc-machine-law engine, met gelijkblijvende tool-interface.
 
-Dit design voert die vervolgstap uit, vóór de demo van 18 juni: de
-EML-bepaling wordt een machine-uitvoerbare wet in de engine; de
-MCP-server wordt een dunne proxy (zoals hij voor `check_informatieplicht`
-al is). De demo-flow en de tool-interface `regelrecht__maatregelen`
-veranderen niet.
+Dit design voert die vervolgstap uit vóór de demo van 18 juni, met twee
+aanscherpingen ten opzichte van het eerste ontwerp:
 
-## Gekozen aanpak (optie A): per-maatregel outputs
+1. **Huidige EML-structuur (2023).** De echte EML is sinds 2023 één lijst
+   (Staatscourant 2023-15844, gewijzigd okt 2023), georganiseerd in drie
+   categorieën — *Gebouwen*, *Faciliteiten*, *Processen* — met per
+   maatregel een code (bv. FD3 "Pas nachtafdekking toe bij semi-verticale
+   koelmeubels") en toepasselijkheidscriteria. Géén bedrijfstak-lijsten
+   meer. De demo-subset volgt die structuur met échte EML 2023-codes.
+2. **Feitelijke vragen uit de engine, niet hardcoded.** Welke feiten de
+   ondernemer moet leveren volgt uit de wet-YAML (parameters); de
+   assistent leest ze af in plaats van dat ze in tool-description of
+   prompt staan.
+
+## Gekozen aanpak: per-maatregel outputs (optie A, herzien)
 
 De engine kan geen lijst-van-objecten als output uitdrukken (`CONCAT` is
 string-only, `FOREACH` alleen aggregatie via `combine`). Daarom krijgt
 **elke EML-maatregel een eigen boolean output** in de wet-YAML. Dat past
-bij de aard van de EML: elke maatregel ís een regel met een eigen
-toepasselijkheidsvoorwaarde en eigen grondslag — en de engine levert dan
-per maatregel explainability.
+bij de aard van de EML: elke maatregel ís een regel met eigen
+toepasselijkheidscriteria en grondslag — en de engine levert per maatregel
+explainability.
 
-Verworpen alternatieven:
-
-- *Booleans per voorwaardegroep* (koeling/afzuiging): minimale YAML, maar
-  de maatregelenlijst zelf blijft dan regelkennis in de MCP-server — half
-  verhaal.
-- *Engine uitbreiden met een list/map-operatie*: engine-core wijzigen één
-  week voor de demo is onverantwoord.
+Verworpen alternatieven: booleans per voorwaardegroep (lijst blijft dan
+regelkennis in de MCP-server) en engine uitbreiden met een
+list/map-operatie (engine-core wijzigen één week voor de demo).
 
 ## Deel 1 — wet-YAML in poc-machine-law
 
 Nieuw bestand:
 `laws/omgevingswet/energiebesparing/maatregelen/RVO-2024-01-01.yaml`
-(schema v0.1.7, zelfde conventies als
-`laws/omgevingswet/energiebesparing/informatieplicht/RVO-2024-01-01.yaml`).
-
-Kern van het ontwerp:
+(schema v0.1.7, conventies van de bestaande informatieplicht-YAML).
 
 ```yaml
 law: omgevingswet/energiebesparing/maatregelen
 service: "RVO"
-name: Erkende Maatregelenlijst energiebesparing (subset Horeca)
+name: Erkende Maatregelenlijst energiebesparing (EML 2023, demo-subset)
 legal_basis:
   law: "Besluit activiteiten leefomgeving"
   bwb_id: "BWBR0041330"
-  article: "5.15"          # energiebesparingsplicht; EML als invulling
+  article: "5.15"          # energiebesparingsplicht; EML als erkende invulling
 
 properties:
   parameters:
-    - name: "BEDRIJFSTAK"          # maakt expliciet dat dit de horeca-subset is
-      type: "string"
-      required: true
-    - name: "HEEFT_KOELINSTALLATIE"     # feit, geleverd door ondernemer
+    # De feiten die de ondernemer levert. De description IS de vraag
+    # die de assistent aan de ondernemer stelt (afgelezen, niet hardcoded).
+    - name: "HEEFT_KOELINSTALLATIE"
+      description: "Heeft het bedrijf een koel- of vriesinstallatie (koelcel, koelmeubel)?"
       type: "boolean"
       required: true
-    - name: "HEEFT_AFZUIGINSTALLATIE"   # feit, geleverd door ondernemer
+    - name: "HEEFT_AFZUIGINSTALLATIE"
+      description: "Heeft het bedrijf een afzuiginstallatie (keuken/ventilatie)?"
       type: "boolean"
       required: true
 
   output:
-    # per EML-maatregel één boolean; naam van de maatregel in description
-    - name: "eml_h01_van_toepassing"
-      description: "LED-verlichting in verblijfsruimten"
+    # Per EML 2023-maatregel één boolean. Echte code als naam-suffix,
+    # categorie + officiële maatregelnaam in de description.
+    - name: "eml_fd3_van_toepassing"
+      description: "Faciliteiten — Pas nachtafdekking toe bij semi-verticale koelmeubels"
       type: "boolean"
       citizen_relevance: primary
-    # ... idem voor H02, H03, H10, H11, H20, H21
+    # ... overige subset-maatregelen (Gebouwen / Faciliteiten / Processen)
 
-requirements:
-  - all:
-      - subject: "$BEDRIJFSTAK"
-        operation: EQUALS
-        value: "horeca"
+requirements: []   # EML 2023 geldt ongeacht bedrijfstak
 
 actions:
-  - output: "eml_h01_van_toepassing"   # "altijd"-maatregelen
+  - output: "eml_<code>_van_toepassing"   # onvoorwaardelijke maatregelen
     value: true
-  # ...
-  - output: "eml_h10_van_toepassing"   # conditionele maatregelen
+  - output: "eml_fd3_van_toepassing"      # conditionele maatregelen
     value: "$HEEFT_KOELINSTALLATIE"
-  - output: "eml_h20_van_toepassing"
-    value: "$HEEFT_AFZUIGINSTALLATIE"
   # ...
 ```
+
+Demo-subset: de ~7 maatregelen die de huidige mock dekt (LED-verlichting,
+waterzijdig inregelen, deurdranger, koel-/vriescelisolatie, nachtafdekking
+koelmeubelen, tijd-/aanwezigheidsschakeling afzuiging, frequentieregeling
+afzuigventilator), maar dan met de **echte EML 2023-codes en officiële
+namen** uit de RVO-publicatie
+(`erkende-maatregelenlijst-eml-2023-v-1-3.pdf` / RVO-informatiebank) —
+opzoeken is een implementatiestap. Per output een `legal_basis`
+(Bal art. 5.15; explanation verwijst naar de EML-maatregelcode).
 
 Ontwerpkeuzes:
 
 - **Feiten als `parameters`, niet als `sources`.** De bedrijfskenmerken
-  (koel-/afzuiginstallatie) staan nergens geregistreerd; de ondernemer
-  levert ze (PDR-007 §3). Parameters maken dat expliciet en vereisen geen
-  brontabellen in de engine.
-- **`BEDRIJFSTAK`-requirement `EQUALS "horeca"`** maakt eerlijk dat dit de
-  horeca-subset is. Andere bedrijfstak → `requirements_met: false`, geen
-  outputs; de MCP-server vertaalt dat naar "geen maatregelbepaling
-  beschikbaar voor deze bedrijfstak".
-- **Per output een `legal_basis`** (Bal art. 5.15; explanation verwijst
-  naar de betreffende EML-maatregel), conform de conventies van de
-  bestaande informatieplicht-YAML.
+  staan nergens geregistreerd; de ondernemer levert ze (PDR-007 §3).
+  De parameter-`description` is letterlijk de vraagtekst.
+- **Geen bedrijfstak meer.** EML 2023 kent geen bedrijfstak-lijsten;
+  `requirements` is leeg, de wet geldt voor iedere onderneming met
+  energiebesparingsplicht. `BEDRIJFSTAK`/`sbi_code` vervallen.
 - Elke maatregel krijgt altijd een output (true/false), zodat de
-  bestaande tool-semantiek (`van_toepassing` per maatregel) behouden
-  blijft.
+  tool-semantiek (`van_toepassing` per maatregel) behouden blijft.
 
 Validatie: schema-validatie van poc-machine-law (`script/`) + pre-commit
 aldaar. PR naar `MinBZK/poc-machine-law` main.
 
 ## Deel 2 — omschakeling in deze repo
 
-`services/mcp/regelrecht/server.py`:
+`services/mcp/regelrecht/server.py` — de tool `maatregelen` wordt een
+engine-proxy met een **twee-staps-flow**:
 
-1. `_bepaal_maatregelen` (de tool-handler voor `maatregelen`) roept
-   `execute_law` aan via de bestaande `_rpc_call`, met
-   `service: "RVO"`, `law: "omgevingswet/energiebesparing/maatregelen"`
-   en de drie parameters. Zelfde patroon als `_check_informatieplicht`.
-   De tool-input `sbi_code` wordt in de server vertaald naar
-   `BEDRIJFSTAK` (SBI 55–56 → `"horeca"`, anders de bestaande
-   "geen maatregelenlijst beschikbaar"-melding); die vertaling is
-   presentatie-/routeringslogica en blijft bewust buiten de wet-YAML.
-2. **Mapping engine-response → bestaande tool-vorm.** De
-   `execute_law`-response bevat `output` (de booleans) én `rule_spec`
-   (de volledige wet-spec). De server bouwt daaruit de bestaande
-   lijst-vorm: per output `eml_<id>_van_toepassing` een item
-   `{id, naam, van_toepassing}` met `naam` uit de output-`description`
-   in `rule_spec`. De maatregelnamen komen dus uit de engine; de
-   MCP-server bevat geen regelkennis meer.
-3. **Lokale mock blijft als fallback.** Bij `SOURCE_UNAVAILABLE` of een
-   onbruikbare response valt de server terug op de huidige lokale
-   evaluatie (`EML_HORECA`). De provenance vermeldt eerlijk welke route
-   is gebruikt: `"RegelRecht (poc-machine-law)"` bij de engine,
-   het bestaande `EML_SOURCE_LABEL` ("lokale mock") bij fallback.
-   De demo kan daardoor niet stuk door deze omschakeling.
-4. Tool-interface (`regelrecht__maatregelen`, inputschema, outputvorm)
-   blijft ongewijzigd — geen wijzigingen in host, prompts of frontend.
+1. **Nieuw inputschema (generiek).** `sbi_code`, `koelinstallatie` en
+   `afzuiginstallatie` vervallen als named properties. Eén optionele
+   property `feiten` (object, boolean-waarden). De description instrueert:
+   "Roep eerst aan zónder feiten; de tool meldt welke feitelijke vragen
+   aan de ondernemer gesteld moeten worden."
+2. **Stap 1 — vragen aflezen.** Aanroep zonder (volledige) feiten →
+   server roept `execute_law` aan → engine antwoordt met
+   `missing_required` / `missing_parameters` (incl. descriptions uit de
+   wet-YAML) → server geeft terug:
+   `{"benodigde_feiten": [{"naam": "HEEFT_KOELINSTALLATIE", "vraag": "Heeft het bedrijf ..."}, ...]}`.
+   De assistent stelt die vragen letterlijk; niets is hardcoded.
+3. **Stap 2 — maatregelen bepalen.** Aanroep mét feiten → `execute_law`
+   met de feiten als parameters → server mapt de response naar de
+   lijst-vorm: per output `eml_<code>_van_toepassing` een item
+   `{code, naam, categorie, van_toepassing}` met naam/categorie uit de
+   output-`description` in `rule_spec`. Alle regelkennis komt uit de
+   engine.
+4. **Lokale mock blijft als fallback**, omgebouwd naar dezelfde
+   twee-staps-flow en EML 2023-vorm. Bij `SOURCE_UNAVAILABLE` of een
+   onbruikbare response serveert de server lokaal; provenance vermeldt
+   eerlijk de route (`"RegelRecht (poc-machine-law)"` vs. het bestaande
+   lokale-mock-label). De demo kan niet stuk door de omschakeling.
+
+**Impact buiten de server** (interface wijzigt — dit is de prijs van de
+twee aanscherpingen):
+
+- `services/host/prompts/`: de hardcoded feitelijke vragen
+  ("koelinstallatie? afzuiginstallatie?") vervangen door de
+  patroon-instructie: eerst `maatregelen` aanroepen, de gemelde vragen
+  stellen, daarna opnieuw aanroepen met de antwoorden.
+- `services/host/tests/test_demo_personas.py`: EML-invarianten aanpassen
+  aan de twee-staps-flow en EML 2023-codes; Donald-invariant
+  (geen netbeheerder-data) blijft ongewijzigd.
+- CLI-transport kende `maatregelen` al niet (PDR-007) — geen impact.
 
 ## Deploy-sporen (risico demo 18 juni)
 
@@ -147,33 +158,39 @@ aldaar. PR naar `MinBZK/poc-machine-law` main.
 |---|---|---|
 | a | PR poc-machine-law mergen; digilab-deploy van `ui.lac.apps.digilab.network` vóór 18/6 | voorkeursroute |
 | b | Engine lokaal draaien (Dockerfile aanwezig) en `REGELRECHT_RPC_URL` ernaar wijzen (werkt sinds de env-doorvoer-fix in `mcp_client.py`) | als (a) niet op tijd lukt |
-| vangnet | Fallback naar lokale mock (deel 2, punt 3) | altijd actief |
+| vangnet | Fallback naar lokale mock (deel 2, punt 4) | altijd actief |
 
 ## Tests
 
-- Bestaande EML-invarianten in `services/host/tests/test_demo_personas.py`
-  blijven gelden (zelfde tool-output) — geen aanpassing nodig.
-- Nieuw: unit-test voor de mapping engine-response → lijst-vorm
-  (op basis van een vaste voorbeeld-response, geen netwerktoegang).
-- Nieuw: test dat fallback naar de lokale mock werkt als de engine
-  onbereikbaar is, en dat de provenance het juiste label draagt.
-- Handmatig integratiescript (vereist netwerk) naast de bestaande
-  scripts in `services/host/scripts/`: end-to-end `maatregelen` tegen de
-  echte engine voor Noon (horeca, koeling + afzuiging → 7 maatregelen,
-  alle 7 `van_toepassing: true`).
+- Unit-test mapping engine-response → lijst-vorm (vaste
+  voorbeeld-response, geen netwerk).
+- Unit-test twee-staps-flow: zonder feiten → `benodigde_feiten` met de
+  vraagteksten uit de YAML; met feiten → maatregelenlijst.
+- Test dat fallback naar de lokale mock werkt bij onbereikbare engine,
+  met het juiste provenance-label, in béíde stappen.
+- Aangepaste EML-invarianten in `test_demo_personas.py` (EML 2023-codes;
+  koeling+afzuiging → alle subset-maatregelen `van_toepassing: true`).
+- Handmatig integratiescript naast de bestaande scripts in
+  `services/host/scripts/`: end-to-end twee-staps-flow tegen de echte
+  engine voor Noon.
 
 ## Documentatie
 
-- PDR-007 §3 krijgt een addendum: vervolgstap uitgevoerd, met verwijzing
-  naar dit design en de poc-machine-law PR. (PDR zelf blijft staan,
-  conform `docs/decisions/README.md`.)
+- PDR-007 §3 krijgt een addendum: vervolgstap uitgevoerd, mét de
+  structuurwijziging naar EML 2023 (bedrijfstak-model vervallen) en het
+  vragen-uit-de-engine-patroon; verwijzing naar dit design en de
+  poc-machine-law PR. (PDR blijft staan, conform
+  `docs/decisions/README.md`.)
 
 ## Buiten scope / bevindingen voor de echte bouw
 
 - **Schaalbaarheid**: per-maatregel outputs schalen niet naar de volledige
-  EML (~150 maatregelen over alle bedrijfstakken). Voor de echte bouw is
-  een list/map-uitbreiding van de engine (of een aparte
-  maatregelen-resource) nodig. Vastleggen in het PDR-addendum.
-- Volledige EML (andere bedrijfstakken, terugverdientijd-criteria) blijft
-  buiten scope; dit is de demo-subset Horeca.
-- CLI-transport kent `maatregelen` al niet (PDR-007 "Gevolgen") — blijft zo.
+  EML (~150 maatregelen). Voor de echte bouw is een list/map-uitbreiding
+  van de engine (of een maatregelen-resource) nodig. Vastleggen in het
+  PDR-addendum.
+- **Toepasselijkheidscriteria versimpeld**: de echte EML 2023 kent per
+  maatregel rijkere criteria (technisch, economisch) dan de twee
+  demo-booleans. De demo-subset reduceert dat bewust tot
+  koel-/afzuiginstallatie.
+- Volledige EML (alle ~150 maatregelen, terugverdientijd-criteria) blijft
+  buiten scope.
