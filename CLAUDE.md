@@ -8,8 +8,8 @@ docs in plaats van details te dupliceren.
 
 Proof of Concept van de **Digitale Assistent** voor MijnOverheid Zakelijk (MOZa):
 een AI-assistent die ondernemers helpt met vragen over overheidsdienstverlening.
-Een FastAPI-host orkestreert een gesprek tussen een LLM en vier overheidsbronnen
-(KvK, KOOP, RegelRecht, RVO), ontsloten als tools via het Model Context Protocol
+Een FastAPI-host orkestreert een gesprek tussen een LLM en vijf overheidsbronnen
+(KvK, KOOP, RegelRecht, RVO, netbeheerder-mock), ontsloten als tools via het Model Context Protocol
 (MCP) of als CLI-wrappers.
 
 Dit is **experimentele PoC-code**, geen productie. Geen persoonsgegevens; alleen
@@ -36,8 +36,8 @@ Handmatige integratie-scripts (vereisen een `.env` met echte API-keys) staan in
   `vlam_host.py` (orkestratie / agentic loops), `mcp_client.py` (MCP-verbindingen),
   `cli_executor.py` (CLI-transport), `config.py` (env/CORS/timeouts),
   `prompts/` (modulaire systeemprompts, samengesteld door `composer.py`).
-- **`services/mcp/{kvk,koop,regelrecht,rvo}/server.py`** — vier MCP-servers
-  (Python, als stdio-subprocessen gestart door de host).
+- **`services/mcp/{kvk,koop,regelrecht,rvo,netbeheerder}/server.py`** — vijf
+  MCP-servers (Python, als stdio-subprocessen gestart door de host).
 - **`services/cli/`** — Bash CLI-wrappers (alternatief transport, on-demand).
 - **`docs/`** — `architecture.md` (routering + scenario's), `decisions/` (PDR's),
   `test-vragen.md`, `ai-verantwoording.md`.

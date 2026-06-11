@@ -9,7 +9,7 @@ overheidsdienstverlening.
 
 ## Inleiding
 
-De assistent ontsluit overheidsbronnen (KvK, KOOP, RegelRecht, RVO) als tools
+De assistent ontsluit overheidsbronnen (KvK, KOOP, RegelRecht, RVO, netbeheerder) als tools
 voor een Large Language Model via het [Model Context Protocol](https://modelcontextprotocol.io/)
 (MCP). Een FastAPI-host orkestreert het gesprek; per bron is er een MCP-server.
 
@@ -21,7 +21,7 @@ de [MCP-standaard voor Generieke Interactieservices](https://gemmaonline.nl/inde
 De PoC bestaat uit de volgende onderdelen:
 
 - **host**: FastAPI-service met LLM-orkestratie (Claude of VLAM/Mistral) en MCP-clients
-- **mcp**: Vier MCP-servers (KvK, KOOP, RegelRecht, RVO)
+- **mcp**: Vijf MCP-servers (KvK, KOOP, RegelRecht, RVO, netbeheerder-mock)
 - **cli**: Equivalente CLI-tools voor on-demand gebruik en als fallback
 
 ## Vereisten
