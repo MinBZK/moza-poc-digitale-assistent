@@ -55,6 +55,9 @@ MCP_SERVERS: dict[str, Path] = {
     "koop": _resolve_server_path("MCP_SERVER_KOOP", SERVERS_DIR / "koop" / "server.py"),
     "regelrecht": _resolve_server_path("MCP_SERVER_REGELRECHT", SERVERS_DIR / "regelrecht" / "server.py"),
     "rvo": _resolve_server_path("MCP_SERVER_RVO", SERVERS_DIR / "rvo" / "server.py"),
+    "netbeheerder": _resolve_server_path(
+        "MCP_SERVER_NETBEHEERDER", SERVERS_DIR / "netbeheerder" / "server.py"
+    ),
 }
 
 # Host

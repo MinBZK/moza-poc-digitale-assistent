@@ -22,6 +22,7 @@ Voldoet aan de MCP-standaard voor Generieke Interactieservices:
 import asyncio
 import json
 import logging
+import os
 from datetime import UTC, datetime
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -53,11 +54,91 @@ SERVER_VERSION = "0.3.0"
 KVK_TEST_BASE = "https://api.kvk.nl/test/api"
 KVK_TEST_API_KEY = "l7xx1f2691f2520d487b902f4e0b57a0b197"
 
-# Demo-gebruiker Robin Vogel — alleen dit KvK-nummer is toegestaan
-SESSIE_KVK_NUMMER = "68750110"
+# Sessie-gebonden KvK-nummer. Default: demo-gebruiker Robin Vogel (Test BV
+# Donald, via de KvK Test API). Via DEMO_KVK_NUMMER selecteerbaar — bv.
+# 85234567 voor de mock-persona Claudia van Dam (Koffiezaak Noon), die niet
+# in de KvK Test API bestaat en volledig uit MOCK_PROFIELEN komt (PDR-007).
+SESSIE_KVK_NUMMER = os.getenv("DEMO_KVK_NUMMER", "68750110")
 
 # Cache voor het basisprofiel (wordt één keer opgehaald per server-lifetime)
 _profiel_cache: dict | None = None
+
+# ---------------------------------------------------------------------------
+# Mock-persona's — KvK-nummers die niet in de KvK Test API bestaan en
+# volledig lokaal worden geserveerd. Vorm volgt de KvK Basisprofiel API
+# zodat downstream-logica (adres-extractie, BAG-verrijking) identiek werkt.
+# ---------------------------------------------------------------------------
+
+MOCK_PROFIELEN: dict[str, dict] = {
+    "85234567": {
+        "kvkNummer": "85234567",
+        "naam": "Koffiezaak Noon",
+        "rechtsvorm": "Eenmanszaak",
+        "totaalWerkzamePersonen": 4,
+        "handelsnamen": [{"naam": "Koffiezaak Noon", "volgorde": 0}],
+        "sbiActiviteiten": [
+            {
+                "sbiCode": "56102",
+                "sbiOmschrijving": "Cafés",
+                "indHoofdactiviteit": "Ja",
+            }
+        ],
+        "materieleRegistratie": {"datumAanvang": "20220301"},
+        "statusinformatie": "actief",
+        "_embedded": {
+            "hoofdvestiging": {
+                "vestigingsnummer": "000052341288",
+                "eersteHandelsnaam": "Koffiezaak Noon",
+                "indHoofdvestiging": "Ja",
+                "totaalWerkzamePersonen": 4,
+                "adressen": [
+                    {
+                        "type": "bezoekadres",
+                        "volledigAdres": "Witte de Withstraat 27, 3012BL Rotterdam",
+                        "straatnaam": "Witte de Withstraat",
+                        "huisnummer": 27,
+                        "postcode": "3012BL",
+                        "plaats": "Rotterdam",
+                    }
+                ],
+                "sbiActiviteiten": [
+                    {
+                        "sbiCode": "56102",
+                        "sbiOmschrijving": "Cafés",
+                        "indHoofdactiviteit": "Ja",
+                    }
+                ],
+            }
+        },
+    }
+}
+
+MOCK_VESTIGINGEN: dict[str, dict] = {
+    "85234567": {
+        "kvkNummer": "85234567",
+        "aantalCommercieleVestigingen": 1,
+        "vestigingen": [
+            {
+                "vestigingsnummer": "000052341288",
+                "eersteHandelsnaam": "Koffiezaak Noon",
+                "indHoofdvestiging": "Ja",
+                "volledigAdres": "Witte de Withstraat 27, 3012BL Rotterdam",
+            }
+        ],
+    }
+}
+
+MOCK_EIGENAREN: dict[str, dict] = {
+    "85234567": {
+        "kvkNummer": "85234567",
+        "rechtsvorm": "Eenmanszaak",
+        "natuurlijkPersoon": {
+            "geslachtsnaam": "van Dam",
+            "voornamen": "Claudia",
+            "volledigeNaam": "Claudia van Dam",
+        },
+    }
+}
 
 
 def _kvk_fetch(path: str) -> dict:
@@ -70,9 +151,12 @@ def _kvk_fetch(path: str) -> dict:
 
 
 async def _get_basisprofiel() -> dict:
-    """Haal het basisprofiel op (met cache)."""
+    """Haal het basisprofiel op (met cache). Mock-persona's komen lokaal."""
     global _profiel_cache
     if _profiel_cache is not None:
+        return _profiel_cache
+    if SESSIE_KVK_NUMMER in MOCK_PROFIELEN:
+        _profiel_cache = MOCK_PROFIELEN[SESSIE_KVK_NUMMER]
         return _profiel_cache
     loop = asyncio.get_event_loop()
     _profiel_cache = await loop.run_in_executor(
@@ -83,6 +167,8 @@ async def _get_basisprofiel() -> dict:
 
 async def _get_vestigingen() -> dict:
     """Haal de vestigingen-lijst op voor het sessie-bedrijf."""
+    if SESSIE_KVK_NUMMER in MOCK_VESTIGINGEN:
+        return MOCK_VESTIGINGEN[SESSIE_KVK_NUMMER]
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(
         None, _kvk_fetch, f"/v1/basisprofielen/{SESSIE_KVK_NUMMER}/vestigingen"
@@ -91,6 +177,8 @@ async def _get_vestigingen() -> dict:
 
 async def _get_eigenaar() -> dict:
     """Haal de eigenaar-informatie op voor het sessie-bedrijf."""
+    if SESSIE_KVK_NUMMER in MOCK_EIGENAREN:
+        return MOCK_EIGENAREN[SESSIE_KVK_NUMMER]
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(
         None, _kvk_fetch, f"/v1/basisprofielen/{SESSIE_KVK_NUMMER}/eigenaar"
@@ -111,7 +199,15 @@ _BAG_DEMO_FALLBACK = {
         "oppervlakte": 250,
         "oorspronkelijkBouwjaar": "1985",
         "nummeraanduidingIdentificatie": "0081200000012345",
-    }
+    },
+    # Koffiezaak Noon (mock-persona Claudia van Dam) — horecapand, geen
+    # woonfunctie, dus de woonfunctie-uitzondering geldt niet.
+    "3012BL-27": {
+        "gebruiksdoelen": ["bijeenkomstfunctie"],
+        "oppervlakte": 140,
+        "oorspronkelijkBouwjaar": "1923",
+        "nummeraanduidingIdentificatie": "0599200000312345",
+    },
 }
 
 
