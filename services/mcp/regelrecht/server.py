@@ -46,65 +46,102 @@ SOURCE_LABEL = "RegelRecht (poc-machine-law)"
 SERVER_VERSION = "0.1.0"
 
 # ---------------------------------------------------------------------------
-# Lokale regelevaluatie: Erkende Maatregelenlijst (EML, mock-subset Horeca)
+# EML-maatregelbepaling: via de poc-machine-law engine, met lokale fallback
 #
-# Welke maatregelen gelden hangt deels af van feitelijke bedrijfskenmerken
-# die nergens geregistreerd staan (koelinstallatie? afzuiginstallatie?).
-# Die feiten levert de ondernemer; de regel bepaalt vervolgens de geldende
-# maatregelen. Deze evaluatie staat hier (RegelRecht = regelevaluatie) maar
-# is een LOKALE mock — nog geen onderdeel van de poc-machine-law engine.
-# Verhuist naar de engine zodra die de EML-regels ondersteunt (PDR-007).
+# Welke maatregelen gelden hangt af van feitelijke bedrijfskenmerken die
+# nergens geregistreerd staan; de ondernemer levert ze. De wet
+# omgevingswet/energiebesparing/maatregelen in de engine bepaalt de
+# geldende maatregelen; de vraagteksten staan als parameter-descriptions
+# in die wet en worden door de assistent afgelezen (twee-staps-flow).
+# Het blok hieronder is uitsluitend de fallback voor als de engine
+# onbereikbaar is en moet synchroon blijven met de wet-YAML (PDR-007).
 # ---------------------------------------------------------------------------
 
-EML_SOURCE_LABEL = "RegelRecht — EML-maatregelbepaling (lokale mock)"
+EML_SOURCE_LABEL = "RegelRecht — EML-maatregelbepaling (lokale fallback)"
+EML_LAW = "omgevingswet/energiebesparing/maatregelen"
 
-EML_HORECA = [
+EML_FALLBACK_VRAGEN = [
     {
-        "id": "EML-H01",
-        "naam": "LED-verlichting in verblijfsruimten",
-        "voorwaarde": "altijd",
+        "naam": "HEEFT_KOELINSTALLATIE",
+        "vraag": "Heeft het bedrijf een koel- of vriesinstallatie (koelcel, koelmeubel)?",
     },
     {
-        "id": "EML-H02",
-        "naam": "Waterzijdig inregelen van het verwarmingssysteem",
-        "voorwaarde": "altijd",
-    },
-    {
-        "id": "EML-H03",
-        "naam": "Deurdranger of automatische deursluiting buitendeur",
-        "voorwaarde": "altijd",
-    },
-    {
-        "id": "EML-H10",
-        "naam": "Isolatie van koel- of vriescel (deuren en wanden)",
-        "voorwaarde": "koelinstallatie",
-    },
-    {
-        "id": "EML-H11",
-        "naam": "Nachtafdekking van koelmeubelen",
-        "voorwaarde": "koelinstallatie",
-    },
-    {
-        "id": "EML-H20",
-        "naam": "Tijd- of aanwezigheidsschakeling op de afzuiginstallatie",
-        "voorwaarde": "afzuiginstallatie",
-    },
-    {
-        "id": "EML-H21",
-        "naam": "Frequentieregeling op de afzuigventilator",
-        "voorwaarde": "afzuiginstallatie",
+        "naam": "HEEFT_AFZUIGINSTALLATIE",
+        "vraag": "Heeft het bedrijf een afzuiginstallatie (keuken of ruimteventilatie)?",
     },
 ]
 
+EML_FALLBACK_MAATREGELEN = [
+    {"code": "GC1", "naam": "Pas een klokregeling toe en regel deze in", "categorie": "Gebouwen, Ruimteverwarming", "voorwaarde": None},
+    {"code": "GC3", "naam": "Pas een weersafhankelijke regeling toe", "categorie": "Gebouwen, Ruimteverwarming", "voorwaarde": None},
+    {"code": "GF4", "naam": "Vervang gloei-, halogeen- en spaarlampen door LED-lampen", "categorie": "Gebouwen, Binnenverlichting", "voorwaarde": None},
+    {"code": "FD3", "naam": "Pas nachtafdekking toe bij semi-verticale koelmeubels", "categorie": "Faciliteiten, Productkoeling", "voorwaarde": "HEEFT_KOELINSTALLATIE"},
+    {"code": "FD7", "naam": "Isoleer de wanden van koelcellen om warmte buiten te houden", "categorie": "Faciliteiten, Productkoeling", "voorwaarde": "HEEFT_KOELINSTALLATIE"},
+    {"code": "FE4", "naam": "Pas een laagdebiet afzuigkap toe bij grootkeukens", "categorie": "Faciliteiten, Grootkeukenapparatuur", "voorwaarde": "HEEFT_AFZUIGINSTALLATIE"},
+    {"code": "GD1", "naam": "Pas een klokregeling toe op het ventilatiesysteem", "categorie": "Gebouwen, Ruimteventilatie", "voorwaarde": "HEEFT_AFZUIGINSTALLATIE"},
+]
 
-def _geldende_maatregelen(koelinstallatie: bool, afzuiginstallatie: bool) -> list[dict]:
-    """Bepaal welke EML-maatregelen gelden op basis van bedrijfskenmerken."""
-    actief = {
-        "altijd": True,
-        "koelinstallatie": koelinstallatie,
-        "afzuiginstallatie": afzuiginstallatie,
+
+def _eml_fallback(feiten: dict) -> dict:
+    """Lokale evaluatie van de demo-subset (zelfde flow als de engine)."""
+    onbeantwoord = [v for v in EML_FALLBACK_VRAGEN if v["naam"] not in feiten]
+    if onbeantwoord:
+        return {"benodigde_feiten": onbeantwoord}
+    return {
+        "maatregelen": [
+            {
+                "code": m["code"],
+                "naam": m["naam"],
+                "categorie": m["categorie"],
+                "van_toepassing": (
+                    m["voorwaarde"] is None or bool(feiten.get(m["voorwaarde"]))
+                ),
+            }
+            for m in EML_FALLBACK_MAATREGELEN
+        ],
+        "feiten": feiten,
     }
-    return [{**m, "van_toepassing": actief[m["voorwaarde"]]} for m in EML_HORECA]
+
+
+def _eml_vragen(rule_spec: dict, feiten: dict) -> list[dict]:
+    """Lees de nog te stellen feitelijke vragen af uit de wet-spec."""
+    params = rule_spec.get("properties", {}).get("parameters", [])
+    return [
+        {"naam": p["name"], "vraag": p.get("description", p["name"])}
+        for p in params
+        if p.get("name") and p["name"] not in feiten
+    ]
+
+
+def _eml_lijst(structured: dict) -> list[dict]:
+    """Map engine-outputs (eml_<code>_van_toepassing) naar de maatregelenlijst.
+
+    Naam en categorie komen uit de output-descriptions in de wet-spec
+    ("<categorie> — <naam>"); alle regelkennis zit dus in de engine.
+    """
+    beschrijvingen = {
+        o["name"]: o.get("description", "")
+        for o in structured.get("rule_spec", {})
+        .get("properties", {})
+        .get("output", [])
+        if o.get("name")
+    }
+    lijst = []
+    for naam, waarde in structured.get("output", {}).items():
+        if not (naam.startswith("eml_") and naam.endswith("_van_toepassing")):
+            continue
+        code = naam[len("eml_") : -len("_van_toepassing")].upper()
+        beschrijving = beschrijvingen.get(naam, "")
+        categorie, scheider, titel = beschrijving.partition(" — ")
+        lijst.append(
+            {
+                "code": code,
+                "naam": titel if scheider else beschrijving,
+                "categorie": categorie if scheider else "",
+                "van_toepassing": bool(waarde),
+            }
+        )
+    return lijst
 
 
 # ---------------------------------------------------------------------------
@@ -219,7 +256,7 @@ def _wrap_provenance(data: dict) -> str:
 
 
 def _wrap_eml_provenance(data: dict) -> str:
-    """Provenance voor de lokale EML-maatregelbepaling (mock, niet de engine)."""
+    """Provenance voor de lokale EML-maatregelbepaling (lokale fallback wanneer de engine onbereikbaar is)."""
     return json.dumps(
         {
             "data": data,
@@ -311,48 +348,33 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="maatregelen",
             description=(
-                "Bepaal welke energiebesparende maatregelen uit de Erkende "
-                "Maatregelenlijst (EML) gelden voor het bedrijf, op basis van "
-                "de bedrijfstak en feitelijke bedrijfskenmerken. Stel de "
-                "gebruiker EERST de feitelijke vragen (heeft u een "
-                "koelinstallatie? heeft u een afzuiginstallatie?) — deze "
-                "feiten staan nergens geregistreerd en blijven bewust bij de "
-                "ondernemer. Roep daarna deze tool aan met de antwoorden."
+                "Bepaal welke maatregelen uit de Erkende Maatregelenlijst "
+                "(EML 2023) voor het bedrijf gelden. Roep EERST aan zónder "
+                "feiten: de tool meldt dan welke feitelijke vragen aan de "
+                "ondernemer gesteld moeten worden (benodigde_feiten). Stel "
+                "die vragen letterlijk — de feiten staan nergens "
+                "geregistreerd en blijven bewust bij de ondernemer — en roep "
+                "daarna opnieuw aan met de antwoorden in 'feiten'."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "sbi_code": {
-                        "type": "string",
+                    "feiten": {
+                        "type": "object",
                         "description": (
-                            "SBI-code van de hoofdactiviteit (uit "
-                            "kvk__mijn_bedrijf), bv. '56102' voor cafés. "
-                            "Momenteel is alleen de bedrijfstak Horeca "
-                            "(SBI 55-56) beschikbaar."
+                            "Antwoorden op de gemelde feitelijke vragen "
+                            "(naam → true/false). Weglaten bij de eerste "
+                            "aanroep."
                         ),
-                    },
-                    "koelinstallatie": {
-                        "type": "boolean",
-                        "description": (
-                            "Heeft het bedrijf een koel- of vriesinstallatie? "
-                            "(antwoord van de gebruiker)"
-                        ),
-                    },
-                    "afzuiginstallatie": {
-                        "type": "boolean",
-                        "description": (
-                            "Heeft het bedrijf een afzuiginstallatie? "
-                            "(antwoord van de gebruiker)"
-                        ),
+                        "additionalProperties": {"type": "boolean"},
                     },
                 },
-                "required": ["sbi_code", "koelinstallatie", "afzuiginstallatie"],
                 "additionalProperties": False,
             },
             annotations=ToolAnnotations(
                 readOnlyHint=True,
                 destructiveHint=False,
-                openWorldHint=False,
+                openWorldHint=True,
             ),
         ),
     ]
@@ -372,71 +394,54 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         ]
 
     if name == "maatregelen":
-        return _maatregelen(arguments)
+        data, fallback = await _maatregelen(arguments)
+        _audit_log("maatregelen", arguments, data)
+        tekst = _wrap_eml_provenance(data) if fallback else _wrap_provenance(data)
+        return [TextContent(type="text", text=tekst)]
 
     raise ValueError(f"Onbekende tool: {name}")
 
 
-def _maatregelen(arguments: dict) -> list[TextContent]:
-    """Bepaal geldende EML-maatregelen voor de bedrijfstak (lokale mock)."""
-    sbi_code = str(arguments.get("sbi_code", "")).strip()
-    koelinstallatie = arguments.get("koelinstallatie")
-    afzuiginstallatie = arguments.get("afzuiginstallatie")
+async def _maatregelen(arguments: dict) -> tuple[dict, bool]:
+    """Bepaal EML-maatregelen via de engine; lokale fallback bij storing.
 
-    missing = []
-    if not sbi_code:
-        missing.append("sbi_code")
-    if koelinstallatie is None:
-        missing.append("koelinstallatie")
-    if afzuiginstallatie is None:
-        missing.append("afzuiginstallatie")
-    if missing:
-        return [
-            TextContent(
-                type="text",
-                text=json.dumps(
-                    {
-                        "error": "ONTBREKENDE_VELDEN",
-                        "message": f"Verplichte velden ontbreken: {', '.join(missing)}",
-                    },
-                    ensure_ascii=False,
-                ),
-            )
-        ]
-
-    # Mock-subset: alleen bedrijfstak Horeca (SBI 55-56) is beschikbaar.
-    if not sbi_code.startswith(("55", "56")):
-        output = {
-            "sbi_code": sbi_code,
-            "beschikbaar": False,
-            "melding": (
-                "Voor deze bedrijfstak is nog geen maatregelenlijst "
-                "beschikbaar in de demo. Vraag de gebruiker zelf welke "
-                "maatregelen zijn genomen."
-            ),
-        }
-        _audit_log("maatregelen", arguments, output)
-        return [TextContent(type="text", text=_wrap_eml_provenance(output))]
-
-    lijst = _geldende_maatregelen(bool(koelinstallatie), bool(afzuiginstallatie))
-    output = {
-        "sbi_code": sbi_code,
-        "bedrijfstak": "Horeca",
-        "bron": "Erkende Maatregelenlijst energiebesparing (EML, mock-subset)",
-        "bedrijfskenmerken": {
-            "koelinstallatie": bool(koelinstallatie),
-            "afzuiginstallatie": bool(afzuiginstallatie),
-        },
-        "maatregelen": lijst,
-        "geldend_aantal": sum(1 for m in lijst if m["van_toepassing"]),
-        "melding": (
-            "De bedrijfskenmerken worden bewaard voor de volgende "
-            "rapportageronde, zodat deze vragen niet opnieuw gesteld hoeven "
-            "te worden."
-        ),
+    Geeft (data, fallback_gebruikt) terug zodat de caller het juiste
+    provenance-label kan kiezen.
+    """
+    feiten = {
+        str(k): bool(v) for k, v in (arguments.get("feiten") or {}).items()
     }
-    _audit_log("maatregelen", arguments, output)
-    return [TextContent(type="text", text=_wrap_eml_provenance(output))]
+    try:
+        result = await _rpc_call(
+            "tools/call",
+            {
+                "name": "execute_law",
+                "arguments": {
+                    "service": "RVO",
+                    "law": EML_LAW,
+                    "parameters": feiten,
+                },
+            },
+        )
+        structured = (result or {}).get("structuredContent") or {}
+        if not structured.get("success"):
+            raise RuntimeError("engine-response zonder structuredContent")
+    except (httpx.HTTPError, RuntimeError) as e:
+        logger.warning("EML via engine mislukt, lokale fallback: %s", e)
+        return _eml_fallback(feiten), True
+
+    if structured.get("missing_required"):
+        vragen = _eml_vragen(structured.get("rule_spec", {}), feiten)
+        if not vragen:
+            # Spec onbruikbaar om vragen uit af te leiden — fallback weet ze.
+            return _eml_fallback(feiten), True
+        return {"benodigde_feiten": vragen}, False
+
+    lijst = _eml_lijst(structured)
+    if not lijst:
+        logger.warning("EML-engine-response zonder eml_-outputs, fallback")
+        return _eml_fallback(feiten), True
+    return {"maatregelen": lijst, "feiten": feiten}, False
 
 
 async def _check_informatieplicht(params: dict) -> dict:
