@@ -45,6 +45,67 @@ REGELRECHT_RPC_URL = os.getenv(
 SOURCE_LABEL = "RegelRecht (poc-machine-law)"
 SERVER_VERSION = "0.1.0"
 
+# ---------------------------------------------------------------------------
+# Lokale regelevaluatie: Erkende Maatregelenlijst (EML, mock-subset Horeca)
+#
+# Welke maatregelen gelden hangt deels af van feitelijke bedrijfskenmerken
+# die nergens geregistreerd staan (koelinstallatie? afzuiginstallatie?).
+# Die feiten levert de ondernemer; de regel bepaalt vervolgens de geldende
+# maatregelen. Deze evaluatie staat hier (RegelRecht = regelevaluatie) maar
+# is een LOKALE mock — nog geen onderdeel van de poc-machine-law engine.
+# Verhuist naar de engine zodra die de EML-regels ondersteunt (PDR-007).
+# ---------------------------------------------------------------------------
+
+EML_SOURCE_LABEL = "RegelRecht — EML-maatregelbepaling (lokale mock)"
+
+EML_HORECA = [
+    {
+        "id": "EML-H01",
+        "naam": "LED-verlichting in verblijfsruimten",
+        "voorwaarde": "altijd",
+    },
+    {
+        "id": "EML-H02",
+        "naam": "Waterzijdig inregelen van het verwarmingssysteem",
+        "voorwaarde": "altijd",
+    },
+    {
+        "id": "EML-H03",
+        "naam": "Deurdranger of automatische deursluiting buitendeur",
+        "voorwaarde": "altijd",
+    },
+    {
+        "id": "EML-H10",
+        "naam": "Isolatie van koel- of vriescel (deuren en wanden)",
+        "voorwaarde": "koelinstallatie",
+    },
+    {
+        "id": "EML-H11",
+        "naam": "Nachtafdekking van koelmeubelen",
+        "voorwaarde": "koelinstallatie",
+    },
+    {
+        "id": "EML-H20",
+        "naam": "Tijd- of aanwezigheidsschakeling op de afzuiginstallatie",
+        "voorwaarde": "afzuiginstallatie",
+    },
+    {
+        "id": "EML-H21",
+        "naam": "Frequentieregeling op de afzuigventilator",
+        "voorwaarde": "afzuiginstallatie",
+    },
+]
+
+
+def _geldende_maatregelen(koelinstallatie: bool, afzuiginstallatie: bool) -> list[dict]:
+    """Bepaal welke EML-maatregelen gelden op basis van bedrijfskenmerken."""
+    actief = {
+        "altijd": True,
+        "koelinstallatie": koelinstallatie,
+        "afzuiginstallatie": afzuiginstallatie,
+    }
+    return [{**m, "van_toepassing": actief[m["voorwaarde"]]} for m in EML_HORECA]
+
 
 # ---------------------------------------------------------------------------
 # HTTP helper — JSON-RPC naar RegelRecht endpoint
@@ -157,6 +218,22 @@ def _wrap_provenance(data: dict) -> str:
     )
 
 
+def _wrap_eml_provenance(data: dict) -> str:
+    """Provenance voor de lokale EML-maatregelbepaling (mock, niet de engine)."""
+    return json.dumps(
+        {
+            "data": data,
+            "provenance": {
+                "source": EML_SOURCE_LABEL,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "version": SERVER_VERSION,
+                "mock": True,
+            },
+        },
+        ensure_ascii=False,
+    )
+
+
 def _audit_log(tool_name: str, input_data: dict, output_data: dict) -> None:
     """Log een tool-aanroep conform standaard §2.2 (Audit by default)."""
     entry = {
@@ -231,6 +308,53 @@ async def list_tools() -> list[Tool]:
                 openWorldHint=True,
             ),
         ),
+        Tool(
+            name="maatregelen",
+            description=(
+                "Bepaal welke energiebesparende maatregelen uit de Erkende "
+                "Maatregelenlijst (EML) gelden voor het bedrijf, op basis van "
+                "de bedrijfstak en feitelijke bedrijfskenmerken. Stel de "
+                "gebruiker EERST de feitelijke vragen (heeft u een "
+                "koelinstallatie? heeft u een afzuiginstallatie?) — deze "
+                "feiten staan nergens geregistreerd en blijven bewust bij de "
+                "ondernemer. Roep daarna deze tool aan met de antwoorden."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "sbi_code": {
+                        "type": "string",
+                        "description": (
+                            "SBI-code van de hoofdactiviteit (uit "
+                            "kvk__mijn_bedrijf), bv. '56102' voor cafés. "
+                            "Momenteel is alleen de bedrijfstak Horeca "
+                            "(SBI 55-56) beschikbaar."
+                        ),
+                    },
+                    "koelinstallatie": {
+                        "type": "boolean",
+                        "description": (
+                            "Heeft het bedrijf een koel- of vriesinstallatie? "
+                            "(antwoord van de gebruiker)"
+                        ),
+                    },
+                    "afzuiginstallatie": {
+                        "type": "boolean",
+                        "description": (
+                            "Heeft het bedrijf een afzuiginstallatie? "
+                            "(antwoord van de gebruiker)"
+                        ),
+                    },
+                },
+                "required": ["sbi_code", "koelinstallatie", "afzuiginstallatie"],
+                "additionalProperties": False,
+            },
+            annotations=ToolAnnotations(
+                readOnlyHint=True,
+                destructiveHint=False,
+                openWorldHint=False,
+            ),
+        ),
     ]
 
 
@@ -247,7 +371,72 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             )
         ]
 
+    if name == "maatregelen":
+        return _maatregelen(arguments)
+
     raise ValueError(f"Onbekende tool: {name}")
+
+
+def _maatregelen(arguments: dict) -> list[TextContent]:
+    """Bepaal geldende EML-maatregelen voor de bedrijfstak (lokale mock)."""
+    sbi_code = str(arguments.get("sbi_code", "")).strip()
+    koelinstallatie = arguments.get("koelinstallatie")
+    afzuiginstallatie = arguments.get("afzuiginstallatie")
+
+    missing = []
+    if not sbi_code:
+        missing.append("sbi_code")
+    if koelinstallatie is None:
+        missing.append("koelinstallatie")
+    if afzuiginstallatie is None:
+        missing.append("afzuiginstallatie")
+    if missing:
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "error": "ONTBREKENDE_VELDEN",
+                        "message": f"Verplichte velden ontbreken: {', '.join(missing)}",
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+        ]
+
+    # Mock-subset: alleen bedrijfstak Horeca (SBI 55-56) is beschikbaar.
+    if not sbi_code.startswith(("55", "56")):
+        output = {
+            "sbi_code": sbi_code,
+            "beschikbaar": False,
+            "melding": (
+                "Voor deze bedrijfstak is nog geen maatregelenlijst "
+                "beschikbaar in de demo. Vraag de gebruiker zelf welke "
+                "maatregelen zijn genomen."
+            ),
+        }
+        _audit_log("maatregelen", arguments, output)
+        return [TextContent(type="text", text=_wrap_eml_provenance(output))]
+
+    lijst = _geldende_maatregelen(bool(koelinstallatie), bool(afzuiginstallatie))
+    output = {
+        "sbi_code": sbi_code,
+        "bedrijfstak": "Horeca",
+        "bron": "Erkende Maatregelenlijst energiebesparing (EML, mock-subset)",
+        "bedrijfskenmerken": {
+            "koelinstallatie": bool(koelinstallatie),
+            "afzuiginstallatie": bool(afzuiginstallatie),
+        },
+        "maatregelen": lijst,
+        "geldend_aantal": sum(1 for m in lijst if m["van_toepassing"]),
+        "melding": (
+            "De bedrijfskenmerken worden bewaard voor de volgende "
+            "rapportageronde, zodat deze vragen niet opnieuw gesteld hoeven "
+            "te worden."
+        ),
+    }
+    _audit_log("maatregelen", arguments, output)
+    return [TextContent(type="text", text=_wrap_eml_provenance(output))]
 
 
 async def _check_informatieplicht(params: dict) -> dict:
