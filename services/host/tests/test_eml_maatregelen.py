@@ -152,3 +152,43 @@ def test_maatregelen_fallback_bij_onbereikbare_engine(monkeypatch):
     codes = {m["code"] for m in data["maatregelen"]}
     assert codes == {"GC1", "GC3", "GF4", "FD3", "FD7", "FE4", "GD1"}
     assert all(m["van_toepassing"] for m in data["maatregelen"])
+
+
+def test_maatregelen_fallback_bij_onbruikbare_engine_response(monkeypatch):
+    regelrecht = _load_regelrecht()
+
+    for kapotte_response in ({}, {"structuredContent": {"success": False}}):
+
+        async def nep_rpc(method, params, _response=kapotte_response):
+            return _response
+
+        monkeypatch.setattr(regelrecht, "_rpc_call", nep_rpc)
+        data, fallback = asyncio.run(
+            regelrecht._maatregelen(
+                {"feiten": {"HEEFT_KOELINSTALLATIE": True, "HEEFT_AFZUIGINSTALLATIE": True}}
+            )
+        )
+        assert fallback is True
+        assert len(data["maatregelen"]) == 7
+
+
+def test_maatregelen_fallback_bij_missing_required_zonder_rule_spec(monkeypatch):
+    regelrecht = _load_regelrecht()
+
+    async def nep_rpc(method, params):
+        return {
+            "structuredContent": {
+                "success": True,
+                "missing_required": True,
+                "output": {},
+                "rule_spec": {},
+            }
+        }
+
+    monkeypatch.setattr(regelrecht, "_rpc_call", nep_rpc)
+    data, fallback = asyncio.run(regelrecht._maatregelen({}))
+    assert fallback is True
+    assert [v["naam"] for v in data["benodigde_feiten"]] == [
+        "HEEFT_KOELINSTALLATIE",
+        "HEEFT_AFZUIGINSTALLATIE",
+    ]

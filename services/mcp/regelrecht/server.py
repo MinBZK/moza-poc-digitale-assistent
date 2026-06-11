@@ -130,13 +130,15 @@ def _eml_lijst(structured: dict) -> list[dict]:
     for naam, waarde in structured.get("output", {}).items():
         if not (naam.startswith("eml_") and naam.endswith("_van_toepassing")):
             continue
+        if waarde is None:
+            continue
         code = naam[len("eml_") : -len("_van_toepassing")].upper()
         beschrijving = beschrijvingen.get(naam, "")
         categorie, scheider, titel = beschrijving.partition(" — ")
         lijst.append(
             {
                 "code": code,
-                "naam": titel if scheider else beschrijving,
+                "naam": titel if scheider else (beschrijving or code),
                 "categorie": categorie if scheider else "",
                 "van_toepassing": bool(waarde),
             }
@@ -264,7 +266,7 @@ def _wrap_eml_provenance(data: dict) -> str:
                 "source": EML_SOURCE_LABEL,
                 "timestamp": datetime.now(UTC).isoformat(),
                 "version": SERVER_VERSION,
-                "mock": True,
+                "fallback": True,
             },
         },
         ensure_ascii=False,
@@ -408,9 +410,10 @@ async def _maatregelen(arguments: dict) -> tuple[dict, bool]:
     Geeft (data, fallback_gebruikt) terug zodat de caller het juiste
     provenance-label kan kiezen.
     """
-    feiten = {
-        str(k): bool(v) for k, v in (arguments.get("feiten") or {}).items()
-    }
+    ruwe_feiten = arguments.get("feiten")
+    if not isinstance(ruwe_feiten, dict):
+        ruwe_feiten = {}
+    feiten = {str(k): bool(v) for k, v in ruwe_feiten.items()}
     try:
         result = await _rpc_call(
             "tools/call",
@@ -425,8 +428,8 @@ async def _maatregelen(arguments: dict) -> tuple[dict, bool]:
         )
         structured = (result or {}).get("structuredContent") or {}
         if not structured.get("success"):
-            raise RuntimeError("engine-response zonder structuredContent")
-    except (httpx.HTTPError, RuntimeError) as e:
+            raise RuntimeError(f"engine-response niet bruikbaar (success={structured.get('success')!r})")
+    except (httpx.HTTPError, ValueError, RuntimeError) as e:
         logger.warning("EML via engine mislukt, lokale fallback: %s", e)
         return _eml_fallback(feiten), True
 
