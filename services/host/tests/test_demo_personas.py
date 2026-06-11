@@ -66,24 +66,24 @@ def test_netbeheerder_onbekend_kvk_geeft_geen_data():
     )
 
 
-def test_eml_maatregelen_volgen_bedrijfskenmerken():
+def test_eml_fallback_volgt_bedrijfskenmerken():
     regelrecht = _load("regelrecht")
-    lijst = regelrecht._geldende_maatregelen(
-        koelinstallatie=True, afzuiginstallatie=False
+    data = regelrecht._eml_fallback(
+        {"HEEFT_KOELINSTALLATIE": True, "HEEFT_AFZUIGINSTALLATIE": False}
     )
-    per_voorwaarde = {m["id"]: m["van_toepassing"] for m in lijst}
-    # 'altijd'-maatregelen gelden onvoorwaardelijk
-    assert per_voorwaarde["EML-H01"] is True
-    # koelinstallatie=True activeert de koel-maatregelen
-    assert per_voorwaarde["EML-H10"] is True
-    # afzuiginstallatie=False deactiveert de afzuig-maatregelen
-    assert per_voorwaarde["EML-H20"] is False
+    per_code = {m["code"]: m["van_toepassing"] for m in data["maatregelen"]}
+    # onvoorwaardelijke maatregelen gelden altijd
+    assert per_code["GF4"] is True
+    # koelinstallatie=True activeert de productkoeling-maatregelen
+    assert per_code["FD3"] is True
+    # afzuiginstallatie=False deactiveert de afzuig-/ventilatiemaatregelen
+    assert per_code["FE4"] is False
 
 
-def test_eml_alle_kenmerken_true_geeft_alle_maatregelen():
+def test_eml_fallback_zonder_feiten_geeft_de_twee_vragen():
     regelrecht = _load("regelrecht")
-    lijst = regelrecht._geldende_maatregelen(
-        koelinstallatie=True, afzuiginstallatie=True
-    )
-    assert all(m["van_toepassing"] for m in lijst)
-    assert len(lijst) == len(regelrecht.EML_HORECA)
+    data = regelrecht._eml_fallback({})
+    assert [v["naam"] for v in data["benodigde_feiten"]] == [
+        "HEEFT_KOELINSTALLATIE",
+        "HEEFT_AFZUIGINSTALLATIE",
+    ]
