@@ -65,6 +65,20 @@ blijven. De feitelijke vragen blijven bewust bij de ondernemer (alleen
 feiten, geen regelinterpretatie) en worden als `bedrijfskenmerken`
 meegegeven aan `rvo__indienen` ("bewaard voor de volgende ronde").
 
+**Addendum (2026-06-11):** de vervolgstap is uitgevoerd — de EML-bepaling
+draait nu als wet `omgevingswet/energiebesparing/maatregelen` in de
+poc-machine-law engine (zie
+`docs/superpowers/specs/2026-06-11-eml-naar-engine-design.md` en
+MinBZK/poc-machine-law#483). Daarbij is de structuur gemoderniseerd naar de
+EML 2023 (één lijst, onderdelen Gebouwen/Faciliteiten/Processen, echte
+maatregelcodes; het bedrijfstak-model en de `sbi_code`-parameter zijn
+vervallen) en worden de feitelijke vragen niet meer hardcoded gesteld maar
+door de assistent afgelezen uit de wet-spec (parameter-descriptions). De
+lokale mock blijft als fallback met eigen provenance-label. Bekende
+beperking voor de echte bouw: per-maatregel boolean outputs schalen niet
+naar de volledige EML (~150 maatregelen) — daarvoor is een
+list/map-uitbreiding van de engine nodig.
+
 ### 4. Geautomatiseerde toets als onderdeel van de indienings-response
 
 De omgevingsdienst-toets (stap 4 van de flow) is een mock-veld `toets` in de
