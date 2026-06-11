@@ -41,13 +41,16 @@ async def _execute_law(client: httpx.AsyncClient, parameters: dict) -> dict:
     data = response.json()
     if "error" in data:
         raise SystemExit(f"RPC-fout: {data['error']}")
-    return data["result"].get("structuredContent", {})
+    return (data.get("result") or {}).get("structuredContent", {})
 
 
 async def main() -> None:
     async with httpx.AsyncClient() as client:
         # Stap 1: zonder feiten — engine moet melden wat er ontbreekt
-        stap1 = await _execute_law(client, {})
+        try:
+            stap1 = await _execute_law(client, {})
+        except httpx.HTTPError as e:
+            raise SystemExit(f"Engine niet bereikbaar via {RPC_URL}: {e}") from e
         print("— Stap 1 (zonder feiten) —")
         print("missing_required:", stap1.get("missing_required"))
         params = (
@@ -58,14 +61,18 @@ async def main() -> None:
         assert stap1.get("missing_required") is True, "verwacht: feiten ontbreken"
 
         # Stap 2: met feiten (Noon: koeling én afzuiging)
-        stap2 = await _execute_law(
-            client,
-            {"HEEFT_KOELINSTALLATIE": True, "HEEFT_AFZUIGINSTALLATIE": True},
-        )
+        try:
+            stap2 = await _execute_law(
+                client,
+                {"HEEFT_KOELINSTALLATIE": True, "HEEFT_AFZUIGINSTALLATIE": True},
+            )
+        except httpx.HTTPError as e:
+            raise SystemExit(f"Engine niet bereikbaar via {RPC_URL}: {e}") from e
         print("— Stap 2 (met feiten) —")
         outputs = stap2.get("output", {})
         print(json.dumps(outputs, indent=2, ensure_ascii=False))
         eml = {k: v for k, v in outputs.items() if k.startswith("eml_")}
+        # pas aan als de wet-YAML meer maatregelen krijgt
         assert len(eml) == 7, f"verwacht 7 maatregelen, kreeg {len(eml)}"
         assert all(eml.values()), "Noon (koeling+afzuiging): alles van toepassing"
         print("OK — engine bepaalt de EML-maatregelen")
