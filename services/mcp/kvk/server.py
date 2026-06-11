@@ -58,7 +58,9 @@ KVK_TEST_API_KEY = "l7xx1f2691f2520d487b902f4e0b57a0b197"
 # Donald, via de KvK Test API). Via DEMO_KVK_NUMMER selecteerbaar — bv.
 # 85234567 voor de mock-persona Claudia van Dam (Koffiezaak Noon), die niet
 # in de KvK Test API bestaat en volledig uit MOCK_PROFIELEN komt (PDR-007).
-SESSIE_KVK_NUMMER = os.getenv("DEMO_KVK_NUMMER", "68750110")
+# `or` i.p.v. getenv-default: een lege string (bv. compose-passthrough zonder
+# waarde) moet ook op de default terugvallen.
+SESSIE_KVK_NUMMER = os.getenv("DEMO_KVK_NUMMER") or "68750110"
 
 # Cache voor het basisprofiel (wordt één keer opgehaald per server-lifetime)
 _profiel_cache: dict | None = None
