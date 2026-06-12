@@ -58,7 +58,12 @@ async def main() -> None:
         )
         for p in params:
             print(f"  vraag: {p.get('name')}: {p.get('description')}")
-        assert stap1.get("missing_required") is True, "verwacht: feiten ontbreken"
+        if stap1.get("missing_required") is not True:
+            raise SystemExit(
+                f"FOUT: engine meldt geen ontbrekende feiten (missing_required="
+                f"{stap1.get('missing_required')!r}) — staat de wet {LAW} al "
+                "op de engine?"
+            )
 
         # Stap 2: met feiten (Noon: koeling én afzuiging)
         try:
@@ -73,8 +78,13 @@ async def main() -> None:
         print(json.dumps(outputs, indent=2, ensure_ascii=False))
         eml = {k: v for k, v in outputs.items() if k.startswith("eml_")}
         # pas aan als de wet-YAML meer maatregelen krijgt
-        assert len(eml) == 7, f"verwacht 7 maatregelen, kreeg {len(eml)}"
-        assert all(eml.values()), "Noon (koeling+afzuiging): alles van toepassing"
+        if len(eml) != 7:
+            raise SystemExit(f"FOUT: verwacht 7 maatregelen, kreeg {len(eml)}")
+        if not all(eml.values()):
+            raise SystemExit(
+                "FOUT: Noon (koeling+afzuiging) hoort alle maatregelen "
+                f"van toepassing te hebben: {eml}"
+            )
         print("OK — engine bepaalt de EML-maatregelen")
 
 

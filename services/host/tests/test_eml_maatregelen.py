@@ -192,3 +192,48 @@ def test_maatregelen_fallback_bij_missing_required_zonder_rule_spec(monkeypatch)
         "HEEFT_KOELINSTALLATIE",
         "HEEFT_AFZUIGINSTALLATIE",
     ]
+
+
+def test_maatregelen_normaliseert_feiten_keys_en_negeert_niet_boolse_waarden(
+    monkeypatch,
+):
+    regelrecht = _load_regelrecht()
+    gezien = {}
+
+    async def nep_rpc(method, params):
+        gezien.update(params["arguments"]["parameters"])
+        return ENGINE_RESULT_COMPLEET
+
+    monkeypatch.setattr(regelrecht, "_rpc_call", nep_rpc)
+    asyncio.run(
+        regelrecht._maatregelen(
+            {
+                "feiten": {
+                    "heeft_koelinstallatie": True,  # lowercase -> genormaliseerd
+                    "HEEFT_AFZUIGINSTALLATIE": "nee",  # string -> geen antwoord
+                }
+            }
+        )
+    )
+    assert gezien == {"HEEFT_KOELINSTALLATIE": True}
+
+    # Fallback-route: zelfde normalisatie; de string-waarde telt niet als
+    # antwoord, dus die vraag wordt opnieuw gesteld.
+    async def kapot(method, params):
+        raise regelrecht.httpx.ConnectError("engine offline")
+
+    monkeypatch.setattr(regelrecht, "_rpc_call", kapot)
+    data, fallback = asyncio.run(
+        regelrecht._maatregelen(
+            {
+                "feiten": {
+                    "heeft_koelinstallatie": True,
+                    "HEEFT_AFZUIGINSTALLATIE": "nee",
+                }
+            }
+        )
+    )
+    assert fallback is True
+    assert [v["naam"] for v in data["benodigde_feiten"]] == [
+        "HEEFT_AFZUIGINSTALLATIE"
+    ]

@@ -413,7 +413,11 @@ async def _maatregelen(arguments: dict) -> tuple[dict, bool]:
     ruwe_feiten = arguments.get("feiten")
     if not isinstance(ruwe_feiten, dict):
         ruwe_feiten = {}
-    feiten = {str(k): bool(v) for k, v in ruwe_feiten.items()}
+    # Normaliseer keys naar de parameternamen (uppercase); niet-boolse waarden
+    # tellen niet als antwoord — de vraag wordt dan gewoon opnieuw gesteld.
+    feiten = {
+        str(k).upper(): v for k, v in ruwe_feiten.items() if isinstance(v, bool)
+    }
     try:
         result = await _rpc_call(
             "tools/call",
