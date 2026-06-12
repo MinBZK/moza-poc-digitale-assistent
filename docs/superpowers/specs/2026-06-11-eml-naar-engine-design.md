@@ -124,8 +124,9 @@ engine-proxy met een **twee-staps-flow**:
    aan de ondernemer gesteld moeten worden."
 2. **Stap 1 — vragen aflezen.** Aanroep zonder (volledige) feiten →
    server roept `execute_law` aan → engine antwoordt met
-   `missing_required` / `missing_parameters` (incl. descriptions uit de
-   wet-YAML) → server geeft terug:
+   `missing_required: true` plus de volledige wet-spec (`rule_spec`);
+   de server leest de vragen af uit
+   `rule_spec.properties.parameters[].description` → server geeft terug:
    `{"benodigde_feiten": [{"naam": "HEEFT_KOELINSTALLATIE", "vraag": "Heeft het bedrijf ..."}, ...]}`.
    De assistent stelt die vragen letterlijk; niets is hardcoded.
 3. **Stap 2 — maatregelen bepalen.** Aanroep mét feiten → `execute_law`
