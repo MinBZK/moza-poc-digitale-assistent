@@ -294,83 +294,74 @@ def _audit_log(tool_name: str, input_data: dict, output_data: dict) -> None:
 
 @server.list_tools()
 async def list_tools() -> list[Tool]:
-    """Publiceer beschikbare tools met beschrijving, schema en annotaties."""
+    """Publiceer beschikbare tools met beschrijving, schema en annotaties.
+
+    RegelRecht is één engine (poc-machine-law); daarom is er één generieke
+    tool `execute_law`. Welke regel je uitvoert kies je via de parameter
+    `law` — niet via aparte tools per wet (PDR-007-addendum / PDR-008).
+    """
     return [
         Tool(
-            name="check",
+            name="execute_law",
             description=(
-                "Controleer of de Informatieplicht Energiebesparing van toepassing "
-                "is op een bedrijf. Gebruikt de beslislogica van het Besluit "
-                "activiteiten leefomgeving (artikelen 5.15 en 5.15d) om te bepalen "
-                "of een organisatie verplicht is om energiebesparende maatregelen "
-                "te rapporteren. Vereist minimaal een KvK-nummer. Optioneel kunnen "
-                "energieverbruikcijfers worden meegegeven voor een volledig oordeel."
+                "Voer een RegelRecht-regel (wet) uit via de poc-machine-law "
+                "engine en krijg een juridisch onderbouwd oordeel terug. Dit is "
+                "de ENIGE RegelRecht-tool: kies de regel via de parameter "
+                "'law'.\n\n"
+                "Beschikbare regels in deze demo:\n"
+                "• 'omgevingswet/energiebesparing/informatieplicht' — bepaalt of "
+                "de energiebesparings-/informatieplicht geldt. parameters: "
+                '{"KVK_NUMMER": "<8 cijfers>"}. Geef verbruik en woonfunctie mee '
+                'via overrides: {"RVO": {"JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": '
+                '<kWh>, "JAARLIJKS_GASVERBRUIK_M3": <m3>, "IS_WOONFUNCTIE": '
+                "<true/false>}}. Drempels: 50.000 kWh / 25.000 m3.\n"
+                "• 'omgevingswet/energiebesparing/maatregelen' — bepaalt welke "
+                "EML-2023-maatregelen gelden. TWEE-STAPS: roep EERST aan met "
+                "parameters={} (leeg). De respons (benodigde_feiten) meldt welke "
+                "feitelijke vragen je aan de ondernemer moet stellen. Stel die "
+                "vragen letterlijk en roep daarna opnieuw aan met de antwoorden "
+                'als parameters, bv. {"HEEFT_KOELINSTALLATIE": true, '
+                '"HEEFT_AFZUIGINSTALLATIE": false}.\n\n'
+                "Parameternamen volgen de engine-conventie (HOOFDLETTERS). Geef "
+                "regel-parameters in 'parameters'; gegevens die de engine "
+                "normaliter zelf ophaalt (zoals verbruik) geef je in 'overrides' "
+                "onder de juiste service."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "kvk_nummer": {
+                    "law": {
                         "type": "string",
                         "description": (
-                            "KvK-nummer van het bedrijf (8 cijfers). "
-                            "Wordt gebruikt om bedrijfsgegevens op te halen."
+                            "Pad van de uit te voeren regel, bv. "
+                            "'omgevingswet/energiebesparing/informatieplicht' of "
+                            "'omgevingswet/energiebesparing/maatregelen'."
                         ),
                     },
-                    "jaarlijks_elektriciteitsverbruik_kwh": {
-                        "type": "number",
-                        "description": (
-                            "Jaarlijks elektriciteitsverbruik in kWh. "
-                            "Drempel: 50.000 kWh."
-                        ),
-                    },
-                    "jaarlijks_gasverbruik_m3": {
-                        "type": "number",
-                        "description": (
-                            "Jaarlijks gasverbruik in m3 aardgasequivalenten. "
-                            "Drempel: 25.000 m3."
-                        ),
-                    },
-                    "is_woonfunctie": {
-                        "type": "boolean",
-                        "description": (
-                            "Of het pand uitsluitend een woonfunctie heeft. "
-                            "Gebouwen met alleen woonfunctie zijn uitgezonderd."
-                        ),
-                    },
-                },
-                "required": ["kvk_nummer"],
-                "additionalProperties": False,
-            },
-            annotations=ToolAnnotations(
-                readOnlyHint=True,
-                destructiveHint=False,
-                openWorldHint=True,
-            ),
-        ),
-        Tool(
-            name="maatregelen",
-            description=(
-                "Bepaal welke maatregelen uit de Erkende Maatregelenlijst "
-                "(EML 2023) voor het bedrijf gelden. Roep EERST aan zónder "
-                "feiten: de tool meldt dan welke feitelijke vragen aan de "
-                "ondernemer gesteld moeten worden (benodigde_feiten). Stel "
-                "die vragen letterlijk — de feiten staan nergens "
-                "geregistreerd en blijven bewust bij de ondernemer — en roep "
-                "daarna opnieuw aan met de antwoorden in 'feiten'."
-            ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "feiten": {
+                    "parameters": {
                         "type": "object",
                         "description": (
-                            "Antwoorden op de gemelde feitelijke vragen "
-                            "(naam → true/false). Weglaten bij de eerste "
-                            "aanroep."
+                            "Regel-parameters (engine-namen, HOOFDLETTERS). Voor "
+                            "de maatregelen-regel: leeg bij de eerste aanroep, "
+                            "daarna de feiten als naam → true/false."
                         ),
-                        "additionalProperties": {"type": "boolean"},
+                        "additionalProperties": True,
+                    },
+                    "overrides": {
+                        "type": "object",
+                        "description": (
+                            "Optionele overrides per service, bv. "
+                            '{"RVO": {"JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": '
+                            "61250}}."
+                        ),
+                        "additionalProperties": True,
+                    },
+                    "service": {
+                        "type": "string",
+                        "description": "Service waaronder de regel valt. Standaard 'RVO'.",
                     },
                 },
+                "required": ["law"],
                 "additionalProperties": False,
             },
             annotations=ToolAnnotations(
@@ -385,23 +376,84 @@ async def list_tools() -> list[Tool]:
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     """Voer een tool uit en log de aanroep (standaard §2.2)."""
-    if name == "check":
-        result = await _check_informatieplicht(arguments)
-        _audit_log("check", arguments, result)
-        return [
-            TextContent(
-                type="text",
-                text=_wrap_provenance(result),
-            )
-        ]
-
-    if name == "maatregelen":
-        data, fallback = await _maatregelen(arguments)
-        _audit_log("maatregelen", arguments, data)
+    if name == "execute_law":
+        data, fallback = await _execute_law(arguments)
+        _audit_log("execute_law", arguments, data)
         tekst = _wrap_eml_provenance(data) if fallback else _wrap_provenance(data)
         return [TextContent(type="text", text=tekst)]
 
     raise ValueError(f"Onbekende tool: {name}")
+
+
+async def _execute_law(arguments: dict) -> tuple[dict, bool]:
+    """Dispatch één generieke RegelRecht-tool naar de juiste regel.
+
+    Geeft (data, fallback_gebruikt) terug. Alleen de EML-maatregelenregel kent
+    een lokale fallback (zie _maatregelen); andere regels gaan rechtstreeks naar
+    de engine. Zo ziet het LLM één tool, terwijl de regelkennis in de engine zit.
+    """
+    law = str(arguments.get("law", "")).strip()
+    if not law:
+        return {
+            "error": "ONTBREKEND_VELD",
+            "message": "Parameter 'law' is verplicht.",
+        }, False
+
+    parameters = arguments.get("parameters")
+    if not isinstance(parameters, dict):
+        parameters = {}
+
+    # EML-maatregelen: eigen twee-staps-flow + lokale fallback. De parameters
+    # ZIJN hier de feiten (HEEFT_KOELINSTALLATIE etc.).
+    if law == EML_LAW:
+        return await _maatregelen({"feiten": parameters})
+
+    service = str(arguments.get("service") or "RVO")
+    overrides = arguments.get("overrides")
+    overrides = overrides if isinstance(overrides, dict) else {}
+    return await _engine_execute(service, law, parameters, overrides), False
+
+
+async def _engine_execute(
+    service: str, law: str, parameters: dict, overrides: dict
+) -> dict:
+    """Generieke uitvoering van een regel via de engine, met nette foutmeldingen."""
+    rpc_arguments = {"service": service, "law": law, "parameters": parameters}
+    if overrides:
+        rpc_arguments["overrides"] = overrides
+
+    try:
+        result = await _rpc_call(
+            "tools/call",
+            {"name": "execute_law", "arguments": rpc_arguments},
+        )
+    except httpx.HTTPStatusError as e:
+        return {
+            "error": "SOURCE_UNAVAILABLE",
+            "message": (
+                f"RegelRecht endpoint niet beschikbaar: {e.response.status_code}"
+            ),
+        }
+    except httpx.RequestError as e:
+        return {
+            "error": "SOURCE_UNAVAILABLE",
+            "message": f"RegelRecht endpoint niet bereikbaar: {e}",
+        }
+    except RuntimeError as e:
+        return {
+            "error": "EXECUTION_ERROR",
+            "message": str(e),
+        }
+
+    # Extraheer structured content uit de MCP response
+    structured = (result or {}).get("structuredContent", {})
+    if not structured:
+        # Fallback: geef de ruwe tekst terug
+        content = (result or {}).get("content", [])
+        text = " ".join(c.get("text", "") for c in content if c.get("type") == "text")
+        return {"resultaat": text}
+
+    return _simplify_result(structured)
 
 
 async def _maatregelen(arguments: dict) -> tuple[dict, bool]:
@@ -449,72 +501,6 @@ async def _maatregelen(arguments: dict) -> tuple[dict, bool]:
         logger.warning("EML-engine-response zonder eml_-outputs, fallback")
         return _eml_fallback(feiten), True
     return {"maatregelen": lijst, "feiten": feiten}, False
-
-
-async def _check_informatieplicht(params: dict) -> dict:
-    """Check Informatieplicht Energiebesparing via RegelRecht."""
-    kvk_nummer = params.get("kvk_nummer", "")
-
-    # Bouw parameters op voor de law engine
-    law_params = {"KVK_NUMMER": kvk_nummer}
-
-    # Optionele overrides voor energieverbruik
-    overrides = {}
-    elektriciteit = params.get("jaarlijks_elektriciteitsverbruik_kwh")
-    gas = params.get("jaarlijks_gasverbruik_m3")
-    is_woonfunctie = params.get("is_woonfunctie")
-
-    if elektriciteit is not None or gas is not None or is_woonfunctie is not None:
-        rvo_overrides = {}
-        if elektriciteit is not None:
-            rvo_overrides["JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH"] = elektriciteit
-        if gas is not None:
-            rvo_overrides["JAARLIJKS_GASVERBRUIK_M3"] = gas
-        if is_woonfunctie is not None:
-            rvo_overrides["IS_WOONFUNCTIE"] = is_woonfunctie
-        overrides["RVO"] = rvo_overrides
-
-    # Bouw het RPC request
-    rpc_arguments = {
-        "service": "RVO",
-        "law": "omgevingswet/energiebesparing/informatieplicht",
-        "parameters": law_params,
-    }
-    if overrides:
-        rpc_arguments["overrides"] = overrides
-
-    try:
-        result = await _rpc_call(
-            "tools/call",
-            {"name": "execute_law", "arguments": rpc_arguments},
-        )
-    except httpx.HTTPStatusError as e:
-        return {
-            "error": "SOURCE_UNAVAILABLE",
-            "message": (
-                f"RegelRecht endpoint niet beschikbaar: {e.response.status_code}"
-            ),
-        }
-    except httpx.RequestError as e:
-        return {
-            "error": "SOURCE_UNAVAILABLE",
-            "message": f"RegelRecht endpoint niet bereikbaar: {e}",
-        }
-    except RuntimeError as e:
-        return {
-            "error": "EXECUTION_ERROR",
-            "message": str(e),
-        }
-
-    # Extraheer structured content uit de MCP response
-    structured = result.get("structuredContent", {})
-    if not structured:
-        # Fallback: geef de ruwe tekst terug
-        content = result.get("content", [])
-        text = " ".join(c.get("text", "") for c in content if c.get("type") == "text")
-        return {"resultaat": text}
-
-    return _simplify_result(structured)
 
 
 # ---------------------------------------------------------------------------

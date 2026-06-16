@@ -10,6 +10,7 @@ per bestandspad. De servers starten geen verbindingen bij import.
 """
 
 import importlib.util
+import json
 from pathlib import Path
 
 MCP_DIR = Path(__file__).resolve().parent.parent.parent / "mcp"
@@ -64,6 +65,29 @@ def test_netbeheerder_onbekend_kvk_geeft_geen_data():
         "Test BV Donald hoort GEEN netbeheerder-data te hebben: de bestaande "
         "demo-flow (verbruik uitvragen bij de gebruiker) moet blijven werken."
     )
+
+
+def test_wallet_presenteert_attestatie_met_toestemming():
+    """De energiegegevens komen als door de wallet gepresenteerde credential.
+
+    Demo-model EU Business Wallet: bron = wallet, uitgever = netbeheerder,
+    met expliciete toestemming. Het verbruik moet binnen de credential
+    leesbaar blijven voor de assistent.
+    """
+    netbeheerder = _load("netbeheerder")
+    resultaat = netbeheerder._verbruik({"kvk_nummer": NOON_KVK})
+    payload = json.loads(resultaat[0].text)
+
+    # Bron is de wallet; de netbeheerder is de uitgever van de attestatie
+    assert "Wallet" in payload["provenance"]["source"]
+    assert payload["provenance"]["issuer"] == netbeheerder.ISSUER_LABEL
+
+    data = payload["data"]
+    assert data["beschikbaar"] is True
+    assert data["credential"]["type"] == "EnergieverbruikAttestatie"
+    assert data["toestemming"]["met_toestemming_ondernemer"] is True
+    # Het verbruik blijft leesbaar — kern van de demo (boven de drempel)
+    assert data["verbruik"]["totaal"]["jaarlijks_elektriciteitsverbruik_kwh"] > 50_000
 
 
 def test_eml_fallback_volgt_bedrijfskenmerken():

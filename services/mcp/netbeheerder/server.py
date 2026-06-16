@@ -1,16 +1,23 @@
-"""Netbeheerder MCP-server — Energieverbruik bij de bron via MCP (mock).
+"""Wallet-presentatie van energiegegevens — demo-mock (PDR-008).
 
-Mock-implementatie van een netbeheerder-gegevensdienst. Levert het
-jaarlijkse energieverbruik (elektriciteit en gas) van de aansluiting(en)
-van een bedrijf, zodat de assistent verbruiksgegevens bij de bron kan
-raadplegen in plaats van ze aan de ondernemer te vragen (PDR-007).
+Demo-model van de EU Business Wallet: de ondernemer HOUDT een
+energieverbruik-attestatie (afgegeven door de netbeheerder) in zijn wallet
+en DEELT die met toestemming met de assistent. Zo komen de verbruiksgegevens
+"uit de wallet" in plaats van uit een directe bevraging van een achterliggende
+dienst.
 
-Alleen bekende demo-aansluitingen worden geserveerd; voor andere
-KvK-nummers meldt de server dat er geen gegevens beschikbaar zijn —
-de assistent valt dan terug op uitvragen bij de gebruiker.
+LET OP — dit is bewust GEEN echte wallet-/MCP-koppeling: de wallet is voor de
+demo een presentatie-/toestemmingslaag. De mock hieronder speelt de
+netbeheerder als UITGEVER (issuer) van de attestatie; de respons modelleert
+een door de wallet gepresenteerde verifiable credential met expliciete
+toestemming. Zie ook PDR-008 en https://digital-strategy.ec.europa.eu/nl/policies/business-wallets
 
-In productie zou dit een koppeling met de netbeheerder(s) zijn,
-uitsluitend met machtiging van de ondernemer.
+Alleen bekende demo-aansluitingen worden geserveerd; voor andere KvK-nummers
+meldt de server dat er geen attestatie in de wallet zit — de assistent valt
+dan terug op uitvragen bij de gebruiker.
+
+In productie zou de netbeheerder de attestatie uitgeven aan de wallet van de
+ondernemer (EUDI/Business Wallet), die haar met toestemming presenteert.
 
 Voldoet aan de MCP-standaard voor Generieke Interactieservices:
 - Provenance metadata bij elke response (§4.1, §7)
@@ -37,7 +44,10 @@ logger = logging.getLogger("netbeheerder")
 
 server = Server(name="netbeheerder")
 
-SOURCE_LABEL = "Netbeheerder (mock)"
+# De wallet PRESENTEERT de gegevens (bron die de gebruiker ziet); de
+# netbeheerder is de UITGEVER (issuer) van de attestatie.
+SOURCE_LABEL = "EU Business Wallet (mock)"
+ISSUER_LABEL = "Netbeheerder (mock, uitgever)"
 SERVER_VERSION = "0.1.0"
 
 # ---------------------------------------------------------------------------
@@ -88,6 +98,7 @@ def _wrap_provenance(data: dict | list) -> str:
             "data": data,
             "provenance": {
                 "source": SOURCE_LABEL,
+                "issuer": ISSUER_LABEL,
                 "timestamp": datetime.now(UTC).isoformat(),
                 "version": SERVER_VERSION,
                 "mock": True,
@@ -120,12 +131,15 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="verbruik",
             description=(
-                "Haal het jaarlijkse energieverbruik (elektriciteit in kWh en "
-                "gas in m³) op bij de netbeheerder voor het bedrijf van de "
-                "ingelogde gebruiker. Gebruik dit VOORDAT u de gebruiker om "
-                "verbruiksgegevens vraagt — als de bron de gegevens heeft, "
-                "hoeft de ondernemer niets op te zoeken. Als er geen gegevens "
-                "beschikbaar zijn, vraag het verbruik dan aan de gebruiker."
+                "Vraag de energieverbruik-attestatie op uit de EU Business "
+                "Wallet (mock) van de ingelogde ondernemer: het jaarverbruik "
+                "(elektriciteit in kWh, gas in m³), afgegeven door de "
+                "netbeheerder en met toestemming van de ondernemer gedeeld. "
+                "Gebruik dit VOORDAT u de gebruiker om verbruiksgegevens vraagt "
+                "— zit de attestatie in de wallet, dan hoeft de ondernemer niets "
+                "op te zoeken; vermeld dat de gegevens uit de wallet komen "
+                "(afgegeven door de netbeheerder). Zit er geen attestatie in de "
+                "wallet, vraag het verbruik dan aan de gebruiker."
             ),
             inputSchema={
                 "type": "object",
@@ -181,14 +195,33 @@ def _verbruik(arguments: dict) -> list[TextContent]:
             "kvk_nummer": kvk_nummer,
             "beschikbaar": False,
             "melding": (
-                "Geen verbruiksgegevens beschikbaar bij de netbeheerder voor "
-                "dit KvK-nummer. Vraag het jaarverbruik aan de gebruiker."
+                "Geen energieverbruik-attestatie in de wallet voor dit "
+                "KvK-nummer. Vraag het jaarverbruik aan de gebruiker."
             ),
         }
         _audit_log("verbruik", arguments, output)
         return [TextContent(type="text", text=_wrap_provenance(output))]
 
-    output = {"beschikbaar": True, **data}
+    # Modelleer de respons als een door de wallet gepresenteerde credential:
+    # uitgever (netbeheerder), houder (de ondernemer) en expliciete toestemming.
+    output = {
+        "beschikbaar": True,
+        "credential": {
+            "type": "EnergieverbruikAttestatie",
+            "uitgegeven_door": data.get("netbeheerder", ISSUER_LABEL),
+            "houder": {"kvk_nummer": kvk_nummer},
+            "peiljaar": data["peiljaar"],
+        },
+        "toestemming": {
+            "gedeeld_via": SOURCE_LABEL,
+            "met_toestemming_ondernemer": True,
+        },
+        "verbruik": {
+            "aansluitingen": data["aansluitingen"],
+            "totaal": data["totaal"],
+        },
+        "toelichting": data["toelichting"],
+    }
     _audit_log("verbruik", arguments, output)
     return [TextContent(type="text", text=_wrap_provenance(output))]
 

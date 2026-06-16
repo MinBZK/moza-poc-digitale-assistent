@@ -5,8 +5,8 @@ Gebruiker: Moet mijn bedrijf voldoen aan de Informatieplicht Energiebesparing?
 Assistent roept tool aan: kvk__mijn_bedrijf()
 Assistent ontvangt: Test BV Donald, KvK 68750110, adres Hizzaarderlaan 3A Lollum, BAG: gebruiksdoel industriefunctie, is_woonfunctie: false
 
-Assistent roept tool aan: regelrecht__check(kvk_nummer="68750110", is_woonfunctie=false)
-Assistent ontvangt: ontbrekende gegevens — energieverbruik nodig
+Assistent roept tool aan: regelrecht__execute_law(law="omgevingswet/energiebesparing/informatieplicht", parameters={"KVK_NUMMER": "68750110"}, overrides={"RVO": {"IS_WOONFUNCTIE": false}})
+Assistent ontvangt: ontbrekende gegevens - energieverbruik nodig
 
 Assistent:
 Uw bedrijf: Test BV Donald (KvK 68750110)
@@ -24,7 +24,7 @@ Bron: KvK Handelsregister
 
 Gebruiker: 60.000 kWh elektriciteit en 10.000 m3 gas
 
-Assistent roept tool aan: regelrecht__check(kvk_nummer="68750110", jaarlijks_elektriciteitsverbruik_kwh=60000, jaarlijks_gasverbruik_m3=10000, is_woonfunctie=false)
+Assistent roept tool aan: regelrecht__execute_law(law="omgevingswet/energiebesparing/informatieplicht", parameters={"KVK_NUMMER": "68750110"}, overrides={"RVO": {"JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": 60000, "JAARLIJKS_GASVERBRUIK_M3": 10000, "IS_WOONFUNCTIE": false}})
 Assistent roept tool aan: rvo__zoek_regeling(trefwoord="informatieplicht energiebesparing")
 
 Assistent:
@@ -60,8 +60,8 @@ Inputwaarden:
 - Gasverbruik: 10.000 m³/jaar
 
 Berekening:
-- Drempel elektriciteit: 60.000 kWh > 50.000 kWh — overschreden
-- Drempel aardgas: 10.000 m³ < 25.000 m³ — niet overschreden
+- Drempel elektriciteit: 60.000 kWh > 50.000 kWh - overschreden
+- Drempel aardgas: 10.000 m³ < 25.000 m³ - niet overschreden
 - Woonfunctie-uitzondering: nee
 
 Uitkomst:

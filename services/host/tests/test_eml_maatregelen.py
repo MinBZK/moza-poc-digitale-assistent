@@ -194,6 +194,82 @@ def test_maatregelen_fallback_bij_missing_required_zonder_rule_spec(monkeypatch)
     ]
 
 
+def test_execute_law_dispatcht_eml_naar_maatregelen(monkeypatch):
+    """De generieke tool stuurt de maatregelen-wet door naar de EML-flow.
+
+    De parameters ZIJN bij die wet de feiten; ze worden als zodanig
+    doorgegeven aan de engine.
+    """
+    regelrecht = _load_regelrecht()
+
+    async def nep_rpc(method, params):
+        assert params["arguments"]["law"] == regelrecht.EML_LAW
+        assert params["arguments"]["parameters"] == {
+            "HEEFT_KOELINSTALLATIE": True,
+            "HEEFT_AFZUIGINSTALLATIE": False,
+        }
+        return ENGINE_RESULT_COMPLEET
+
+    monkeypatch.setattr(regelrecht, "_rpc_call", nep_rpc)
+    data, fallback = asyncio.run(
+        regelrecht._execute_law(
+            {
+                "law": regelrecht.EML_LAW,
+                "parameters": {
+                    "HEEFT_KOELINSTALLATIE": True,
+                    "HEEFT_AFZUIGINSTALLATIE": False,
+                },
+            }
+        )
+    )
+    assert fallback is False
+    assert {m["code"] for m in data["maatregelen"]} == {"GF4", "FD3"}
+
+
+def test_execute_law_generieke_wet_gaat_rechtstreeks_naar_engine(monkeypatch):
+    """Niet-EML-wetten (bv. informatieplicht) gaan generiek naar de engine.
+
+    parameters en overrides worden ongewijzigd doorgegeven; de structured
+    response wordt vereenvoudigd. Geen fallback voor deze wetten.
+    """
+    regelrecht = _load_regelrecht()
+    gezien = {}
+
+    async def nep_rpc(method, params):
+        gezien.update(params["arguments"])
+        return {
+            "structuredContent": {
+                "requirements_met": True,
+                "output": {"informatieplicht": True},
+                "law_metadata": {"name": "informatieplicht"},
+            }
+        }
+
+    monkeypatch.setattr(regelrecht, "_rpc_call", nep_rpc)
+    data, fallback = asyncio.run(
+        regelrecht._execute_law(
+            {
+                "law": "omgevingswet/energiebesparing/informatieplicht",
+                "parameters": {"KVK_NUMMER": "85234567"},
+                "overrides": {"RVO": {"JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": 61250}},
+            }
+        )
+    )
+    assert fallback is False
+    assert gezien["law"] == "omgevingswet/energiebesparing/informatieplicht"
+    assert gezien["parameters"] == {"KVK_NUMMER": "85234567"}
+    assert gezien["overrides"] == {"RVO": {"JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": 61250}}
+    assert data["voldoet_aan_voorwaarden"] is True
+    assert data["uitkomsten"] == {"informatieplicht": True}
+
+
+def test_execute_law_zonder_law_geeft_nette_fout():
+    regelrecht = _load_regelrecht()
+    data, fallback = asyncio.run(regelrecht._execute_law({}))
+    assert fallback is False
+    assert data["error"] == "ONTBREKEND_VELD"
+
+
 def test_maatregelen_normaliseert_feiten_keys_en_negeert_niet_boolse_waarden(
     monkeypatch,
 ):
