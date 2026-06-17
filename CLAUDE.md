@@ -71,6 +71,9 @@ Volledig overzicht en de routerings-beslisboom: [`docs/architecture.md`](docs/ar
   (o.a. bare-except `E722`) zijn bewust nog niet aan. Host-modules staan als
   `known-first-party` voor importgroepering.
 - **Met AI gegenereerde commits** krijgen een `Co-Authored-By`-trailer.
+- **Werk [`NEXT_STEPS.md`](NEXT_STEPS.md) bij vóór elke commit.** Vink afgeronde
+  punten af en voeg nieuwe open punten toe (incl. openstaande review-bevindingen),
+  zodat de werklijst de actuele staat van de repo blijft volgen.
 
 ## Verantwoorde inzet van AI
 
