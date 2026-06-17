@@ -24,7 +24,7 @@ else:
 
 # Claude API (Anthropic)
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
 
 # VLAM API (UbiOps/Mistral — OpenAI-compatibele API)
 # Base URL en model-ID hebben zinvolle defaults (zie PDR-001) zodat een frontend

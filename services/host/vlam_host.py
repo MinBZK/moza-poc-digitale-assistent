@@ -35,7 +35,7 @@ TOOL_LABELS = {
     "kvk__eigenaar": "KvK: eigenaar opzoeken",
     "koop__zoek_regelgeving": "KOOP Regelingenbank doorzoeken",
     "koop__lees_regeling": "KOOP: wettekst lezen",
-    "netbeheerder__verbruik": "Wallet: energieverbruik raadplegen",
+    "netbeheerder__verbruik": "Business Wallet: energieverbruik raadplegen",
     "regelrecht__execute_law": "RegelRecht: regel uitvoeren",
     "regelrecht__check": "RegelRecht: verplichting toetsen",  # CLI-transport (zie PDR-008)
     "rvo__zoek_regeling": "RVO: subsidieregeling zoeken",

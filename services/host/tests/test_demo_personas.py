@@ -68,9 +68,9 @@ def test_netbeheerder_onbekend_kvk_geeft_geen_data():
 
 
 def test_wallet_presenteert_attestatie_met_toestemming():
-    """De energiegegevens komen als door de wallet gepresenteerde credential.
+    """De energiegegevens komen als door de Business Wallet gepresenteerde credential.
 
-    Demo-model EU Business Wallet: bron = wallet, uitgever = netbeheerder,
+    Demo-model EU Business Wallet: bron = Business Wallet, uitgever = netbeheerder,
     met expliciete toestemming. Het verbruik moet binnen de credential
     leesbaar blijven voor de assistent.
     """
@@ -78,8 +78,8 @@ def test_wallet_presenteert_attestatie_met_toestemming():
     resultaat = netbeheerder._verbruik({"kvk_nummer": NOON_KVK})
     payload = json.loads(resultaat[0].text)
 
-    # Bron is de wallet; de netbeheerder is de uitgever van de attestatie
-    assert "Wallet" in payload["provenance"]["source"]
+    # Bron is de Business Wallet; de netbeheerder is de uitgever van de attestatie
+    assert "Business Wallet" in payload["provenance"]["source"]
     assert payload["provenance"]["issuer"] == netbeheerder.ISSUER_LABEL
 
     data = payload["data"]

@@ -1,4 +1,4 @@
-# PDR-008: Eén generieke RegelRecht-tool en energiegegevens via de Wallet
+# PDR-008: Eén generieke RegelRecht-tool en energiegegevens via de Business Wallet
 
 | Veld | Waarde |
 |---|---|
@@ -18,8 +18,8 @@ is (`omgevingswet/energiebesparing/maatregelen`).
 Daarnaast haalde de demo het energieverbruik op via een directe bevraging van
 een netbeheerder-mock (PDR-007). Voor de Dag van de Toekomst willen we het
 model van de **EU Business Wallet** tonen: de ondernemer *houdt* een
-verbruiks-attestatie (afgegeven door de netbeheerder) in zijn wallet en
-*deelt* die met toestemming — gegevens komen "uit de wallet", niet uit een
+verbruiks-attestatie (afgegeven door de netbeheerder) in zijn Business Wallet en
+*deelt* die met toestemming — gegevens komen "uit de Business Wallet", niet uit een
 stille achtergrond-query. Zie
 <https://digital-strategy.ec.europa.eu/nl/policies/business-wallets>.
 
@@ -42,17 +42,17 @@ zelf aanbiedt (`execute_law`) en maakt EML geen aparte tool meer.
   tool-beschrijving, de bijgewerkte voorbeeldprompts en de
   parameter-descriptions in de rule-spec.
 
-### 2. Energiegegevens via de (EU Business) Wallet — demo-presentatielaag
+### 2. Energiegegevens via de Business Wallet — demo-presentatielaag
 
-De verbruiksgegevens worden gepresenteerd als een door de wallet gedeelde
+De verbruiksgegevens worden gepresenteerd als een door de Business Wallet gedeelde
 **verifiable credential**: uitgever (issuer) = netbeheerder-mock, houder =
 de ondernemer, mét expliciete toestemming. De bron die de gebruiker ziet is
-de **Wallet**; de netbeheerder is de uitgever.
+de **Business Wallet**; de netbeheerder is de uitgever.
 
-**Bewust GEEN echte wallet-/MCP-koppeling.** De wallet is voor de demo een
+**Bewust GEEN echte Business Wallet-/MCP-koppeling.** De Business Wallet is voor de demo een
 presentatie-/toestemmingslaag bovenop de bestaande netbeheerder-mock (die de
-attestatie "uitgeeft"). Er komt geen aparte wallet-MCP-server. De
-respons-`provenance` zet `source` op de wallet en voegt `issuer` toe; de data
+attestatie "uitgeeft"). Er komt geen aparte Business Wallet-MCP-server. De
+respons-`provenance` zet `source` op de Business Wallet en voegt `issuer` toe; de data
 bevat een `credential`- en een `toestemming`-blok.
 
 ### 3. De feitelijke vragen staan in het regel-model, niet in de wet
@@ -105,10 +105,10 @@ feitelijke bron.
   (loopt achter, conform PDR-005/PDR-007). De demo draait op MCP (default
   `vlam`/`claude`), waar `regelrecht__execute_law` geldt. De voorbeeldprompts
   zijn bijgewerkt naar de generieke tool.
-- **Frontend (`MinBZK/moza-poc`)** toont de Wallet als **databron** (los van de
+- **Frontend (`MinBZK/moza-poc`)** toont de Business Wallet als **databron** (los van de
   capabilities/tools) en kent een expliciet deel-/toestemmingsmoment. Zie de
   losse implementatie-prompts bij deze wijziging.
-- **Tests** borgen de dispatch (`_execute_law`) en de wallet-credential met
+- **Tests** borgen de dispatch (`_execute_law`) en de Business Wallet-credential met
   toestemming; de bestaande EML- en demo-invarianten blijven gelden.
 - **Vervolg (echte bouw):** een echte EUDI/Business Wallet-presentatie
   (OpenID4VP, credential-uitgifte door de netbeheerder) valt buiten de PoC.

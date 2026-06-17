@@ -39,7 +39,9 @@ server = Server(name="regelrecht")
 
 REGELRECHT_RPC_URL = os.getenv(
     "REGELRECHT_RPC_URL",
-    "https://ui.lac.apps.digilab.network/mcp/rpc",
+    # De demo-engine verhuisde van ui.lac.apps.* naar ui.lac.projects.* (de oude
+    # host 301-redirect nog tijdelijk). Override desnoods via REGELRECHT_RPC_URL.
+    "https://ui.lac.projects.digilab.network/mcp/rpc",
 )
 
 SOURCE_LABEL = "RegelRecht (poc-machine-law)"

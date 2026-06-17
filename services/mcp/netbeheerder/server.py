@@ -1,22 +1,22 @@
-"""Wallet-presentatie van energiegegevens — demo-mock (PDR-008).
+"""Business Wallet-presentatie van energiegegevens — demo-mock (PDR-008).
 
 Demo-model van de EU Business Wallet: de ondernemer HOUDT een
-energieverbruik-attestatie (afgegeven door de netbeheerder) in zijn wallet
+energieverbruik-attestatie (afgegeven door de netbeheerder) in zijn Business Wallet
 en DEELT die met toestemming met de assistent. Zo komen de verbruiksgegevens
-"uit de wallet" in plaats van uit een directe bevraging van een achterliggende
+"uit de Business Wallet" in plaats van uit een directe bevraging van een achterliggende
 dienst.
 
-LET OP — dit is bewust GEEN echte wallet-/MCP-koppeling: de wallet is voor de
+LET OP — dit is bewust GEEN echte Business Wallet-/MCP-koppeling: de Business Wallet is voor de
 demo een presentatie-/toestemmingslaag. De mock hieronder speelt de
 netbeheerder als UITGEVER (issuer) van de attestatie; de respons modelleert
-een door de wallet gepresenteerde verifiable credential met expliciete
+een door de Business Wallet gepresenteerde verifiable credential met expliciete
 toestemming. Zie ook PDR-008 en https://digital-strategy.ec.europa.eu/nl/policies/business-wallets
 
 Alleen bekende demo-aansluitingen worden geserveerd; voor andere KvK-nummers
-meldt de server dat er geen attestatie in de wallet zit — de assistent valt
+meldt de server dat er geen attestatie in de Business Wallet zit — de assistent valt
 dan terug op uitvragen bij de gebruiker.
 
-In productie zou de netbeheerder de attestatie uitgeven aan de wallet van de
+In productie zou de netbeheerder de attestatie uitgeven aan de Business Wallet van de
 ondernemer (EUDI/Business Wallet), die haar met toestemming presenteert.
 
 Voldoet aan de MCP-standaard voor Generieke Interactieservices:
@@ -44,7 +44,7 @@ logger = logging.getLogger("netbeheerder")
 
 server = Server(name="netbeheerder")
 
-# De wallet PRESENTEERT de gegevens (bron die de gebruiker ziet); de
+# De Business Wallet PRESENTEERT de gegevens (bron die de gebruiker ziet); de
 # netbeheerder is de UITGEVER (issuer) van de attestatie.
 SOURCE_LABEL = "EU Business Wallet (mock)"
 ISSUER_LABEL = "Netbeheerder (mock, uitgever)"
@@ -131,15 +131,15 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="verbruik",
             description=(
-                "Vraag de energieverbruik-attestatie op uit de EU Business "
-                "Wallet (mock) van de ingelogde ondernemer: het jaarverbruik "
+                "Vraag de energieverbruik-attestatie op uit de "
+                "Business Wallet (mock) van de ingelogde ondernemer: het jaarverbruik "
                 "(elektriciteit in kWh, gas in m³), afgegeven door de "
                 "netbeheerder en met toestemming van de ondernemer gedeeld. "
                 "Gebruik dit VOORDAT u de gebruiker om verbruiksgegevens vraagt "
-                "— zit de attestatie in de wallet, dan hoeft de ondernemer niets "
-                "op te zoeken; vermeld dat de gegevens uit de wallet komen "
+                "— zit de attestatie in de Business Wallet, dan hoeft de ondernemer niets "
+                "op te zoeken; vermeld dat de gegevens uit de Business Wallet komen "
                 "(afgegeven door de netbeheerder). Zit er geen attestatie in de "
-                "wallet, vraag het verbruik dan aan de gebruiker."
+                "Business Wallet, vraag het verbruik dan aan de gebruiker."
             ),
             inputSchema={
                 "type": "object",
@@ -195,14 +195,14 @@ def _verbruik(arguments: dict) -> list[TextContent]:
             "kvk_nummer": kvk_nummer,
             "beschikbaar": False,
             "melding": (
-                "Geen energieverbruik-attestatie in de wallet voor dit "
+                "Geen energieverbruik-attestatie in de Business Wallet voor dit "
                 "KvK-nummer. Vraag het jaarverbruik aan de gebruiker."
             ),
         }
         _audit_log("verbruik", arguments, output)
         return [TextContent(type="text", text=_wrap_provenance(output))]
 
-    # Modelleer de respons als een door de wallet gepresenteerde credential:
+    # Modelleer de respons als een door de Business Wallet gepresenteerde credential:
     # uitgever (netbeheerder), houder (de ondernemer) en expliciete toestemming.
     output = {
         "beschikbaar": True,

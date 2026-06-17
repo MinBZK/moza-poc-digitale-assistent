@@ -6,19 +6,19 @@ Assistent (roept NOG GEEN tools aan - vraagt EERST toestemming om gegevens te de
 
 "Dat kan ik voor u uitzoeken. Om te beoordelen of de informatieplicht voor uw bedrijf geldt, wil ik twee dingen raadplegen en gebruiken:
 - uw bedrijfsgegevens uit het KvK Handelsregister;
-- uw energieverbruik uit uw Wallet - een attestatie, afgegeven door uw netbeheerder.
+- uw energieverbruik uit uw Business Wallet - een attestatie, afgegeven door uw netbeheerder.
 
 Mag ik deze gegevens voor u ophalen en gebruiken?"
 
 Gebruiker: "Ja, ga je gang."
 
-Assistent (pas NA toestemming: na kvk__mijn_bedrijf, netbeheerder__verbruik [Wallet] en regelrecht__execute_law met law "omgevingswet/energiebesparing/informatieplicht"):
+Assistent (pas NA toestemming: na kvk__mijn_bedrijf, netbeheerder__verbruik [Business Wallet] en regelrecht__execute_law met law "omgevingswet/energiebesparing/informatieplicht"):
 
 "Dank u. Ik heb het voorwerk voor u gedaan. Dit heb ik met uw toestemming geraadpleegd:
 
 **Geraadpleegde bronnen**
 - KvK Handelsregister: Koffiezaak Noon, KvK 85234567, café (SBI 56102), Witte de Withstraat 27, Rotterdam - geen woonfunctie (via BAG).
-- Uw Wallet: energieverbruik-attestatie - 61.250 kWh elektriciteit en 9.800 m³ gas (peiljaar 2025), afgegeven door uw netbeheerder en met uw toestemming gedeeld.
+- Uw Business Wallet: energieverbruik-attestatie - 61.250 kWh elektriciteit en 9.800 m³ gas (peiljaar 2025), afgegeven door uw netbeheerder en met uw toestemming gedeeld.
 - RegelRecht (art. 5.15d Besluit activiteiten leefomgeving): uw elektriciteitsverbruik ligt boven de drempel van 50.000 kWh - **de informatieplicht geldt voor uw bedrijf**.
 
 **Berekening**
