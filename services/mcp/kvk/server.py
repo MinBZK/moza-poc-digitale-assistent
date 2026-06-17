@@ -188,10 +188,14 @@ async def _get_eigenaar() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# BAG-verrijking via PDOK LVBAG API (openbare data, geen API-key nodig)
+# BAG-verrijking via de Kadaster BAG API Individuele Bevragingen.
+# Sinds 1-3-2023 vereist deze API een eigen API-key (gratis aan te vragen bij
+# Kadaster). Zet die in BAG_API_KEY (.env). Zonder key valt de verrijking terug
+# op demo-data (_BAG_DEMO_FALLBACK) voor de bekende demo-adressen.
 # ---------------------------------------------------------------------------
 
-BAG_API_BASE = "https://api.pdok.nl/lv/bag/individuelebevragingen/v2"
+BAG_API_BASE = "https://api.bag.kadaster.nl/lvbag/individuelebevragingen/v2"
+BAG_API_KEY = os.getenv("BAG_API_KEY", "").strip()
 
 # Fallback BAG-data voor bekende demo-adressen (als PDOK niet bereikbaar is
 # of het adres niet bestaat in de BAG, bv. bij KvK test-adressen)
@@ -227,7 +231,17 @@ def _extract_address(profiel: dict) -> dict | None:
 
 
 def _bag_fetch(postcode: str, huisnummer: int, huisletter: str = "") -> dict | None:
-    """Haal BAG-gegevens op via de PDOK LVBAG API (openbaar, geen key nodig)."""
+    """Haal BAG-gegevens op via de Kadaster BAG API (vereist BAG_API_KEY).
+
+    Zonder API-key of bij een storing valt de verrijking terug op demo-data
+    voor de bekende demo-adressen (_BAG_DEMO_FALLBACK).
+    """
+    fallback_key = f"{postcode.replace(' ', '')}-{huisnummer}"
+
+    if not BAG_API_KEY:
+        logger.info("Geen BAG_API_KEY gezet, BAG-verrijking via demo-data")
+        return _BAG_DEMO_FALLBACK.get(fallback_key)
+
     params = {"postcode": postcode, "huisnummer": huisnummer}
     if huisletter:
         params["huisletter"] = huisletter
@@ -235,7 +249,14 @@ def _bag_fetch(postcode: str, huisnummer: int, huisletter: str = "") -> dict | N
 
     logger.info("BAG API call: %s", url)
     try:
-        req = Request(url, headers={"Accept": "application/hal+json"})
+        # De API-key gaat als header mee (X-Api-Key), niet in de URL of de logs.
+        req = Request(
+            url,
+            headers={
+                "Accept": "application/hal+json",
+                "X-Api-Key": BAG_API_KEY,
+            },
+        )
         with urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read())
         adressen = data.get("_embedded", {}).get("adressen", [])
@@ -250,11 +271,9 @@ def _bag_fetch(postcode: str, huisnummer: int, huisletter: str = "") -> dict | N
                 ),
             }
     except Exception as e:
-        logger.warning("BAG API niet bereikbaar: %s — fallback naar demo-data", e)
+        logger.warning("BAG API niet bereikbaar: %s, fallback naar demo-data", e)
 
-    # Fallback naar demo-data
-    key = f"{postcode.replace(' ', '')}-{huisnummer}"
-    return _BAG_DEMO_FALLBACK.get(key)
+    return _BAG_DEMO_FALLBACK.get(fallback_key)
 
 
 async def _enrich_with_bag(profiel: dict) -> dict:
