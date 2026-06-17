@@ -4,7 +4,6 @@ Mock-implementatie van de RVO (Rijksdienst voor Ondernemend Nederland)
 indienings-API. Biedt twee tools:
 
 - zoek_regeling: zoek naar subsidies en regelingen (read-only)
-- maatregelen: bepaal geldende EML-maatregelen voor een bedrijfstak (read-only)
 - indienen: dien een energiebesparingsrapportage in (muterend)
 
 In productie worden de mocks vervangen door calls naar de RVO API
