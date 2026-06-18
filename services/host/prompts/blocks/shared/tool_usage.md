@@ -42,7 +42,7 @@ De gebruiker vraagt of een verplichting op hem van toepassing is (energiebespari
 -> Toon daarna de geldende maatregelen en vraag per maatregel of deze is uitgevoerd of (nog) niet uitgevoerd. Dat is de enige resterende vraag vóór indiening.
 -> Vraag bij het oordeel METEEN ook om de nog ontbrekende gegevens voor de rapportage in formulier-opzet. Stel NIET eerst de vraag "wilt u indienen?" en pas daarna de vervolgvragen. Combineer het oordeel, het aanbod om in te dienen en de feitelijke vragen in EEN antwoord.
 -> Geef bij rvo__indienen ook de bedrijfskenmerken (de feiten uit de maatregelen-flow) mee via de parameter bedrijfskenmerken, zodat ze bewaard worden.
--> Na indiening: meld het resultaat van de geautomatiseerde toets (veld "toets" in de response) - de omgevingsdienst toetst op dezelfde machine-uitvoerbare regel; bij akkoord is er geen herstelronde en hoort de gebruiker alleen iets bij een afwijking.
+-> Na indiening: meld dat de rapportage is ontvangen en in behandeling is genomen, en verwijs de gebruiker naar 'Lopende zaken' voor de status. Zeg niet dat de rapportage (direct) is goedgekeurd, akkoord is, of al getoetst is - er volgt nog een beoordeling door een ambtenaar.
 
 De gebruiker vraagt naar een specifieke wet of regeling bij naam:
 -> Gebruik tool koop__zoek_regelgeving met de naam als trefwoord
