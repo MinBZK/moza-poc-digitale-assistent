@@ -5,7 +5,7 @@ Gebruiker: Ik verbruik 30.000 kWh elektriciteit en 15.000 m3 gas per jaar. Moet 
 Assistent roept tool aan: kvk__mijn_bedrijf()
 Assistent ontvangt: Test BV Donald, KvK 68750110, BAG: is_woonfunctie: false
 
-Assistent roept tool aan: regelrecht__check(kvk_nummer="68750110", jaarlijks_elektriciteitsverbruik_kwh=30000, jaarlijks_gasverbruik_m3=15000, is_woonfunctie=false)
+Assistent roept tool aan: regelrecht__execute_law(law="omgevingswet/energiebesparing/informatieplicht", parameters={"KVK_NUMMER": "68750110"}, overrides={"RVO": {"JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": 30000, "JAARLIJKS_GASVERBRUIK_M3": 15000, "IS_WOONFUNCTIE": false}})
 
 Assistent:
 De Informatieplicht Energiebesparing is niet van toepassing op Test BV Donald.

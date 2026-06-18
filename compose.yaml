@@ -17,3 +17,8 @@ services:
       MCP_SERVER_KOOP: /app/services/mcp/koop/server.py
       MCP_SERVER_REGELRECHT: /app/services/mcp/regelrecht/server.py
       MCP_SERVER_RVO: /app/services/mcp/rvo/server.py
+      MCP_SERVER_NETBEHEERDER: /app/services/mcp/netbeheerder/server.py
+      # Demo-persona (zie PDR-007): leeg = Robin Vogel / Test BV Donald.
+      # Zet 85234567 (of export de var vóór `docker compose up`) voor
+      # Claudia van Dam / Koffiezaak Noon.
+      DEMO_KVK_NUMMER: ${DEMO_KVK_NUMMER:-}

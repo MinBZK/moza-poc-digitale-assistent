@@ -3,12 +3,33 @@
 import hashlib
 import json
 import logging
+import os
 from pathlib import Path
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 logger = logging.getLogger("vlam.mcp_client")
+
+# Alleen deze env-vars gaan naar MCP-subprocessen. Bewust GEEN LLM-sleutels
+# (ANTHROPIC_API_KEY / VLAM_API_KEY): geen enkele MCP-server heeft die nodig, en
+# ze in vijf extra processen laten leven vergroot het lek-oppervlak onnodig
+# (PDR-007: identiteit/config bij de bron; sleutel-blootstelling minimaliseren).
+# Systeemvars (PATH etc.) blijven nodig om de interpreter te kunnen starten.
+_SUBPROCESS_ENV_ALLOWLIST = (
+    # systeem
+    "PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TZ",
+    "TMPDIR", "TEMP", "TMP", "TERM",
+    "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE",
+    "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT",
+    # app-config die de servers daadwerkelijk gebruiken
+    "DEMO_KVK_NUMMER", "REGELRECHT_RPC_URL", "BAG_API_KEY", "KVK_TEST_API_KEY",
+)
+
+
+def _subprocess_env() -> dict:
+    """Bouw de env voor MCP-subprocessen: alleen de allowlist, geen LLM-keys."""
+    return {k: v for k, v in os.environ.items() if k in _SUBPROCESS_ENV_ALLOWLIST}
 
 
 def _tool_fingerprint(tool) -> str:
@@ -45,9 +66,13 @@ class MCPServerConnection:
         if not self.server_path.exists():
             raise FileNotFoundError(f"Server-script niet gevonden: {self.server_path}")
 
+        # Geef alleen een allowlist van env-vars door (zie _subprocess_env):
+        # server-config zoals DEMO_KVK_NUMMER / REGELRECHT_RPC_URL / BAG_API_KEY
+        # moet de subprocess bereiken, maar de LLM-sleutels bewust NIET.
         server_params = StdioServerParameters(
             command="python",
             args=[str(self.server_path)],
+            env=_subprocess_env(),
         )
 
         self._context = stdio_client(server_params)

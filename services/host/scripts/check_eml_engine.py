@@ -1,0 +1,92 @@
+"""Handmatige integratiecheck: EML-maatregelen via de echte engine.
+
+Draait de twee-staps-flow tegen REGELRECHT_RPC_URL (default: digilab).
+Vereist netwerktoegang; geen API-keys nodig.
+
+    uv run python services/host/scripts/check_eml_engine.py
+"""
+
+import asyncio
+import json
+import os
+
+import httpx
+
+RPC_URL = os.getenv(
+    "REGELRECHT_RPC_URL",
+    "https://ui.lac.apps.digilab.network/mcp/rpc",
+)
+LAW = "omgevingswet/energiebesparing/maatregelen"
+
+
+async def _execute_law(client: httpx.AsyncClient, parameters: dict) -> dict:
+    response = await client.post(
+        RPC_URL,
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "execute_law",
+                "arguments": {
+                    "service": "RVO",
+                    "law": LAW,
+                    "parameters": parameters,
+                },
+            },
+        },
+        timeout=30.0,
+    )
+    response.raise_for_status()
+    data = response.json()
+    if "error" in data:
+        raise SystemExit(f"RPC-fout: {data['error']}")
+    return (data.get("result") or {}).get("structuredContent", {})
+
+
+async def main() -> None:
+    async with httpx.AsyncClient() as client:
+        # Stap 1: zonder feiten — engine moet melden wat er ontbreekt
+        try:
+            stap1 = await _execute_law(client, {})
+        except httpx.HTTPError as e:
+            raise SystemExit(f"Engine niet bereikbaar via {RPC_URL}: {e}") from e
+        print("— Stap 1 (zonder feiten) —")
+        print("missing_required:", stap1.get("missing_required"))
+        params = (
+            stap1.get("rule_spec", {}).get("properties", {}).get("parameters", [])
+        )
+        for p in params:
+            print(f"  vraag: {p.get('name')}: {p.get('description')}")
+        if stap1.get("missing_required") is not True:
+            raise SystemExit(
+                f"FOUT: engine meldt geen ontbrekende feiten (missing_required="
+                f"{stap1.get('missing_required')!r}) — staat de wet {LAW} al "
+                "op de engine?"
+            )
+
+        # Stap 2: met feiten (Noon: koeling én afzuiging)
+        try:
+            stap2 = await _execute_law(
+                client,
+                {"HEEFT_KOELINSTALLATIE": True, "HEEFT_AFZUIGINSTALLATIE": True},
+            )
+        except httpx.HTTPError as e:
+            raise SystemExit(f"Engine niet bereikbaar via {RPC_URL}: {e}") from e
+        print("— Stap 2 (met feiten) —")
+        outputs = stap2.get("output", {})
+        print(json.dumps(outputs, indent=2, ensure_ascii=False))
+        eml = {k: v for k, v in outputs.items() if k.startswith("eml_")}
+        # pas aan als de wet-YAML meer maatregelen krijgt
+        if len(eml) != 7:
+            raise SystemExit(f"FOUT: verwacht 7 maatregelen, kreeg {len(eml)}")
+        if not all(eml.values()):
+            raise SystemExit(
+                "FOUT: Noon (koeling+afzuiging) hoort alle maatregelen "
+                f"van toepassing te hebben: {eml}"
+            )
+        print("OK — engine bepaalt de EML-maatregelen")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

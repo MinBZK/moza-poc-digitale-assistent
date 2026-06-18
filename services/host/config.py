@@ -24,7 +24,7 @@ else:
 
 # Claude API (Anthropic)
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
 
 # VLAM API (UbiOps/Mistral — OpenAI-compatibele API)
 # Base URL en model-ID hebben zinvolle defaults (zie PDR-001) zodat een frontend
@@ -55,6 +55,9 @@ MCP_SERVERS: dict[str, Path] = {
     "koop": _resolve_server_path("MCP_SERVER_KOOP", SERVERS_DIR / "koop" / "server.py"),
     "regelrecht": _resolve_server_path("MCP_SERVER_REGELRECHT", SERVERS_DIR / "regelrecht" / "server.py"),
     "rvo": _resolve_server_path("MCP_SERVER_RVO", SERVERS_DIR / "rvo" / "server.py"),
+    "netbeheerder": _resolve_server_path(
+        "MCP_SERVER_NETBEHEERDER", SERVERS_DIR / "netbeheerder" / "server.py"
+    ),
 }
 
 # Host

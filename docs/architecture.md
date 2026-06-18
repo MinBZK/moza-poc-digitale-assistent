@@ -8,6 +8,8 @@ Zie [Product Decision Records](decisions/) voor gemaakte keuzes in de opzet.
 - [PDR-001](decisions/PDR-001-dual-llm-backend.md) — dual-backend keuze (VLAM + Claude)
 - [PDR-005](decisions/PDR-005-cli-vs-mcp-transport.md) — CLI vs MCP als transport
 - [PDR-006](decisions/PDR-006-feasibility-conclusie.md) — feasibility-onderzoek en conclusie
+- [PDR-007](decisions/PDR-007-demo-persona-en-netbeheerder-bron.md) — demo-persona's, netbeheerder/Business Wallet en EML-maatregelen
+- [PDR-008](decisions/PDR-008-generieke-regelrecht-tool-en-wallet.md) — generieke RegelRecht-tool en energiegegevens via de Business Wallet
 
 ## Architectuur
 
@@ -28,12 +30,16 @@ Zie [Product Decision Records](decisions/) voor gemaakte keuzes in de opzet.
 
 | Bron | MCP-server | CLI-tool | Type | Externe API |
 |---|---|---|---|---|
-| KvK | Resource + Tool | `kvk-cli` | Bedrijfsgegevens (sessie-gebonden) | KvK Test API |
+| KvK | Resource + Tool | `kvk-cli` | Bedrijfsgegevens (sessie-gebonden) | KvK Test API + BAG (Kadaster) |
 | KOOP | Resource + Tool | `koop-cli` | Regelingenbank | wetten.overheid.nl |
-| RegelRecht | Tool (non-muterend) | `regelrecht-cli` | Beslislogica verplichtingen | poc-machine-law API |
+| RegelRecht | Tool (non-muterend) | `regelrecht-cli` | Generieke regel-executie (`execute_law`) | poc-machine-law API |
 | RVO | Tool (muterend) | `rvo-cli` | Subsidies en rapportages | RVO API (mock) |
+| Business Wallet (netbeheerder) | Tool | (geen) | Energiegegevens als credential, met toestemming gedeeld | netbeheerder (mock) |
 
 De host werkt ook zonder MCP-servers of CLI-tools; de assistent antwoordt dan op basis van eigen kennis.
+
+> **RegelRecht-tool (MCP) en CLI-divergentie:** op MCP biedt RegelRecht één generieke tool `regelrecht__execute_law(law, parameters, overrides)` waarmee elke wet (informatieplicht, EML-maatregelen) wordt uitgevoerd (zie [PDR-008](decisions/PDR-008-generieke-regelrecht-tool-en-wallet.md)). Het CLI-transport loopt bewust achter en houdt `regelrecht__check` (geen netbeheerder/Business Wallet); de demo draait daarom op MCP (`vlam`/`claude`).
+> **Business Wallet:** de energiegegevens komen als een door de Business Wallet gepresenteerde credential (uitgever = netbeheerder), demo-presentatielaag, geen echte Business Wallet-koppeling (PDR-008). De woonfunctie/gebruiksdoel komen live uit de BAG (Kadaster, met `BAG_API_KEY`) met demo-fallback.
 
 > **MCP vs CLI:** MCP-servers draaien als permanente processen en ondersteunen zowel tools als resources. CLI-tools zijn Bash-scripts die on-demand worden aangeroepen en alleen tools ondersteunen (geen resources). Zie [PDR-005](decisions/PDR-005-cli-vs-mcp-transport.md) voor een uitgebreide vergelijking.
 
@@ -52,7 +58,7 @@ flowchart TD
 
     Q5 -- ja --> KVK_TOOL
     KVK_TOOL --> Q5b{KvK-nummer\nverkregen}
-    Q5b --> RR_TOOL[/Tool: regelrecht__check/]
+    Q5b --> RR_TOOL[/Tool: regelrecht__execute_law/]
     RR_TOOL --> Q5c{Wil gebruiker\nde wettekst lezen?}
     Q5c -- ja --> KOOP_RES[/Resource: koop://regeling/bwb_id/]
     Q5c -- nee --> Antwoord
@@ -98,6 +104,8 @@ Legenda:
 **grijs** = eigen kennis
 
 Bij gecombineerde vragen geldt de volgorde: KvK (wie?) → RegelRecht (wat geldt er?) → KOOP (verdieping wettekst) → RVO (actie ondernemen).
+
+> **Informatieplicht-flow (demo, persona Claudia/Noon):** deze flow voegt stappen toe die de beslisboom hierboven niet apart toont: (1) eerst **toestemming** vragen voordat er bronnen worden geraadpleegd, (2) energieverbruik uit de **Business Wallet** (`netbeheerder__verbruik`, met toestemming), (3) `regelrecht__execute_law` voor de informatieplicht, (4) `regelrecht__execute_law` voor de geldende **EML-maatregelen**, (5) `rvo__indienen` met geautomatiseerde toets. Zie [PDR-007](decisions/PDR-007-demo-persona-en-netbeheerder-bron.md) en [PDR-008](decisions/PDR-008-generieke-regelrecht-tool-en-wallet.md).
 
 ## Voorbeeldscenario's
 
@@ -206,8 +214,8 @@ sequenceDiagram
     Gebruiker->>Host: "Ja"
     Host->>RVO: tools/call [indienen, kvk_nummer="68750110",<br/>regeling_id="EBR-2026",<br/>maatregelen=["LED-verlichting","HR++ beglazing"]]
     Note over RVO: Mock: simuleert succesvolle<br/>indiening en genereert<br/>referentienummer
-    RVO-->>Host: status=INGEDIEND,<br/>ref=RVO-EBR-2026-68750110-001 + provenance
-    Host->>Gebruiker: "Uw rapportage is succesvol ingediend.<br/>Referentienummer: RVO-EBR-2026-68750110-001.<br/>U ontvangt een bevestiging per e-mail.<br/>De voortgang is te volgen onder 'Lopende zaken'."
+    RVO-->>Host: status=INGEDIEND, toets=AKKOORD,<br/>ref=RVO-EBR-2026-68750110-001 + provenance
+    Host->>Gebruiker: "Uw rapportage is ingediend (ref. RVO-EBR-2026-68750110-001)<br/>en direct geautomatiseerd getoetst door de omgevingsdienst:<br/>akkoord, geen herstelronde. U hoort alleen iets bij een afwijking.<br/>Terug te vinden onder 'Lopende zaken'."
 ```
 
 > **Let op:** De `indienen`-tool is muterend. Het AI-platform vraagt daarom *altijd* om expliciete bevestiging van de gebruiker voordat de tool wordt aangeroepen. Dit is afgedwongen via de `ToolAnnotations` (`readOnlyHint=False`) én de systeemprompt.
@@ -242,7 +250,7 @@ moza-poc-digitale-assistent/
     architecture.md         (dit document)
     ai-verantwoording.md    Verantwoording inzet Claude Code in ontwikkeling
     test-vragen.md          Handmatige testvragen
-    decisions/              Product Decision Records (PDR-001 t/m PDR-006)
+    decisions/              Product Decision Records (PDR-001 t/m PDR-008)
   scripts/
     validate-mcp-servers.sh Validatie tegen mcp-standaard
   services/
@@ -265,10 +273,11 @@ moza-poc-digitale-assistent/
       Dockerfile
       .env.example
     mcp/                    MCP-servers (Python, persistent)
-      kvk/                  Resource + Tool — Bedrijfsgegevens (KvK Test API)
+      kvk/                  Resource + Tool — Bedrijfsgegevens (KvK Test API + BAG)
       koop/                 Resource + Tool — Regelingenbank
-      regelrecht/           Tool — beslislogica
+      regelrecht/           Tool — generieke regel-executie (execute_law)
       rvo/                  Tool — subsidies en rapportages
+      netbeheerder/         Tool — energiegegevens als Business Wallet-credential (mock)
     cli/                    CLI-tools (Bash, on-demand)
       kvk-cli               API-wrapper KvK
       koop-cli              API-wrapper KOOP

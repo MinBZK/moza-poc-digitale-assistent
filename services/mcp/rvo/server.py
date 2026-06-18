@@ -191,8 +191,20 @@ async def list_tools() -> list[Tool]:
                         "items": {"type": "string"},
                         "description": (
                             "Lijst van genomen energiebesparende maatregelen "
-                            "(bijv. ['LED-verlichting', 'HR++ beglazing'])."
+                            "(bijv. ['LED-verlichting', 'HR++ beglazing']). "
+                            "Vermeld per geldende maatregel of deze is "
+                            "uitgevoerd of (nog) niet uitgevoerd."
                         ),
+                    },
+                    "bedrijfskenmerken": {
+                        "type": "object",
+                        "description": (
+                            "Optioneel: feitelijke bedrijfskenmerken uit de "
+                            "maatregelen-stap (bv. koelinstallatie, "
+                            "afzuiginstallatie). Worden bewaard voor de "
+                            "volgende rapportageronde."
+                        ),
+                        "additionalProperties": True,
                     },
                 },
                 "required": ["kvk_nummer", "regeling_id", "maatregelen"],
@@ -277,6 +289,24 @@ def _indienen(arguments: dict) -> list[TextContent]:
     # Mock succesvolle indiening
     referentienummer = f"RVO-{regeling_id}-{kvk_nummer}-001"
     ingediend_op = datetime.now(UTC).isoformat()
+    bedrijfskenmerken = arguments.get("bedrijfskenmerken") or {}
+    # Geautomatiseerde toets (mock): de omgevingsdienst toetst de rapportage
+    # direct op dezelfde machine-uitvoerbare regel als waarmee de plicht is
+    # bepaald — in één keer goed, geen herstelronde.
+    toets = {
+        "instantie": "Omgevingsdienst (geautomatiseerd, mock)",
+        "regel": (
+            "art. 5.15d Besluit activiteiten leefomgeving — dezelfde "
+            "machine-uitvoerbare regel als de RegelRecht-toets"
+        ),
+        "resultaat": "AKKOORD",
+        "toelichting": (
+            "De rapportage is geautomatiseerd getoetst en in één keer "
+            "akkoord bevonden. Er volgt geen herstelronde. U hoort alleen "
+            "iets als er alsnog een afwijking wordt geconstateerd."
+        ),
+        "getoetst_op": ingediend_op,
+    }
     output = {
         "status": "INGEDIEND",
         "referentienummer": referentienummer,
@@ -284,10 +314,11 @@ def _indienen(arguments: dict) -> list[TextContent]:
         "regeling_id": regeling_id,
         "maatregelen": maatregelen,
         "ingediend_op": ingediend_op,
+        "toets": toets,
         "bevestiging": (
-            f"Uw rapportage voor {regeling_id} is succesvol ingediend. "
-            f"U ontvangt een bevestiging op het e-mailadres dat gekoppeld is "
-            f"aan uw eHerkenning-account."
+            f"Uw rapportage voor {regeling_id} is succesvol ingediend en "
+            f"geautomatiseerd getoetst: akkoord. U ontvangt een bevestiging "
+            f"op het e-mailadres dat gekoppeld is aan uw eHerkenning-account."
         ),
         "lopende_zaak": {
             "referentienummer": referentienummer,
@@ -302,6 +333,7 @@ def _indienen(arguments: dict) -> list[TextContent]:
                 f"referentienummer {referentienummer}. U kunt de voortgang "
                 f"volgen op MijnOverheid Zakelijk onder 'Lopende zaken'."
             ),
+            "bedrijfskenmerken": bedrijfskenmerken,
             "journal": [
                 {
                     "timestamp": ingediend_op,
@@ -314,6 +346,13 @@ def _indienen(arguments: dict) -> list[TextContent]:
                     "actor": "Digitale Assistent",
                     "grondslag": "art. 5.15d Besluit activiteiten leefomgeving",
                 },
+                {
+                    "timestamp": ingediend_op,
+                    "gebeurtenis": "Geautomatiseerde toets uitgevoerd",
+                    "toelichting": toets["toelichting"],
+                    "actor": toets["instantie"],
+                    "grondslag": toets["regel"],
+                },
             ],
             "taken": [
                 {
@@ -325,18 +364,25 @@ def _indienen(arguments: dict) -> list[TextContent]:
                     "status": "wachtend",
                 },
                 {
-                    "beschrijving": "Beoordeling door RVO",
+                    "beschrijving": "Geautomatiseerde toets omgevingsdienst",
                     "toelichting": (
-                        "RVO beoordeelt of uw rapportage volledig is en of de "
-                        "genomen maatregelen voldoen aan de erkende maatregelenlijst."
+                        "De omgevingsdienst heeft de rapportage geautomatiseerd "
+                        "getoetst op dezelfde machine-uitvoerbare regel: akkoord, "
+                        "geen herstelronde nodig."
                     ),
-                    "status": "wachtend",
+                    "status": "afgerond",
                 },
                 {
                     "beschrijving": "Volgende rapportage indienen",
                     "toelichting": (
                         "De informatieplicht geldt vierjaarlijks. Uw volgende "
                         "rapportage is naar verwachting in 2030."
+                        + (
+                            " Uw bedrijfskenmerken zijn bewaard, zodat het "
+                            "voorwerk dan al klaarstaat."
+                            if bedrijfskenmerken
+                            else ""
+                        )
                     ),
                     "status": "toekomst",
                     "grondslag": "art. 5.15d Besluit activiteiten leefomgeving",
