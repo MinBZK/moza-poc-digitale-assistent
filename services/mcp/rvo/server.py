@@ -290,23 +290,9 @@ def _indienen(arguments: dict) -> list[TextContent]:
     referentienummer = f"RVO-{regeling_id}-{kvk_nummer}-001"
     ingediend_op = datetime.now(UTC).isoformat()
     bedrijfskenmerken = arguments.get("bedrijfskenmerken") or {}
-    # Geautomatiseerde toets (mock): de omgevingsdienst toetst de rapportage
-    # direct op dezelfde machine-uitvoerbare regel als waarmee de plicht is
-    # bepaald — in één keer goed, geen herstelronde.
-    toets = {
-        "instantie": "Omgevingsdienst (geautomatiseerd, mock)",
-        "regel": (
-            "art. 5.15d Besluit activiteiten leefomgeving — dezelfde "
-            "machine-uitvoerbare regel als de RegelRecht-toets"
-        ),
-        "resultaat": "AKKOORD",
-        "toelichting": (
-            "De rapportage is geautomatiseerd getoetst en in één keer "
-            "akkoord bevonden. Er volgt geen herstelronde. U hoort alleen "
-            "iets als er alsnog een afwijking wordt geconstateerd."
-        ),
-        "getoetst_op": ingediend_op,
-    }
+    # De rapportage wordt ontvangen en in behandeling genomen; de status is
+    # daarna te volgen onder 'Lopende zaken'. GEEN automatische goedkeuring:
+    # de respons claimt nooit dat de rapportage direct akkoord/goedgekeurd is.
     output = {
         "status": "INGEDIEND",
         "referentienummer": referentienummer,
@@ -314,11 +300,9 @@ def _indienen(arguments: dict) -> list[TextContent]:
         "regeling_id": regeling_id,
         "maatregelen": maatregelen,
         "ingediend_op": ingediend_op,
-        "toets": toets,
         "bevestiging": (
-            f"Uw rapportage voor {regeling_id} is succesvol ingediend en "
-            f"geautomatiseerd getoetst: akkoord. U ontvangt een bevestiging "
-            f"op het e-mailadres dat gekoppeld is aan uw eHerkenning-account."
+            f"Uw rapportage voor {regeling_id} is ontvangen en in behandeling "
+            f"genomen. U vindt de status terug onder 'Lopende zaken'."
         ),
         "lopende_zaak": {
             "referentienummer": referentienummer,
@@ -348,10 +332,13 @@ def _indienen(arguments: dict) -> list[TextContent]:
                 },
                 {
                     "timestamp": ingediend_op,
-                    "gebeurtenis": "Geautomatiseerde toets uitgevoerd",
-                    "toelichting": toets["toelichting"],
-                    "actor": toets["instantie"],
-                    "grondslag": toets["regel"],
+                    "gebeurtenis": "Rapportage in behandeling genomen",
+                    "toelichting": (
+                        "De rapportage is ontvangen en in behandeling genomen. "
+                        "De status is te volgen onder 'Lopende zaken'."
+                    ),
+                    "actor": "RVO",
+                    "grondslag": "art. 5.15d Besluit activiteiten leefomgeving",
                 },
             ],
             "taken": [
@@ -364,13 +351,12 @@ def _indienen(arguments: dict) -> list[TextContent]:
                     "status": "wachtend",
                 },
                 {
-                    "beschrijving": "Geautomatiseerde toets omgevingsdienst",
+                    "beschrijving": "Beoordeling door de omgevingsdienst",
                     "toelichting": (
-                        "De omgevingsdienst heeft de rapportage geautomatiseerd "
-                        "getoetst op dezelfde machine-uitvoerbare regel: akkoord, "
-                        "geen herstelronde nodig."
+                        "De omgevingsdienst beoordeelt uw rapportage. U hoort "
+                        "het zodra er een uitkomst of vervolgactie is."
                     ),
-                    "status": "afgerond",
+                    "status": "in behandeling",
                 },
                 {
                     "beschrijving": "Volgende rapportage indienen",

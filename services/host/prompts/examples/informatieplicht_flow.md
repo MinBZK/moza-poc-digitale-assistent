@@ -39,13 +39,13 @@ Assistent (na regelrecht__execute_law met law "omgevingswet/energiebesparing/maa
 
 "Dank u. Op basis van de Erkende Maatregelenlijst (EML 2023) gelden voor Koffiezaak Noon 7 maatregelen. Kunt u per maatregel aangeven of deze is uitgevoerd?
 
-1. GC1 - Pas een klokregeling toe en regel deze in (ruimteverwarming) - uitgevoerd / niet uitgevoerd?
-2. GC3 - Pas een weersafhankelijke regeling toe - uitgevoerd / niet uitgevoerd?
-3. GF4 - Vervang gloei-, halogeen- en spaarlampen door LED-lampen - uitgevoerd / niet uitgevoerd?
-4. FD3 - Pas nachtafdekking toe bij semi-verticale koelmeubels - uitgevoerd / niet uitgevoerd?
-5. FD7 - Isoleer de wanden van koelcellen - uitgevoerd / niet uitgevoerd?
-6. FE4 - Pas een laagdebiet afzuigkap toe bij grootkeukens - uitgevoerd / niet uitgevoerd?
-7. GD1 - Pas een klokregeling toe op het ventilatiesysteem - uitgevoerd / niet uitgevoerd?"
+1. Pas een klokregeling toe en regel deze in (ruimteverwarming) - uitgevoerd / niet uitgevoerd? (GC1)
+2. Pas een weersafhankelijke regeling toe - uitgevoerd / niet uitgevoerd? (GC3)
+3. Vervang gloei-, halogeen- en spaarlampen door LED-lampen - uitgevoerd / niet uitgevoerd? (GF4)
+4. Pas nachtafdekking toe bij semi-verticale koelmeubels - uitgevoerd / niet uitgevoerd? (FD3)
+5. Isoleer de wanden van koelcellen - uitgevoerd / niet uitgevoerd? (FD7)
+6. Pas een laagdebiet afzuigkap toe bij grootkeukens - uitgevoerd / niet uitgevoerd? (FE4)
+7. Pas een klokregeling toe op het ventilatiesysteem - uitgevoerd / niet uitgevoerd?" (GD1)
 
 Gebruiker: "1 t/m 5 gedaan, 6 en 7 nog niet."
 
@@ -57,6 +57,6 @@ Gebruiker: "Ja, dien maar in."
 
 Assistent (na rvo__indienen met maatregelen-status en bedrijfskenmerken):
 
-"✅ Uw rapportage is ingediend (referentie RVO-EBR-2026-85234567-001) en direct geautomatiseerd getoetst door de omgevingsdienst op dezelfde machine-uitvoerbare regel: **akkoord - in één keer goed, geen herstelronde**. U hoort alleen iets als er alsnog een afwijking wordt geconstateerd.
+"✅ Uw rapportage is ingediend (referentie RVO-EBR-2026-85234567-001) en in behandeling genomen. U vindt de status terug onder 'Lopende zaken'; u hoort het zodra er een vervolgactie nodig is.
 
-Uw antwoorden (koelinstallatie, afzuiginstallatie) zijn bewaard; bij de volgende ronde (2030) staat het voorwerk al klaar. U vindt de zaak terug onder 'Lopende zaken'."
+Uw antwoorden (koelinstallatie, afzuiginstallatie) zijn bewaard; bij de volgende ronde (2030) staat het voorwerk al klaar."
