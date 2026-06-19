@@ -214,8 +214,8 @@ sequenceDiagram
     Gebruiker->>Host: "Ja"
     Host->>RVO: tools/call [indienen, kvk_nummer="68750110",<br/>regeling_id="EBR-2026",<br/>maatregelen=["LED-verlichting","HR++ beglazing"]]
     Note over RVO: Mock: simuleert succesvolle<br/>indiening en genereert<br/>referentienummer
-    RVO-->>Host: status=INGEDIEND, toets=AKKOORD,<br/>ref=RVO-EBR-2026-68750110-001 + provenance
-    Host->>Gebruiker: "Uw rapportage is ingediend (ref. RVO-EBR-2026-68750110-001)<br/>en direct geautomatiseerd getoetst door de omgevingsdienst:<br/>akkoord, geen herstelronde. U hoort alleen iets bij een afwijking.<br/>Terug te vinden onder 'Lopende zaken'."
+    RVO-->>Host: status=INGEDIEND,<br/>ref=RVO-EBR-2026-68750110-001 + lopende_zaak + provenance
+    Host->>Gebruiker: "Uw rapportage is ingediend (ref. RVO-EBR-2026-68750110-001)<br/>en in behandeling genomen. U vindt de status terug onder 'Lopende zaken';<br/>u hoort het zodra er een vervolgactie nodig is."
 ```
 
 > **Let op:** De `indienen`-tool is muterend. Het AI-platform vraagt daarom *altijd* om expliciete bevestiging van de gebruiker voordat de tool wordt aangeroepen. Dit is afgedwongen via de `ToolAnnotations` (`readOnlyHint=False`) én de systeemprompt.

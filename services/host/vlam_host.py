@@ -167,8 +167,8 @@ CLI_TOOL_DEFINITIONS_ANTHROPIC = [
             "type": "object",
             "properties": {
                 "kvk_nummer": {"type": "string", "description": "8-cijferig KvK-nummer"},
-                "jaarlijks_elektriciteitsverbruik_kwh": {"type": "number", "description": "Jaarlijks elektriciteitsverbruik in kWh (drempel: 50.000)"},
-                "jaarlijks_gasverbruik_m3": {"type": "number", "description": "Jaarlijks gasverbruik in m³ (drempel: 25.000)"},
+                "jaarlijks_elektriciteitsverbruik_kwh": {"type": "number", "description": "Jaarlijks elektriciteitsverbruik in kWh"},
+                "jaarlijks_gasverbruik_m3": {"type": "number", "description": "Jaarlijks gasverbruik in m³"},
                 "is_woonfunctie": {"type": "boolean", "description": "Of het gebouw uitsluitend een woonfunctie heeft"},
                 "fields": _FIELDS_PARAM,
             },
@@ -273,7 +273,7 @@ class VLAMHost:
             "tools": len(self.registry.tool_map),
         }
 
-    async def get_definities(self, law: str, service: str | None = None) -> dict:
+    async def get_definities(self, law: str) -> dict:
         """Definities/constantes (bv. drempelwaarden) van een RegelRecht-wet.
 
         Bron van waarheid: de engine (rule_spec.definitions), opgehaald via de
@@ -287,7 +287,9 @@ class VLAMHost:
                 "law": law,
                 "toegestaan": sorted(REGELRECHT_DEFINITIES_ALLOWLIST),
             }
-        service = service or spec["service"]
+        # De service hoort bij de wet (allowlist), niet bij de caller: pin 'm,
+        # zodat geen door de caller bepaalde parameter de engine bereikt.
+        service = spec["service"]
         tool_key = "regelrecht__execute_law"
         if tool_key in self.registry.tool_map:
             try:

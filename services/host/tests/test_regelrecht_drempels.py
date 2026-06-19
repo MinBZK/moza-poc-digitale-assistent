@@ -59,9 +59,9 @@ class _FakeRegistry:
         return self._result
 
 
-def _get_definities(registry, law, service=None):
+def _get_definities(registry, law):
     fake_self = types.SimpleNamespace(registry=registry)
-    return asyncio.run(vlam_host.VLAMHost.get_definities(fake_self, law, service))
+    return asyncio.run(vlam_host.VLAMHost.get_definities(fake_self, law))
 
 
 def test_get_definities_uit_engine():
@@ -84,6 +84,6 @@ def test_get_definities_fallback_zonder_tool():
 
 def test_get_definities_allowlist_weigert_onbekende_wet():
     res = _get_definities(
-        _FakeRegistry({"regelrecht__execute_law": True}, "{}"), "zorgtoeslagwet", "TOESLAGEN"
+        _FakeRegistry({"regelrecht__execute_law": True}, "{}"), "zorgtoeslagwet"
     )
     assert res["error"] == "WET_NIET_TOEGESTAAN"

@@ -2,7 +2,7 @@
 
 De frontend leest het case-event en toont organisatie/onderwerp/referentienummer.
 Die moeten in de lopende_zaak zitten zodat de frontend niets hoeft te verzinnen.
-Na indienen claimt de respons geen directe goedkeuring (zie PDR-008-context).
+Na indienen claimt de respons geen directe goedkeuring (zie PDR-007-addendum 2026-06-19).
 """
 
 import importlib.util

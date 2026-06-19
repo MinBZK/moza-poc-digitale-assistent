@@ -188,14 +188,15 @@ async def health():
 
 
 @app.get("/regelrecht/definities")
-async def regelrecht_definities(law: str, service: str | None = None):
+async def regelrecht_definities(law: str):
     """Definities/constantes van een RegelRecht-wet (bv. drempelwaarden).
 
     Eén bron van waarheid: de engine (rule_spec.definitions). Alleen wetten op
-    de allowlist (REGELRECHT_DEFINITIES_ALLOWLIST) zijn opvraagbaar. Bedoeld voor
-    frontend CTA-gating per regeling-pagina.
+    de allowlist (REGELRECHT_DEFINITIES_ALLOWLIST) zijn opvraagbaar; de service
+    hoort bij de wet (uit de allowlist), niet bij de caller. Voor frontend
+    CTA-gating per regeling-pagina.
     """
-    result = await host.get_definities(law, service)
+    result = await host.get_definities(law)
     if result.get("error") == "WET_NIET_TOEGESTAAN":
         raise HTTPException(status_code=404, detail=result)
     return result
