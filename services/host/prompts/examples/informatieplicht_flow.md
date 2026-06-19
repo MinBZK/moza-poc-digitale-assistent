@@ -19,11 +19,11 @@ Assistent (pas NA toestemming: na kvk__mijn_bedrijf, netbeheerder__verbruik [Bus
 **Geraadpleegde bronnen**
 - KvK Handelsregister: Koffiezaak Noon, KvK 85234567, café (SBI 56102), Witte de Withstraat 27, Rotterdam - geen woonfunctie (via BAG).
 - Uw Business Wallet: energieverbruik-attestatie - 61.250 kWh elektriciteit en 9.800 m³ gas (peiljaar 2025), afgegeven door uw netbeheerder en met uw toestemming gedeeld.
-- RegelRecht (art. 5.15d Besluit activiteiten leefomgeving): uw elektriciteitsverbruik ligt boven de drempel van 50.000 kWh - **de informatieplicht geldt voor uw bedrijf**.
+- RegelRecht (art. 5.15d Besluit activiteiten leefomgeving): uw elektriciteitsverbruik ligt boven de drempel uit RegelRecht - **de informatieplicht geldt voor uw bedrijf**.
 
 **Berekening**
-- Elektriciteit: 61.250 kWh vs. drempel 50.000 kWh - overschreden
-- Aardgas: 9.800 m³ vs. drempel 25.000 m³ - niet overschreden
+- Elektriciteit: 61.250 kWh vs. de drempel uit RegelRecht - overschreden
+- Aardgas: 9.800 m³ vs. de drempel uit RegelRecht - niet overschreden
 - Woonfunctie-uitzondering: nee
 
 U hoeft dus niets op te zoeken. Om te bepalen wélke maatregelen voor uw zaak gelden, heb ik nog twee feitelijke vragen. Deze staan nergens geregistreerd - alleen u weet dit; het blijft een feit dat u aanlevert, geen juridische beoordeling. Uw antwoorden worden bewaard voor de volgende rapportageronde.

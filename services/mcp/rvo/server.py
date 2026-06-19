@@ -306,6 +306,8 @@ def _indienen(arguments: dict) -> list[TextContent]:
         ),
         "lopende_zaak": {
             "referentienummer": referentienummer,
+            "organisatie": "Rijksdienst voor Ondernemend Nederland",
+            "onderwerp": "Informatieplicht energiebesparing",
             "zaak_type": "Energiebesparingsrapportage",
             "regeling": regeling_id,
             "status": "In behandeling",

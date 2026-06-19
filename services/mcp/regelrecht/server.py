@@ -316,7 +316,8 @@ async def list_tools() -> list[Tool]:
                 '{"KVK_NUMMER": "<8 cijfers>"}. Geef verbruik en woonfunctie mee '
                 'via overrides: {"RVO": {"JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": '
                 '<kWh>, "JAARLIJKS_GASVERBRUIK_M3": <m3>, "IS_WOONFUNCTIE": '
-                "<true/false>}}. Drempels: 50.000 kWh / 25.000 m3.\n"
+                "<true/false>}}. De geldende drempelwaarden komen uit de regel "
+                "zelf en staan in het resultaat (veld drempelwaarden).\n"
                 "• 'omgevingswet/energiebesparing/maatregelen' — bepaalt welke "
                 "EML-2023-maatregelen gelden. TWEE-STAPS: roep EERST aan met "
                 "parameters={} (leeg). De respons (benodigde_feiten) meldt welke "
