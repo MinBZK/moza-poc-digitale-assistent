@@ -81,10 +81,12 @@ _KVK_SESSIE_TOOLS = frozenset(
 )
 _INFORMATIEPLICHT_LAW = "omgevingswet/energiebesparing/informatieplicht"
 
-# Sleutels die een identiteit dragen (KvK-nummer, BSN). Het LLM mag ze nooit
-# meegeven aan de generieke execute_law-tool: identiteit komt uitsluitend uit de
-# sessie. Case-insensitieve substring-match dekt ook varianten (kvk_nummer, KVK).
-_IDENTITY_KEY_RE = re.compile(r"kvk|bsn", re.IGNORECASE)
+# Sleutels die een identiteit dragen (KvK-nummer, BSN, RSIN, burgerservicenummer).
+# Het LLM mag ze nooit meegeven aan de generieke execute_law-tool: identiteit komt
+# uitsluitend uit de sessie. Case-insensitieve substring-match dekt ook varianten
+# (kvk_nummer, KVK). NB: dit is deny-by-default op sleutelnaam; een echte allowlist
+# per wet is een vervolgstap (zie NEXT_STEPS / BETA-02).
+_IDENTITY_KEY_RE = re.compile(r"kvk|bsn|rsin|burgerservicenummer", re.IGNORECASE)
 
 
 def _strip_identity_keys(value):

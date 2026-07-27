@@ -84,13 +84,23 @@ def test_execute_law_strip_kvk_uit_overrides():
     assert out["parameters"]["KVK_NUMMER"] == SESSIE_A
 
 
-def test_execute_law_strip_kvk_alternatieve_spelling():
+def test_execute_law_strip_identity_alternatieve_spelling():
     out = vlam_host._inject_session_kvk(
         "regelrecht__execute_law",
-        {"law": "andere/wet", "parameters": {"kvk_nummer": "9", "KVK": "9", "bsn": "1"}},
+        {
+            "law": "andere/wet",
+            "parameters": {
+                "kvk_nummer": "9",
+                "KVK": "9",
+                "bsn": "1",
+                "RSIN": "8",
+                "BURGERSERVICENUMMER": "7",
+                "IS_WOONFUNCTIE": True,  # legitiem feit blijft
+            },
+        },
         SESSIE_A,
     )
-    assert out["parameters"] == {}
+    assert out["parameters"] == {"IS_WOONFUNCTIE": True}
 
 
 def test_execute_law_strip_llm_kvk_voor_andere_wet():

@@ -122,7 +122,9 @@ def _audit_log(tool_name: str, input_data: dict, output_data: dict | list) -> No
     entry = {
         "timestamp": datetime.now(UTC).isoformat(),
         "tool": tool_name,
-        "input": input_data,
+        # Alleen veldnamen, geen waarden: het KvK-nummer (identiteit) hoort
+        # niet in de logs — consistent met de CLI-audit (audit.sh) (PDR-009).
+        "input_keys": sorted(str(k) for k in input_data),
         "output_type": type(output_data).__name__,
     }
     logger.info("AUDIT: %s", json.dumps(entry, ensure_ascii=False, default=str))
@@ -379,11 +381,10 @@ def _indienen(arguments: dict) -> list[TextContent]:
         },
     }
     _audit_log("indienen", arguments, output)
+    # Geen KvK-nummer in de logregel (identiteit hoort niet in de logs, PDR-009).
     logger.info(
-        "INDIENING: %s voor %s door KvK %s (%d maatregelen)",
+        "INDIENING: regeling %s (%d maatregelen)",
         regeling_id,
-        kvk_nummer,
-        kvk_nummer,
         len(maatregelen),
     )
     return [TextContent(type="text", text=_wrap_provenance(output))]

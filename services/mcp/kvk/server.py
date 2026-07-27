@@ -346,7 +346,9 @@ def _audit_log(tool_name: str, input_data: dict, output_data: dict) -> None:
     entry = {
         "timestamp": datetime.now(UTC).isoformat(),
         "tool": tool_name,
-        "input": input_data,
+        # Alleen veldnamen, geen waarden: het KvK-nummer (identiteit) hoort
+        # niet in de logs — consistent met de CLI-audit (audit.sh) (PDR-009).
+        "input_keys": sorted(str(k) for k in input_data),
         "output": {
             "type": type(output_data).__name__,
             "keys": list(output_data.keys()),
