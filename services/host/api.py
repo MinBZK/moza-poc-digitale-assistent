@@ -204,9 +204,12 @@ async def chat_stream(body: ChatRequest, request: Request):
 
 
 @app.delete("/chat/{session_id}")
-async def clear_session(session_id: str):
-    """Wis de gespreksgeschiedenis van een sessie."""
-    host.clear_session(session_id)
+async def clear_session(session_id: str, request: Request):
+    """Wis de gespreksgeschiedenis van een sessie (alleen de eigen identiteit)."""
+    session_kvk = _resolve_session_kvk(request)
+    if not session_kvk:
+        raise HTTPException(status_code=401, detail=GEEN_SESSIE_MELDING)
+    host.clear_session(session_kvk, session_id)
     return {"status": "gewist", "session_id": session_id}
 
 

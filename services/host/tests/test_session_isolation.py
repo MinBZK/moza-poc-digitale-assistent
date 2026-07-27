@@ -38,10 +38,59 @@ def test_clear_session_wist_alle_modi_inclusief_cli():
     keep = host._conv_key(SESSIE_A, "sid-2", "vlam")
     host.conversations[keep] = [{"y": 2}]
 
-    host.clear_session("sid-1")
+    host.clear_session(SESSIE_A, "sid-1")
 
     assert keep in host.conversations
     assert all("sid-1" not in k for k in host.conversations)
+
+
+def test_clear_session_scoped_op_kvk():
+    # Alleen de buckets van de eigen identiteit worden gewist (geen cross-tenant).
+    host = vlam_host.VLAMHost()
+    mine = host._conv_key(SESSIE_A, "sid-1", "vlam")
+    other = host._conv_key(SESSIE_B, "sid-1", "vlam")
+    host.conversations[mine] = [{"x": 1}]
+    host.conversations[other] = [{"y": 2}]
+
+    host.clear_session(SESSIE_A, "sid-1")
+
+    assert mine not in host.conversations
+    assert other in host.conversations  # andermans historie blijft
+
+
+def test_clear_session_werkt_met_pipe_in_session_id():
+    host = vlam_host.VLAMHost()
+    sid = "a|b"
+    key = host._conv_key(SESSIE_A, sid, "vlam")
+    host.conversations[key] = [{"x": 1}]
+
+    host.clear_session(SESSIE_A, sid)
+
+    assert key not in host.conversations
+
+
+def test_execute_law_strip_kvk_uit_overrides():
+    # Deny-by-default ook buiten parameters: identity-sleutels in overrides eruit.
+    out = vlam_host._inject_session_kvk(
+        "regelrecht__execute_law",
+        {
+            "law": _INFORMATIEPLICHT,
+            "overrides": {"RVO": {"KVK_NUMMER": "99999999", "IS_WOONFUNCTIE": False}},
+        },
+        SESSIE_A,
+    )
+    assert "KVK_NUMMER" not in out["overrides"]["RVO"]
+    assert out["overrides"]["RVO"]["IS_WOONFUNCTIE"] is False
+    assert out["parameters"]["KVK_NUMMER"] == SESSIE_A
+
+
+def test_execute_law_strip_kvk_alternatieve_spelling():
+    out = vlam_host._inject_session_kvk(
+        "regelrecht__execute_law",
+        {"law": "andere/wet", "parameters": {"kvk_nummer": "9", "KVK": "9", "bsn": "1"}},
+        SESSIE_A,
+    )
+    assert out["parameters"] == {}
 
 
 def test_execute_law_strip_llm_kvk_voor_andere_wet():

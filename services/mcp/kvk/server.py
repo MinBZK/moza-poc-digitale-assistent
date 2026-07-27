@@ -389,6 +389,12 @@ async def read_resource(uri: str) -> list[ReadResourceContents]:
 
     De host is de identiteits-autoriteit (PDR-009): hij stelt de URI samen met
     het KvK-nummer van de ingelogde sessie. De server bedient dat nummer.
+
+    LET OP: deze resource-read is NIET sessie-gebonden — hij vertrouwt het
+    KvK-nummer uit de URI. De host ontsluit op dit moment geen MCP-resource-reads
+    aan het LLM, dus dit is geen live bypass. Wordt dat ooit wel gedaan, dan moet
+    het KvK-nummer hier eerst tegen de sessie gevalideerd/geinjecteerd worden,
+    anders is `kvk://basisprofiel/<willekeurig>` een cross-tenant read.
     """
     kvk_nummer = str(uri).rstrip("/").split("/")[-1]
 

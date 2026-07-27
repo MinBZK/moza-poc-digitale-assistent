@@ -7,6 +7,7 @@ De host fungeert als tussenstap:
 import asyncio
 import json
 import logging
+import re
 from collections.abc import AsyncGenerator
 
 import anthropic
@@ -80,6 +81,24 @@ _KVK_SESSIE_TOOLS = frozenset(
 )
 _INFORMATIEPLICHT_LAW = "omgevingswet/energiebesparing/informatieplicht"
 
+# Sleutels die een identiteit dragen (KvK-nummer, BSN). Het LLM mag ze nooit
+# meegeven aan de generieke execute_law-tool: identiteit komt uitsluitend uit de
+# sessie. Case-insensitieve substring-match dekt ook varianten (kvk_nummer, KVK).
+_IDENTITY_KEY_RE = re.compile(r"kvk|bsn", re.IGNORECASE)
+
+
+def _strip_identity_keys(value):
+    """Verwijder identity-dragende sleutels (KvK/BSN) recursief uit dicts/lists."""
+    if isinstance(value, dict):
+        return {
+            k: _strip_identity_keys(v)
+            for k, v in value.items()
+            if not _IDENTITY_KEY_RE.search(str(k))
+        }
+    if isinstance(value, list):
+        return [_strip_identity_keys(v) for v in value]
+    return value
+
 
 def _redact_kvk_for_log(arguments: dict) -> dict:
     """Maskeer het sessie-KvK-nummer in tool-argumenten vóór het loggen.
@@ -109,16 +128,18 @@ def _inject_session_kvk(tool_key: str, arguments: dict, kvk: str) -> dict:
     if tool_key in _KVK_SESSIE_TOOLS:
         args["kvk_nummer"] = kvk
     elif tool_key == "regelrecht__execute_law":
-        # Deny-by-default: verwijder een door het LLM meegegeven KVK_NUMMER voor
-        # ELKE wet (een niet-dict parameters valt terug op leeg), en zet de
-        # sessie-waarde alléén voor de wet die het nodig heeft (informatieplicht).
-        # De maatregelen-regel gebruikt parameters als feiten en krijgt geen KvK.
+        # Deny-by-default: strip alle identity-sleutels (KvK/BSN) die het LLM
+        # meegaf — in parameters én overrides, recursief — zodat identiteit nooit
+        # uit de conversatie komt. Zet daarna de sessie-KvK alléén voor de wet die
+        # het nodig heeft (informatieplicht). De maatregelen-regel gebruikt
+        # parameters als feiten en krijgt geen KvK.
         raw = args.get("parameters")
-        params = dict(raw) if isinstance(raw, dict) else {}
-        params.pop("KVK_NUMMER", None)
+        params = _strip_identity_keys(raw) if isinstance(raw, dict) else {}
         if str(args.get("law", "")).strip() == _INFORMATIEPLICHT_LAW:
             params["KVK_NUMMER"] = kvk
         args["parameters"] = params
+        if "overrides" in args:
+            args["overrides"] = _strip_identity_keys(args.get("overrides"))
     return args
 
 
@@ -1000,9 +1021,12 @@ class VLAMHost:
         """
         return f"{session_kvk}|{session_id}|{mode}"
 
-    def clear_session(self, session_id: str):
-        """Wis de gespreksgeschiedenis van een sessie (alle modi, elke identiteit)."""
-        for key in list(self.conversations):
-            parts = key.split("|", 2)
-            if len(parts) == 3 and parts[1] == session_id:
-                self.conversations.pop(key, None)
+    def clear_session(self, session_kvk: str, session_id: str):
+        """Wis de gespreksgeschiedenis van een sessie (alle modi).
+
+        Gescoped op identiteit (session_kvk): wist alleen de eigen buckets, niet
+        die van een andere gebruiker met hetzelfde session_id. De sleutels worden
+        exact herbouwd i.p.v. geparsed, zodat een `|` in het session_id niet stoort.
+        """
+        for mode in ("vlam", "claude", "cli:vlam", "cli:claude"):
+            self.conversations.pop(self._conv_key(session_kvk, session_id, mode), None)

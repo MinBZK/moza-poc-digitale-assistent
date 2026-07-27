@@ -24,3 +24,13 @@ async def test_kvk_cli_krijgt_sessie_kvk_via_env(monkeypatch):
 
     assert captured["env"] is not None
     assert captured["env"].get("KVK_SESSIE_NUMMER") == MOCK_KVK
+
+
+def test_loggable_cmd_maskeert_geredacte_waarden():
+    # Het KvK-nummer staat als positional argv in de regelrecht/rvo-CLI en mag
+    # niet leesbaar in de logs terechtkomen (net als _redact_kvk_for_log).
+    readable = cli_executor._loggable_cmd(
+        ["regelrecht-cli", "check", MOCK_KVK, "--provenance"], redact=[MOCK_KVK]
+    )
+    assert MOCK_KVK not in readable
+    assert "***" in readable
