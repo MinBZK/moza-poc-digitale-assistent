@@ -74,6 +74,30 @@ def test_execute_law_informatieplicht_zet_sessie_kvk():
     assert out["parameters"]["KVK_NUMMER"] == SESSIE_A
 
 
+def test_redact_kvk_voor_log_maskeert_kvk():
+    # De sessie-KvK (afgeleid van het token) mag niet in de logs (CodeQL/privacy).
+    red = vlam_host._redact_kvk_for_log(
+        {"kvk_nummer": SESSIE_A, "trefwoord": "energie"}
+    )
+    assert red["kvk_nummer"] == "***"
+    assert red["trefwoord"] == "energie"
+
+
+def test_redact_kvk_voor_log_maskeert_geneste_kvk_nummer():
+    red = vlam_host._redact_kvk_for_log(
+        {"law": "x", "parameters": {"KVK_NUMMER": SESSIE_A, "IS_WOONFUNCTIE": False}}
+    )
+    assert red["parameters"]["KVK_NUMMER"] == "***"
+    assert red["parameters"]["IS_WOONFUNCTIE"] is False
+
+
+def test_redact_kvk_voor_log_muteert_input_niet():
+    original = {"kvk_nummer": SESSIE_A, "parameters": {"KVK_NUMMER": SESSIE_A}}
+    vlam_host._redact_kvk_for_log(original)
+    assert original["kvk_nummer"] == SESSIE_A
+    assert original["parameters"]["KVK_NUMMER"] == SESSIE_A
+
+
 def test_execute_law_niet_dict_parameters_geeft_geen_error():
     # Mag niet crashen als het LLM parameters als string stuurt.
     out = vlam_host._inject_session_kvk(
