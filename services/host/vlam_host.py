@@ -93,10 +93,16 @@ def _inject_session_kvk(tool_key: str, arguments: dict, kvk: str) -> dict:
     if tool_key in _KVK_SESSIE_TOOLS:
         args["kvk_nummer"] = kvk
     elif tool_key == "regelrecht__execute_law":
+        # Deny-by-default: verwijder een door het LLM meegegeven KVK_NUMMER voor
+        # ELKE wet (een niet-dict parameters valt terug op leeg), en zet de
+        # sessie-waarde alléén voor de wet die het nodig heeft (informatieplicht).
+        # De maatregelen-regel gebruikt parameters als feiten en krijgt geen KvK.
+        raw = args.get("parameters")
+        params = dict(raw) if isinstance(raw, dict) else {}
+        params.pop("KVK_NUMMER", None)
         if str(args.get("law", "")).strip() == _INFORMATIEPLICHT_LAW:
-            params = dict(args.get("parameters") or {})
             params["KVK_NUMMER"] = kvk
-            args["parameters"] = params
+        args["parameters"] = params
     return args
 
 
@@ -406,7 +412,7 @@ class VLAMHost:
         self.claude_client, self.vlam_client = self._resolve_clients(
             vlam_api_key_override, claude_api_key_override
         )
-        conv_key = f"{session_id}:{mode}"
+        conv_key = self._conv_key(session_kvk, session_id, mode)
         if conv_key not in self.conversations:
             self.conversations[conv_key] = []
         messages = self.conversations[conv_key]
@@ -447,7 +453,7 @@ class VLAMHost:
             vlam_api_key_override, claude_api_key_override
         )
 
-        conv_key = f"{session_id}:{mode}"
+        conv_key = self._conv_key(session_kvk, session_id, mode)
         if conv_key not in self.conversations:
             self.conversations[conv_key] = []
         messages = self.conversations[conv_key]
@@ -967,7 +973,20 @@ class VLAMHost:
                 openai_msgs.append({"role": msg["role"], "content": content})
         return openai_msgs
 
+    @staticmethod
+    def _conv_key(session_kvk: str, session_id: str, mode: str) -> str:
+        """Bucketsleutel voor de gespreksgeschiedenis.
+
+        Gepartitioneerd op identiteit (KvK) én het client-gekozen session_id
+        (PDR-009): zo kan een geldig token met andermans session_id nooit diens
+        historie — met bedrijfsdata — inzien. `|` als scheidingsteken zodat de
+        mode (die zelf een `:` bevat, bv. `cli:vlam`) eenduidig blijft.
+        """
+        return f"{session_kvk}|{session_id}|{mode}"
+
     def clear_session(self, session_id: str):
-        """Wis de gespreksgeschiedenis van een sessie (beide modi)."""
-        for mode in ("vlam", "claude", "cli"):
-            self.conversations.pop(f"{session_id}:{mode}", None)
+        """Wis de gespreksgeschiedenis van een sessie (alle modi, elke identiteit)."""
+        for key in list(self.conversations):
+            parts = key.split("|", 2)
+            if len(parts) == 3 and parts[1] == session_id:
+                self.conversations.pop(key, None)
