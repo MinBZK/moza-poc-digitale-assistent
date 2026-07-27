@@ -11,7 +11,7 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -185,6 +185,30 @@ async def health():
         "status": "actief",
         **host.get_status(),
     }
+
+
+@app.get("/regelrecht/definities")
+async def regelrecht_definities(law: str):
+    """Definities/constantes van een RegelRecht-wet (bv. drempelwaarden).
+
+    Eén bron van waarheid: de engine (rule_spec.definitions). Alleen wetten op
+    de allowlist (REGELRECHT_DEFINITIES_ALLOWLIST) zijn opvraagbaar; de service
+    hoort bij de wet (uit de allowlist), niet bij de caller. Voor frontend
+    CTA-gating per regeling-pagina.
+    """
+    result = await host.get_definities(law)
+    if result.get("error") == "WET_NIET_TOEGESTAAN":
+        raise HTTPException(status_code=404, detail=result)
+    return result
+
+
+@app.get("/regelrecht/drempels")
+async def regelrecht_drempels():
+    """Alias voor /regelrecht/definities (energiebesparings-/informatieplicht).
+
+    Geeft het veld 'drempelwaarden' terug voor terugwaartse compatibiliteit.
+    """
+    return await host.get_drempelwaarden()
 
 
 # Optionele statische frontend-mount. Standaard UIT: de host is API-only en de

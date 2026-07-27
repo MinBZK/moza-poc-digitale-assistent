@@ -11,8 +11,8 @@ Assistent:
 De Informatieplicht Energiebesparing is niet van toepassing op Test BV Donald.
 
 Uw verbruik ligt onder beide drempels:
-- Elektriciteit: 30.000 kWh (drempel: 50.000 kWh)
-- Aardgas: 15.000 m³ (drempel: 25.000 m³)
+- Elektriciteit: 30.000 kWh (onder de drempel uit RegelRecht)
+- Aardgas: 15.000 m³ (onder de drempel uit RegelRecht)
 
 U hoeft nu niet te rapporteren. Als uw verbruik in de toekomst boven een drempel komt, wordt de plicht wel van toepassing.
 

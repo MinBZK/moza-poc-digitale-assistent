@@ -9,7 +9,7 @@ Assistent roept tool aan: regelrecht__execute_law(law="omgevingswet/energiebespa
 Assistent ontvangt: ontbrekende gegevens - energieverbruik nodig
 
 Assistent:
-De energiebesparingsplicht geldt voor bedrijven die meer dan 50.000 kWh elektriciteit of 25.000 m³ aardgas per jaar verbruiken. Gebouwen met uitsluitend een woonfunctie zijn uitgezonderd.
+De energiebesparingsplicht geldt voor bedrijven die boven de drempelwaarden van RegelRecht uitkomen (jaarverbruik elektriciteit of aardgas). Gebouwen met uitsluitend een woonfunctie zijn uitgezonderd.
 
 Uw bedrijf: Test BV Donald (KvK 68750110)
 Woonfunctie: nee

@@ -48,6 +48,24 @@ def _tool_label(tool_key: str) -> str:
     return TOOL_LABELS.get(tool_key, tool_key)
 
 
+# Wetten waarvan de frontend de definities/constantes mag opvragen
+# (GET /regelrecht/definities). Per wet: de service en een optionele lokale
+# fallback voor demo-robuustheid bij een onbereikbare engine. De allowlist
+# voorkomt willekeurige wet-executies via de query-parameter.
+REGELRECHT_DEFINITIES_ALLOWLIST: dict[str, dict] = {
+    "omgevingswet/energiebesparing/informatieplicht": {
+        "service": "RVO",
+        "fallback": {
+            "DREMPEL_ELEKTRICITEIT_KWH": 50000,
+            "DREMPEL_GAS_M3": 25000,
+            "DREMPEL_ONDERZOEK_ELEKTRICITEIT_KWH": 10000000,
+            "DREMPEL_ONDERZOEK_GAS_M3": 170000,
+            "RAPPORTAGE_FREQUENTIE_JAREN": 4,
+        },
+    },
+}
+
+
 def _extract_lopende_zaak(tool_name: str, result: str) -> dict | None:
     """Extraheer lopende_zaak uit een rvo__indienen resultaat."""
     if tool_name != "rvo__indienen":
@@ -149,8 +167,8 @@ CLI_TOOL_DEFINITIONS_ANTHROPIC = [
             "type": "object",
             "properties": {
                 "kvk_nummer": {"type": "string", "description": "8-cijferig KvK-nummer"},
-                "jaarlijks_elektriciteitsverbruik_kwh": {"type": "number", "description": "Jaarlijks elektriciteitsverbruik in kWh (drempel: 50.000)"},
-                "jaarlijks_gasverbruik_m3": {"type": "number", "description": "Jaarlijks gasverbruik in m³ (drempel: 25.000)"},
+                "jaarlijks_elektriciteitsverbruik_kwh": {"type": "number", "description": "Jaarlijks elektriciteitsverbruik in kWh"},
+                "jaarlijks_gasverbruik_m3": {"type": "number", "description": "Jaarlijks gasverbruik in m³"},
                 "is_woonfunctie": {"type": "boolean", "description": "Of het gebouw uitsluitend een woonfunctie heeft"},
                 "fields": _FIELDS_PARAM,
             },
@@ -254,6 +272,68 @@ class VLAMHost:
             "cli": {k: "verbonden" if v else "niet beschikbaar" for k, v in cli_tools.items()},
             "tools": len(self.registry.tool_map),
         }
+
+    async def get_definities(self, law: str) -> dict:
+        """Definities/constantes (bv. drempelwaarden) van een RegelRecht-wet.
+
+        Bron van waarheid: de engine (rule_spec.definitions), opgehaald via de
+        regelrecht-tool. Alleen wetten op REGELRECHT_DEFINITIES_ALLOWLIST zijn
+        opvraagbaar; per wet kan een lokale fallback gelden (demo-robuustheid).
+        """
+        spec = REGELRECHT_DEFINITIES_ALLOWLIST.get(law)
+        if spec is None:
+            return {
+                "error": "WET_NIET_TOEGESTAAN",
+                "law": law,
+                "toegestaan": sorted(REGELRECHT_DEFINITIES_ALLOWLIST),
+            }
+        # De service hoort bij de wet (allowlist), niet bij de caller: pin 'm,
+        # zodat geen door de caller bepaalde parameter de engine bereikt.
+        service = spec["service"]
+        tool_key = "regelrecht__execute_law"
+        if tool_key in self.registry.tool_map:
+            try:
+                raw = await self.registry.call_tool(
+                    tool_key, {"law": law, "service": service, "parameters": {}}
+                )
+                defs = json.loads(raw).get("data", {}).get("drempelwaarden")
+                if defs:
+                    return {
+                        "definities": defs,
+                        "bron": "RegelRecht (poc-machine-law)",
+                        "service": service,
+                        "law": law,
+                    }
+            except Exception as e:
+                logger.warning(
+                    "Definities uit RegelRecht ophalen mislukt (%s): %s", law, e
+                )
+        fallback = spec.get("fallback")
+        if fallback:
+            return {
+                "definities": fallback,
+                "bron": "lokale fallback (RegelRecht niet beschikbaar)",
+                "service": service,
+                "law": law,
+            }
+        return {"error": "BRON_NIET_BESCHIKBAAR", "service": service, "law": law}
+
+    async def get_drempelwaarden(self) -> dict:
+        """Alias voor de energiebesparings-/informatieplicht-drempelwaarden.
+
+        Geeft het veld 'drempelwaarden' terug (terugwaartse compatibiliteit met
+        GET /regelrecht/drempels).
+        """
+        res = await self.get_definities(
+            "omgevingswet/energiebesparing/informatieplicht"
+        )
+        if "definities" in res:
+            return {
+                "drempelwaarden": res["definities"],
+                "bron": res["bron"],
+                "wet": res["law"],
+            }
+        return res
 
     def _resolve_clients(
         self,

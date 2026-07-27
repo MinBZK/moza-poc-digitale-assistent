@@ -8,7 +8,7 @@ De host is de tussenstap tussen browser en LLM. Eén proces, twee LLM-backends (
 
 | Bestand | Doel |
 |---|---|
-| `api.py` | FastAPI-applicatie. Endpoints: `POST /chat`, `POST /chat/stream`, `GET /health`, `GET /tools`, `DELETE /chat/{session_id}`. Standaard **API-only**; een statische frontend-build wordt alleen op `/` gemount als `STATIC_DIR` expliciet is gezet (zie hieronder). |
+| `api.py` | FastAPI-applicatie. Endpoints: `POST /chat`, `POST /chat/stream`, `GET /health`, `GET /tools`, `GET /regelrecht/definities?law=&service=` (definities/constantes per wet uit RegelRecht, bv. drempelwaarden; allowlist + fallback), `GET /regelrecht/drempels` (alias voor de energiebesparingsplicht), `DELETE /chat/{session_id}`. Standaard **API-only**; een statische frontend-build wordt alleen op `/` gemount als `STATIC_DIR` expliciet is gezet (zie hieronder). |
 | `vlam_host.py` | Orkestratie-laag: agentic loops voor Claude en VLAM, in MCP- en CLI-modus. Bevat ook `CLI_TOOL_DEFINITIONS_*` (zie waarschuwing hieronder). |
 | `mcp_client.py` | `MCPToolRegistry` en `MCPServerConnection`: onderhoudt verbindingen met de vier MCP-servers. |
 | `cli_executor.py` | Vertaalt `tool_use`-blokken naar CLI-commando's en voert ze uit als subprocess. |

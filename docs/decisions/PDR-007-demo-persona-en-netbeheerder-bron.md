@@ -100,3 +100,21 @@ bewust geen endpoint voor.
 - `validate-mcp-servers.sh` valideert nu vijf servers.
 - Tests in `services/host/tests/test_demo_personas.py` borgen de
   demo-invarianten (drempel, BAG-fallback, EML-logica, Donald ongewijzigd).
+
+## Addendum (2026-06-19): besluit 4 (geautomatiseerde toets) herzien
+
+Besluit 4 introduceerde een geautomatiseerde omgevingsdienst-toets die de
+rapportage direct als "AKKOORD" markeerde (geen herstelronde). Dat is
+**teruggedraaid**: een PoC mag bij een muterende overheidsactie geen directe
+goedkeuring suggereren. Na `rvo__indienen` is de status nu "in behandeling
+genomen" en verwijst de assistent naar 'Lopende zaken'; de respons claimt nooit
+dat de rapportage is goedgekeurd, akkoord of getoetst is.
+
+- Het `toets: AKKOORD`-blok is uit de `rvo__indienen`-respons verwijderd; de
+  `lopende_zaak` toont status "In behandeling" met een taak "Beoordeling door de
+  omgevingsdienst".
+- Systeemprompt (`tool_usage.md`) en de voorbeeldflow instrueren expliciet: nooit
+  directe goedkeuring melden, altijd naar 'Lopende zaken' verwijzen.
+- De `lopende_zaak` is verrijkt met `organisatie` + `onderwerp` (naast het stabiele
+  `referentienummer`) zodat de frontend geen eigen fallback-registry meer nodig heeft.
+- De rest van besluit 4 (de zaak verschijnt onder 'Lopende zaken') blijft gelden.
