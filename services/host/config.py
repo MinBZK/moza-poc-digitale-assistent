@@ -88,6 +88,38 @@ ALLOW_API_KEY_OVERRIDE: bool = os.getenv("ALLOW_API_KEY_OVERRIDE", "true").lower
     "yes",
 )
 
+# Testgebruikers: token → KvK-nummer (MVP-01 / PDR-009)
+# De frontend stuurt per request de header `X-Test-User: <token>`; de host mapt
+# dat token server-side naar het KvK-nummer van de ingelogde testgebruiker en
+# injecteert dat bij elke bron-aanroep. Het LLM en de gebruiker kunnen het niet
+# kiezen of overschrijven. Formaat: komma-gescheiden `token:kvk`-paren, bv.
+#   TEST_USERS="tok_donald:68750110,tok_claudia:85234567"
+# Echte authenticatie (eHerkenning/DigiD) is BETA-02; dit is de gesloten testgroep.
+def _parse_test_users(raw: str) -> dict[str, str]:
+    users: dict[str, str] = {}
+    for pair in raw.split(","):
+        token, sep, kvk = pair.partition(":")
+        if not sep:
+            continue  # geen dubbele punt => geen geldig paar
+        token, kvk = token.strip(), kvk.strip()
+        if token and kvk:
+            users[token] = kvk
+    return users
+
+
+TEST_USERS: dict[str, str] = _parse_test_users(os.getenv("TEST_USERS", ""))
+
+
+def kvk_voor_token(token: str | None) -> str | None:
+    """Resolve een `X-Test-User`-token naar het KvK-nummer van die testgebruiker.
+
+    Geeft None terug bij een leeg of onbekend token (=> host blokkeert de vraag).
+    """
+    if not token:
+        return None
+    return TEST_USERS.get(token.strip())
+
+
 # System prompt — assembled from modular blocks
 from prompts.composer import compose_system_prompt as get_system_prompt  # noqa: E402
 
@@ -97,6 +129,8 @@ __all__ = [
     "ANTHROPIC_API_KEY",
     "CLAUDE_MODEL",
     "MCP_SERVERS",
+    "TEST_USERS",
+    "kvk_voor_token",
     "VLAM_API_KEY",
     "VLAM_BASE_URL",
     "VLAM_HOST",

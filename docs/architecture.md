@@ -43,7 +43,11 @@ De host werkt ook zonder MCP-servers of CLI-tools; de assistent antwoordt dan op
 
 > **MCP vs CLI:** MCP-servers draaien als permanente processen en ondersteunen zowel tools als resources. CLI-tools zijn Bash-scripts die on-demand worden aangeroepen en alleen tools ondersteunen (geen resources). Zie [PDR-005](decisions/PDR-005-cli-vs-mcp-transport.md) voor een uitgebreide vergelijking.
 
-> **KvK testomgeving:** De KvK-server haalt bedrijfsgegevens op via de KvK Test API (`api.kvk.nl/test/api/v1/basisprofielen`). Toegang is beperkt tot het bedrijf van de ingelogde gebruiker (demo: Test BV Donald, KvK 68750110). In productie wordt het KvK-nummer bepaald door de sessie-authenticatie.
+> **KvK testomgeving:** De KvK-server haalt bedrijfsgegevens op via de KvK Test API (`api.kvk.nl/test/api/v1/basisprofielen`) voor het KvK-nummer dat de host per aanroep meegeeft. De host bepaalt dat nummer server-side uit de sessie (zie [PDR-009](decisions/PDR-009-sessie-identiteit-host-side.md)); het LLM en de gebruiker kunnen het niet kiezen. Er is geen hardcoded demo-bedrijf meer. In de Beta wordt het KvK-nummer bepaald door echte authenticatie (eHerkenning/DigiD, BETA-02).
+
+### Testgebruiker toevoegen (gesloten testgroep)
+
+De identiteit is server-side gebonden aan een vertrouwd token ([PDR-009](decisions/PDR-009-sessie-identiteit-host-side.md)). Een testgebruiker voeg je toe door in de backend-env een `token:kvk`-paar aan `TEST_USERS` toe te voegen, bijvoorbeeld `TEST_USERS=tok_donald:68750110,tok_claudia:85234567` (kies niet-raadbare tokens). De frontend stuurt dat token per request mee in de header `X-Test-User`; de host mapt het naar het KvK-nummer en injecteert dat bij elke bron-aanroep. Zonder geldig token blokkeert de host met een nette "log eerst in"-melding en raadpleegt geen bron. Na het aanpassen van `TEST_USERS` herstart je de host; wisselen van persona hoeft niet meer per herstart (alleen een ander token).
 
 ## Routering: welke bron bij welke vraag?
 

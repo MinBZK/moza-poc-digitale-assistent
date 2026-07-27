@@ -9,6 +9,9 @@ Beslissingen rond de Digitale Assistent. Lees de PDRs in volgorde — elke nieuw
 | [PDR-001](PDR-001-dual-llm-backend.md) | Dual LLM-backend (VLAM + Claude) met gedeelde MCP-tools | Geaccepteerd |
 | [PDR-005](PDR-005-cli-vs-mcp-transport.md) | CLI vs MCP als transport voor tool-uitvoering | Geaccepteerd |
 | [PDR-006](PDR-006-feasibility-conclusie.md) | Feasibility-conclusie MCP en CLI; uitbreiding overheidsstandaard | Geaccepteerd |
+| [PDR-007](PDR-007-demo-persona-en-netbeheerder-bron.md) | Demo-persona's, netbeheerder/Business Wallet en EML-maatregelen | Geaccepteerd |
+| [PDR-008](PDR-008-generieke-regelrecht-tool-en-wallet.md) | Eén generieke RegelRecht-tool en energiegegevens via de Business Wallet | Geaccepteerd |
+| [PDR-009](PDR-009-sessie-identiteit-host-side.md) | Bedrijfsidentiteit server-side bepaald door de host-sessie (MVP-01) | Geaccepteerd |
 
 ## Vervangen of ongeldig verklaarde beslissingen
 
