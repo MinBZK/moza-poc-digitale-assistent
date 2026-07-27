@@ -100,20 +100,15 @@ def _strip_identity_keys(value):
     return value
 
 
-def _redact_kvk_for_log(arguments: dict) -> dict:
-    """Maskeer het sessie-KvK-nummer in tool-argumenten vóór het loggen.
+def _arg_keys(arguments: dict) -> str:
+    """Geef alleen de argument-namen terug voor logging (nooit de waarden).
 
-    Het KvK-nummer wordt server-side uit het `X-Test-User`-token afgeleid; het
-    hoort niet in de logs (privacy + het koppelt een sessie aan een bedrijf).
-    Geeft een kopie terug; de originele argumenten blijven ongemoeid.
+    We loggen bewust geen argument-waarden: die kunnen het sessie-KvK-nummer
+    bevatten (afgeleid van het `X-Test-User`-token) — dat hoort niet in de logs
+    (privacy + het koppelt een sessie aan een bedrijf). Alleen de veldnamen zijn
+    nuttig voor debugging en dragen geen identiteit.
     """
-    red = dict(arguments or {})
-    if "kvk_nummer" in red:
-        red["kvk_nummer"] = "***"
-    params = red.get("parameters")
-    if isinstance(params, dict) and "KVK_NUMMER" in params:
-        red["parameters"] = {**params, "KVK_NUMMER": "***"}
-    return red
+    return ", ".join(sorted(str(k) for k in (arguments or {})))
 
 
 def _inject_session_kvk(tool_key: str, arguments: dict, kvk: str) -> dict:
@@ -667,7 +662,7 @@ class VLAMHost:
                 arguments = _inject_session_kvk(
                     tool_key, json.loads(tc.function.arguments), session_kvk
                 )
-                logger.info("Tool-aanroep [vlam]: %s(%s)", tool_key, _redact_kvk_for_log(arguments))
+                logger.info("Tool-aanroep [vlam]: %s (velden: %s)", tool_key, _arg_keys(arguments))
                 try:
                     result = await self.registry.call_tool(tool_key, arguments)
                 except Exception as e:
@@ -748,7 +743,7 @@ class VLAMHost:
                 }
 
                 cli_args = _inject_session_kvk(tu.name, tu.input, session_kvk)
-                logger.info("CLI tool-aanroep: %s(%s)", tu.name, _redact_kvk_for_log(cli_args))
+                logger.info("CLI tool-aanroep: %s (velden: %s)", tu.name, _arg_keys(cli_args))
                 try:
                     result = await execute_cli_tool(tu.name, cli_args)
                 except Exception as e:
@@ -833,7 +828,7 @@ class VLAMHost:
                 arguments = _inject_session_kvk(
                     tool_key, json.loads(tc.function.arguments or "{}"), session_kvk
                 )
-                logger.info("CLI tool-aanroep [vlam]: %s(%s)", tool_key, _redact_kvk_for_log(arguments))
+                logger.info("CLI tool-aanroep [vlam]: %s (velden: %s)", tool_key, _arg_keys(arguments))
                 try:
                     result = await execute_cli_tool(tool_key, arguments)
                 except Exception as e:
@@ -958,7 +953,7 @@ class VLAMHost:
                 arguments = _inject_session_kvk(
                     tool_key, json.loads(tc.function.arguments), session_kvk
                 )
-                logger.info("Tool-aanroep [vlam]: %s(%s)", tool_key, _redact_kvk_for_log(arguments))
+                logger.info("Tool-aanroep [vlam]: %s (velden: %s)", tool_key, _arg_keys(arguments))
                 try:
                     result = await self.registry.call_tool(tool_key, arguments)
                 except Exception as e:
@@ -984,7 +979,7 @@ class VLAMHost:
         tool_results = []
         for tool_use in tool_uses:
             arguments = _inject_session_kvk(tool_use.name, tool_use.input, session_kvk)
-            logger.info("Tool-aanroep [claude]: %s(%s)", tool_use.name, _redact_kvk_for_log(arguments))
+            logger.info("Tool-aanroep [claude]: %s (velden: %s)", tool_use.name, _arg_keys(arguments))
             try:
                 result = await self.registry.call_tool(tool_use.name, arguments)
             except Exception as e:

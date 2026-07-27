@@ -27,30 +27,26 @@ def _kvk_env(arguments: dict) -> dict | None:
     return {"KVK_SESSIE_NUMMER": kvk} if kvk else None
 
 
-def _loggable_cmd(cmd: list[str], redact: list[str] | None = None) -> str:
-    """Bouw een leesbaar commando voor de log; maskeer gevoelige waarden.
+def _loggable_cmd(cmd: list[str]) -> str:
+    """Geef alleen de CLI-tool + subcommando terug voor logging, geen argv-waarden.
 
-    Het sessie-KvK-nummer staat bij regelrecht/rvo als positional argv en mag
-    niet leesbaar in de logs (privacy — het koppelt een sessie aan een bedrijf,
-    net als _redact_kvk_for_log in de host).
+    De positional argv-waarden kunnen het sessie-KvK-nummer bevatten (bv.
+    `regelrecht-cli check <kvk>`); dat hoort niet in de logs (privacy — het
+    koppelt een sessie aan een bedrijf). We loggen alleen de niet-waarde-tokens:
+    de scriptnaam en de subcommando's/flags.
     """
-    readable = " ".join(c.replace(str(CLI_DIR) + "/", "") for c in cmd)
-    for value in redact or ():
-        if value:
-            readable = readable.replace(value, "***")
-    return readable
+    tokens = [Path(cmd[0]).name] if cmd else []
+    tokens += [c for c in cmd[1:] if c.startswith("-") or c.isalpha()]
+    return " ".join(tokens)
 
 
-async def _run_cli(
-    cmd: list[str], env: dict | None = None, redact: list[str] | None = None
-) -> str:
+async def _run_cli(cmd: list[str], env: dict | None = None) -> str:
     """Voer een CLI-commando uit en retourneer de stdout.
 
     `env` bevat optionele extra omgevingsvariabelen (bovenop de proces-env),
-    o.a. het sessie-KvK-nummer voor de kvk-cli (PDR-009). `redact` bevat waarden
-    die uit de logregel gemaskeerd worden (bv. het KvK-nummer).
+    o.a. het sessie-KvK-nummer voor de kvk-cli (PDR-009).
     """
-    logger.info("$ %s", _loggable_cmd(cmd, redact))
+    logger.info("$ %s", _loggable_cmd(cmd))
 
     subprocess_env = {**os.environ, **env} if env else None
     proc = await asyncio.create_subprocess_exec(
@@ -172,7 +168,7 @@ async def execute_cli_tool(tool_key: str, arguments: dict) -> str:
         woonfunctie = arguments.get("is_woonfunctie")
         if woonfunctie:
             cmd += ["--woonfunctie"]
-        return await _run_cli(_append_fields(cmd, arguments), redact=[kvk_nummer])
+        return await _run_cli(_append_fields(cmd, arguments))
 
     if tool_key == "rvo__zoek_regeling":
         trefwoord = arguments.get("trefwoord", "")
@@ -197,7 +193,7 @@ async def execute_cli_tool(tool_key: str, arguments: dict) -> str:
             "--provenance",
             "--output", "raw",
         ]
-        return await _run_cli(cmd, redact=[kvk_nummer])
+        return await _run_cli(cmd)
 
     return json.dumps({
         "error": "ONBEKENDE_TOOL",
