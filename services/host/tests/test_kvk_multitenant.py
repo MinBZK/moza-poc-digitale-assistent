@@ -56,3 +56,28 @@ async def test_cache_is_per_kvk():
     # Cache is een dict gekeyd op KvK-nummer (geen enkel globaal profiel meer).
     assert isinstance(srv._profiel_cache, dict)
     assert MOCK_KVK in srv._profiel_cache
+
+
+def test_api_logregel_bevat_geen_kvk_nummer():
+    # De host maskeert het sessie-KvK al in zijn tool-call-logs; de KvK-server
+    # logde het nummer alsnog via de volle API-URL, in dezelfde logstream.
+    srv = _load_server()
+    for pad, verwacht in [
+        (f"/v1/basisprofielen/{MOCK_KVK}", "/v1/basisprofielen/<kvk>"),
+        (
+            f"/v1/basisprofielen/{MOCK_KVK}/vestigingen",
+            "/v1/basisprofielen/<kvk>/vestigingen",
+        ),
+        (f"/v1/basisprofielen/{MOCK_KVK}/eigenaar", "/v1/basisprofielen/<kvk>/eigenaar"),
+    ]:
+        gemaskeerd = srv._pad_zonder_kvk(pad)
+        assert gemaskeerd == verwacht
+        assert MOCK_KVK not in gemaskeerd
+
+
+def test_maskering_laat_overige_segmenten_ongemoeid():
+    # Alleen een 8-cijferig pad-segment is een KvK-nummer; laat de rest staan,
+    # anders wordt de logregel onbruikbaar voor debuggen.
+    srv = _load_server()
+    assert srv._pad_zonder_kvk("/v1/basisprofielen") == "/v1/basisprofielen"
+    assert srv._pad_zonder_kvk("/v1/vestigingen/000052341288").endswith("000052341288")

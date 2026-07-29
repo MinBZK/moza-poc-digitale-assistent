@@ -47,7 +47,17 @@ De host werkt ook zonder MCP-servers of CLI-tools; de assistent antwoordt dan op
 
 ### Testgebruiker toevoegen (gesloten testgroep)
 
-De identiteit is server-side gebonden aan een vertrouwd token ([PDR-009](decisions/PDR-009-sessie-identiteit-host-side.md)). Een testgebruiker voeg je toe door in de backend-env een `token:kvk`-paar aan `TEST_USERS` toe te voegen, bijvoorbeeld `TEST_USERS=tok_donald:68750110,tok_claudia:85234567` (kies niet-raadbare tokens). De frontend stuurt dat token per request mee in de header `X-Test-User`; de host mapt het naar het KvK-nummer en injecteert dat bij elke bron-aanroep. Zonder geldig token blokkeert de host met een nette "log eerst in"-melding en raadpleegt geen bron. Na het aanpassen van `TEST_USERS` herstart je de host; wisselen van persona hoeft niet meer per herstart (alleen een ander token).
+De identiteit is server-side gebonden aan een vertrouwd token ([PDR-009](decisions/PDR-009-sessie-identiteit-host-side.md)). Een testgebruiker voeg je toe door in de backend-env een `token:kvk`-paar aan `TEST_USERS` toe te voegen (kies niet-raadbare tokens; het is een bearer-credential). De frontend stuurt dat token per request mee in de header `X-Test-User`; de host mapt het naar het KvK-nummer en injecteert dat bij elke bron-aanroep. Zonder geldig token blokkeert de host met een nette "log eerst in"-melding en raadpleegt geen bron. Na het aanpassen van `TEST_USERS` herstart je de host; wisselen van persona hoeft niet meer per herstart (alleen een ander token).
+
+De gesloten testgroep telt drie profielen. Ze zijn zo gekozen dat dezelfde vraag over de informatieplicht energiebesparing drie verschillende kanten op loopt, zodat een gebruikerstest niet één tak van de regel test:
+
+| KvK | Bedrijf | Persona (frontend) | Verbruik | Uitkomst informatieplicht |
+|---|---|---|---|---|
+| 85234567 | Koffiezaak Noon | `koffiezaak` | 61.250 kWh / 9.800 m³ | geldt, elektriciteit boven de drempel |
+| 62345681 | Kwekerij De Bloesem | `bloemenkweker` | 420.000 kWh / 198.000 m³ | geldt, gas boven de drempel én boven de onderzoeksdrempel |
+| 56789012 | Roots & Locks | `haarstylist` | 14.800 kWh / 1.900 m³ | geldt niet, onder beide drempels |
+
+Alle drie zijn volledig mock-bediend in de KvK-server (`MOCK_PROFIELEN`, `MOCK_VESTIGINGEN`, `MOCK_EIGENAREN`, `_BAG_DEMO_FALLBACK`) en de netbeheerder-server (`MOCK_VERBRUIK`), dus ze werken zonder netwerk of API-key. De persona-id's corresponderen met `_data/personas.json` in `MinBZK/moza-poc`. De overige persona's daar hebben bewust géén token: de assistent antwoordt dan "log eerst in" in plaats van gegevens van een bedrijf te tonen dat de backend niet kent. Wil je een profiel toevoegen, dan zijn mockdata in beide servers nodig — `services/host/tests/test_testprofielen.py` bewaakt dat.
 
 ## Routering: welke bron bij welke vraag?
 

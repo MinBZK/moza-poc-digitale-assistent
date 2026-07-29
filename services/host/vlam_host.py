@@ -77,6 +77,7 @@ _KVK_SESSIE_TOOLS = frozenset(
         "kvk__eigenaar",
         "regelrecht__check",
         "rvo__indienen",
+        "netbeheerder__verbruik",
     }
 )
 _INFORMATIEPLICHT_LAW = "omgevingswet/energiebesparing/informatieplicht"

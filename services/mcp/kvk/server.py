@@ -25,6 +25,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from datetime import UTC, datetime
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -123,7 +124,103 @@ MOCK_PROFIELEN: dict[str, dict] = {
                 ],
             }
         },
-    }
+    },
+    "62345681": {
+        "kvkNummer": "62345681",
+        "naam": "Kwekerij De Bloesem",
+        "rechtsvorm": "Vennootschap onder firma",
+        "totaalWerkzamePersonen": 7,
+        "handelsnamen": [{"naam": "Kwekerij De Bloesem", "volgorde": 0}],
+        "sbiActiviteiten": [
+            {
+                "sbiCode": "01192",
+                "sbiOmschrijving": (
+                    "Teelt van bloemen, bloembollen en perkplanten (onder glas)"
+                ),
+                "indHoofdactiviteit": "Ja",
+            },
+            {
+                "sbiCode": "01300",
+                "sbiOmschrijving": "Teelt van sierplanten voor vermeerdering",
+                "indHoofdactiviteit": "Nee",
+            },
+        ],
+        "materieleRegistratie": {"datumAanvang": "20110212"},
+        "statusinformatie": "actief",
+        "_embedded": {
+            "hoofdvestiging": {
+                "vestigingsnummer": "000062345681",
+                "eersteHandelsnaam": "Kwekerij De Bloesem",
+                "indHoofdvestiging": "Ja",
+                "totaalWerkzamePersonen": 7,
+                "adressen": [
+                    {
+                        "type": "bezoekadres",
+                        "volledigAdres": "Hoefweg 210, 2665KG Bleiswijk",
+                        "straatnaam": "Hoefweg",
+                        "huisnummer": 210,
+                        "postcode": "2665KG",
+                        "plaats": "Bleiswijk",
+                    }
+                ],
+                "sbiActiviteiten": [
+                    {
+                        "sbiCode": "01192",
+                        "sbiOmschrijving": (
+                            "Teelt van bloemen, bloembollen en perkplanten (onder glas)"
+                        ),
+                        "indHoofdactiviteit": "Ja",
+                    }
+                ],
+            }
+        },
+    },
+    "56789012": {
+        "kvkNummer": "56789012",
+        "naam": "Roots & Locks",
+        "rechtsvorm": "Eenmanszaak",
+        "totaalWerkzamePersonen": 1,
+        "handelsnamen": [{"naam": "Roots & Locks", "volgorde": 0}],
+        "sbiActiviteiten": [
+            {
+                "sbiCode": "96021",
+                "sbiOmschrijving": "Haarverzorging",
+                "indHoofdactiviteit": "Ja",
+            },
+            {
+                "sbiCode": "47750",
+                "sbiOmschrijving": "Winkels in parfums en cosmetica",
+                "indHoofdactiviteit": "Nee",
+            },
+        ],
+        "materieleRegistratie": {"datumAanvang": "20210920"},
+        "statusinformatie": "actief",
+        "_embedded": {
+            "hoofdvestiging": {
+                "vestigingsnummer": "000056789012",
+                "eersteHandelsnaam": "Roots & Locks",
+                "indHoofdvestiging": "Ja",
+                "totaalWerkzamePersonen": 1,
+                "adressen": [
+                    {
+                        "type": "bezoekadres",
+                        "volledigAdres": "Witte de Withstraat 18, 3012BP Rotterdam",
+                        "straatnaam": "Witte de Withstraat",
+                        "huisnummer": 18,
+                        "postcode": "3012BP",
+                        "plaats": "Rotterdam",
+                    }
+                ],
+                "sbiActiviteiten": [
+                    {
+                        "sbiCode": "96021",
+                        "sbiOmschrijving": "Haarverzorging",
+                        "indHoofdactiviteit": "Ja",
+                    }
+                ],
+            }
+        },
+    },
 }
 
 MOCK_VESTIGINGEN: dict[str, dict] = {
@@ -138,7 +235,31 @@ MOCK_VESTIGINGEN: dict[str, dict] = {
                 "volledigAdres": "Witte de Withstraat 27, 3012BL Rotterdam",
             }
         ],
-    }
+    },
+    "62345681": {
+        "kvkNummer": "62345681",
+        "aantalCommercieleVestigingen": 1,
+        "vestigingen": [
+            {
+                "vestigingsnummer": "000062345681",
+                "eersteHandelsnaam": "Kwekerij De Bloesem",
+                "indHoofdvestiging": "Ja",
+                "volledigAdres": "Hoefweg 210, 2665KG Bleiswijk",
+            }
+        ],
+    },
+    "56789012": {
+        "kvkNummer": "56789012",
+        "aantalCommercieleVestigingen": 1,
+        "vestigingen": [
+            {
+                "vestigingsnummer": "000056789012",
+                "eersteHandelsnaam": "Roots & Locks",
+                "indHoofdvestiging": "Ja",
+                "volledigAdres": "Witte de Withstraat 18, 3012BP Rotterdam",
+            }
+        ],
+    },
 }
 
 MOCK_EIGENAREN: dict[str, dict] = {
@@ -150,15 +271,48 @@ MOCK_EIGENAREN: dict[str, dict] = {
             "voornamen": "Claudia",
             "volledigeNaam": "Claudia van Dam",
         },
-    }
+    },
+    # VOF: geen rechtspersoonlijkheid, de vennootschap zelf is de eigenaar.
+    "62345681": {
+        "kvkNummer": "62345681",
+        "rechtsvorm": "Vennootschap onder firma",
+        "rechtspersoon": {
+            "rsin": "62345681",
+            "statutaireNaam": "Kwekerij De Bloesem",
+        },
+    },
+    "56789012": {
+        "kvkNummer": "56789012",
+        "rechtsvorm": "Eenmanszaak",
+        "natuurlijkPersoon": {
+            "geslachtsnaam": "Vogel",
+            "voornamen": "Robin",
+            "volledigeNaam": "Robin Vogel",
+        },
+    },
 }
+
+
+# Het KvK-nummer zit in het API-pad (/v1/basisprofielen/<kvk>/...). Dat nummer
+# is de identiteit van de sessie en hoort niet in de logs — consistent met
+# _audit_log hieronder en met de host, die alleen argument-namen logt (PDR-009).
+_KVK_IN_PAD = re.compile(r"/\d{8}(?=/|$)")
+
+
+def _pad_zonder_kvk(path: str) -> str:
+    """Geef het API-pad terug met het KvK-nummer vervangen, voor logging.
+
+    Welk endpoint is aangeroepen blijft zichtbaar (nuttig bij debuggen); welk
+    bedrijf het betrof niet.
+    """
+    return _KVK_IN_PAD.sub("/<kvk>", path)
 
 
 def _kvk_fetch(path: str) -> dict:
     """Haal data op van de KvK Test API."""
     url = f"{KVK_TEST_BASE}{path}"
     req = Request(url, headers={"apikey": KVK_TEST_API_KEY})
-    logger.info("KVK API call: %s", url)
+    logger.info("KVK API call: %s%s", KVK_TEST_BASE, _pad_zonder_kvk(path))
     with urlopen(req, timeout=10) as resp:
         return json.loads(resp.read())
 
@@ -224,6 +378,22 @@ _BAG_DEMO_FALLBACK = {
         "oppervlakte": 140,
         "oorspronkelijkBouwjaar": "1923",
         "nummeraanduidingIdentificatie": "0599200000312345",
+    },
+    # Kwekerij De Bloesem (mock-persona bloemenkweker) — kassencomplex,
+    # industriefunctie, dus geen woonfunctie-uitzondering.
+    "2665KG-210": {
+        "gebruiksdoelen": ["industriefunctie"],
+        "oppervlakte": 18500,
+        "oorspronkelijkBouwjaar": "2004",
+        "nummeraanduidingIdentificatie": "1621200000045678",
+    },
+    # Roots & Locks (mock-persona haarstylist) — kapsalon op de begane grond,
+    # winkelfunctie. Verbruik ligt onder de drempels, dus geen informatieplicht.
+    "3012BP-18": {
+        "gebruiksdoelen": ["winkelfunctie"],
+        "oppervlakte": 65,
+        "oorspronkelijkBouwjaar": "1931",
+        "nummeraanduidingIdentificatie": "0599200000398765",
     },
 }
 

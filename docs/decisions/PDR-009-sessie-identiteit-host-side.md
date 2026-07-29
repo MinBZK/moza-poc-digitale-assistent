@@ -112,3 +112,40 @@ Test BV Donald te tonen.
 - Vervolg: BETA-02 vervangt de token-lijst door echte authenticatie; de
   injectie- en hard-block-logica in de host blijft dan ongewijzigd — alleen de
   bron van het KvK-nummer verandert (van token-map naar auth-claim).
+
+## Addendum (2026-07-29): drie testprofielen in plaats van één
+
+Bij het lokaal beproeven bleek één testprofiel te smal. De frontend
+(`MinBZK/moza-poc`) kent negentien persona's, maar de backend had alleen
+mockdata voor Koffiezaak Noon. Wisselde een tester naar een andere persona, dan
+was er geen bedrijf om te tonen. Daarom is de gesloten testgroep uitgebreid naar
+drie profielen, gekozen op **verschil in uitkomst** en niet op verscheidenheid
+op zichzelf:
+
+| KvK | Bedrijf | Persona | Uitkomst informatieplicht |
+|---|---|---|---|
+| 85234567 | Koffiezaak Noon | `koffiezaak` | geldt, via elektriciteit |
+| 62345681 | Kwekerij De Bloesem | `bloemenkweker` | geldt, via gas + onderzoeksdrempel |
+| 56789012 | Roots & Locks | `haarstylist` | geldt niet, onder beide drempels |
+
+Zo doorloopt een gebruikerstest alle takken van dezelfde regel, inclusief de
+negatieve uitkomst — die anders nooit getoond wordt, terwijl juist daar de
+uitleg van de assistent telt.
+
+**Persona's zonder token blijven bewust geblokkeerd.** Het alternatief (elke
+persona een token geven en de KvK-server laten terugvallen op de Test API) is
+verworpen: dan krijgt een tester een leeg of vreemd bedrijfsprofiel te zien, wat
+verwarrender is dan een expliciet "log eerst in". Een profiel toevoegen vereist
+dus mockdata in zowel de KvK- als de netbeheerder-server;
+`services/host/tests/test_testprofielen.py` faalt als er één ontbreekt.
+
+**Bijvangst — een gat in de injectie.** De uitbreiding legde bloot dat
+`mcp_client._strip_kvk_param` `kvk_nummer` uit *alle* LLM-zichtbare schema's
+knipt, terwijl `vlam_host._KVK_SESSIE_TOOLS` het maar voor vijf tools
+terug-injecteerde. `netbeheerder__verbruik` viel daarbuiten en kreeg dus altijd
+een lege `kvk_nummer`, waardoor de informatieplicht-flow (PDR-007) strandde op
+"ontbrekend verbruik". De tool is aan de injectie-set toegevoegd; een test
+(`test_kvk_injectie_dekking.py`) leest nu de echte tool-definities uit de
+MCP-servers en faalt zodra een tool wél `kvk_nummer` vraagt maar buiten de
+injectie valt. Strippen en injecteren horen één lijst te delen; tot die
+refactor bewaakt de test de koppeling.
