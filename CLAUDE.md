@@ -63,8 +63,14 @@ Volledig overzicht en de routerings-beslisboom: [`docs/architecture.md`](docs/ar
   én de systeemprompt.
 - **Dataminimalisatie** loopt via de optionele `fields`-parameter op read-tools.
 - **Security-defaults zijn streng.** `ALLOWED_ORIGINS` is leeg → geen CORS tenzij
-  expliciet gezet; `ALLOW_API_KEY_OVERRIDE` is `true` als PoC-default (zet op
-  `false` in productie). Zie `config.py`.
+  expliciet gezet (bij `*` waarschuwt de host bij het opstarten). Zie `config.py`.
+- **De LLM-sleutel komt van de gebruiker** (`ALLOW_API_KEY_OVERRIDE` default
+  `true`, PDR-010): de deployment draait zonder LLM-sleutels. Daar hoort aan de
+  host-kant bij dat een sleutel precies één verzoek leeft
+  (`vlam_host._request_clients` — geef de client als argument door, val niet
+  terug op gedeelde state), op vorm wordt getoetst (`api._valideer_sleutel`),
+  nooit een subprocess in gaat (`subprocess_env.py`) en uit logregels wordt
+  geredigeerd (`log_redaction.py`).
 - **`services/host/_site/`** wordt op runtime gemount; niet handmatig beheren
   (staat in `.gitignore`).
 - **Ruff** dekt `E9, F, I, W, UP, B` (zie `pyproject.toml`); pycodestyle `E4`/`E7`
