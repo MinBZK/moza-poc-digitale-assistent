@@ -46,7 +46,7 @@ select = ["E9", "F", "I", "W", "UP", "B"]
 # Host-modules draaien top-level op de pythonpath (services/host), dus ruff kan
 # ze niet vanzelf als first-party herkennen. Expliciet benoemen zodat ze in een
 # eigen importgroep komen i.p.v. tussen de third-party imports.
-known-first-party = ["config", "vlam_host", "cli_executor", "mcp_client", "prompts", "log_redaction"]
+known-first-party = ["config", "vlam_host", "cli_executor", "mcp_client", "prompts", "log_redaction", "subprocess_env"]
 
 [tool.coverage.run]
 # Meet alleen broncode-dekking; testbestanden zelf tellen niet mee.
