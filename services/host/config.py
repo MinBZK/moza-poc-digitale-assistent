@@ -88,6 +88,33 @@ ALLOW_API_KEY_OVERRIDE: bool = os.getenv("ALLOW_API_KEY_OVERRIDE", "true").lower
     "yes",
 )
 
+# Toegestane KvK-nummers voor de gesloten testgroep (MVP-01 / PDR-009 addendum).
+# De frontend stuurt `X-Test-User: <kvk-nummer>` van de gekozen persona; de host
+# valideert dat hiertegen en injecteert het nummer server-side bij elke
+# bron-aanroep. Geen geheim (de nummers staan publiek in de frontend), wel een
+# grens: zonder allowlist zou de KvK-server willekeurige nummers opvragen.
+# Formaat: TEST_KVK_NUMMERS="85234567,62345681,56789012". BETA-02 vervangt de
+# lijst door echte authenticatie; de vorm blijft gelijk.
+def _parse_kvk_allowlist(raw: str) -> frozenset[str]:
+    return frozenset(k.strip() for k in raw.split(",") if k.strip())
+
+
+TEST_KVK_NUMMERS: frozenset[str] = _parse_kvk_allowlist(
+    os.getenv("TEST_KVK_NUMMERS", "")
+)
+
+
+def kvk_uit_header(waarde: str | None) -> str | None:
+    """Valideer het KvK-nummer uit de `X-Test-User`-header tegen de allowlist.
+
+    None bij een lege header of een nummer erbuiten => de host blokkeert.
+    """
+    if not waarde:
+        return None
+    kvk = waarde.strip()
+    return kvk if kvk in TEST_KVK_NUMMERS else None
+
+
 # System prompt — assembled from modular blocks
 from prompts.composer import compose_system_prompt as get_system_prompt  # noqa: E402
 
@@ -97,6 +124,8 @@ __all__ = [
     "ANTHROPIC_API_KEY",
     "CLAUDE_MODEL",
     "MCP_SERVERS",
+    "TEST_KVK_NUMMERS",
+    "kvk_uit_header",
     "VLAM_API_KEY",
     "VLAM_BASE_URL",
     "VLAM_HOST",

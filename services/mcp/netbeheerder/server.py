@@ -78,6 +78,53 @@ MOCK_VERBRUIK: dict[str, dict] = {
             "kalenderjaar. Gedeeld met machtiging van de ondernemer."
         ),
     },
+    # Kwekerij De Bloesem (glastuinbouw) — ruim boven beide drempels, en het
+    # gasverbruik ligt ook boven de onderzoeksdrempel van 170.000 m3. Hier is
+    # gas de trigger, niet elektriciteit: een ander pad door dezelfde regel.
+    "62345681": {
+        "kvk_nummer": "62345681",
+        "netbeheerder": "Stedin (mock)",
+        "peiljaar": 2025,
+        "aansluitingen": [
+            {
+                "ean": "871685900023456789",
+                "adres": "Hoefweg 210, 2665KG Bleiswijk",
+                "jaarlijks_elektriciteitsverbruik_kwh": 420000,
+                "jaarlijks_gasverbruik_m3": 198000,
+            }
+        ],
+        "totaal": {
+            "jaarlijks_elektriciteitsverbruik_kwh": 420000,
+            "jaarlijks_gasverbruik_m3": 198000,
+        },
+        "toelichting": (
+            "Verbruiksgegevens van de netbeheerder over het laatste volledige "
+            "kalenderjaar. Gedeeld met machtiging van de ondernemer."
+        ),
+    },
+    # Roots & Locks (kapsalon) — ruim onder beide drempels, dus de
+    # informatieplicht energiebesparing geldt niet. De negatieve uitkomst.
+    "56789012": {
+        "kvk_nummer": "56789012",
+        "netbeheerder": "Stedin (mock)",
+        "peiljaar": 2025,
+        "aansluitingen": [
+            {
+                "ean": "871685900034567890",
+                "adres": "Witte de Withstraat 18, 3012BP Rotterdam",
+                "jaarlijks_elektriciteitsverbruik_kwh": 14800,
+                "jaarlijks_gasverbruik_m3": 1900,
+            }
+        ],
+        "totaal": {
+            "jaarlijks_elektriciteitsverbruik_kwh": 14800,
+            "jaarlijks_gasverbruik_m3": 1900,
+        },
+        "toelichting": (
+            "Verbruiksgegevens van de netbeheerder over het laatste volledige "
+            "kalenderjaar. Gedeeld met machtiging van de ondernemer."
+        ),
+    },
 }
 
 

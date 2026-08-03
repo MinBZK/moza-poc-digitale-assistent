@@ -32,6 +32,27 @@ def _subprocess_env() -> dict:
     return {k: v for k, v in os.environ.items() if k in _SUBPROCESS_ENV_ALLOWLIST}
 
 
+def _strip_kvk_param(schema: dict) -> dict:
+    """Verwijder `kvk_nummer` uit een LLM-zichtbaar inputschema (MVP-01/PDR-009).
+
+    De host bepaalt het KvK-nummer server-side en injecteert het bij de aanroep;
+    het LLM mag de parameter niet eens kunnen meegeven. Geeft een kopie terug
+    zodat de gedeelde `tool.inputSchema` niet gemuteerd wordt.
+    """
+    if not isinstance(schema, dict):
+        return schema
+    stripped = dict(schema)
+    props = schema.get("properties")
+    if isinstance(props, dict) and "kvk_nummer" in props:
+        stripped["properties"] = {
+            k: v for k, v in props.items() if k != "kvk_nummer"
+        }
+    required = schema.get("required")
+    if isinstance(required, list) and "kvk_nummer" in required:
+        stripped["required"] = [r for r in required if r != "kvk_nummer"]
+    return stripped
+
+
 def _tool_fingerprint(tool) -> str:
     """Hash de stabiele velden van een tool-definitie.
 
@@ -139,7 +160,7 @@ class MCPToolRegistry:
                 {
                     "name": tool_key,
                     "description": tool.description or "",
-                    "input_schema": tool.inputSchema,
+                    "input_schema": _strip_kvk_param(tool.inputSchema),
                 }
             )
         return anthropic_tools
@@ -154,7 +175,7 @@ class MCPToolRegistry:
                     "function": {
                         "name": tool_key,
                         "description": tool.description or "",
-                        "parameters": tool.inputSchema,
+                        "parameters": _strip_kvk_param(tool.inputSchema),
                     },
                 }
             )

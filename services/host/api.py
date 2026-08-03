@@ -17,7 +17,13 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from config import ALLOW_API_KEY_OVERRIDE, ALLOWED_ORIGINS, VLAM_HOST, VLAM_PORT
+from config import (
+    ALLOW_API_KEY_OVERRIDE,
+    ALLOWED_ORIGINS,
+    VLAM_HOST,
+    VLAM_PORT,
+    kvk_uit_header,
+)
 from vlam_host import VLAMHost
 
 logging.basicConfig(
@@ -91,6 +97,23 @@ class ToolInfo(BaseModel):
 # --- Endpoints ---
 
 
+# Nette melding als er geen geldige sessie is (MVP-01/PDR-009). De host raadpleegt
+# dan géén bron en roept het LLM niet aan; de identiteit wordt server-side bepaald.
+GEEN_SESSIE_MELDING = (
+    "Log eerst in om uw bedrijfsgegevens te kunnen gebruiken. "
+    "Zonder geldige sessie raadpleegt de assistent geen overheidsbronnen."
+)
+
+
+def _resolve_session_kvk(request: Request) -> str | None:
+    """Bepaal het KvK-nummer van de sessie uit de `X-Test-User`-header.
+
+    Gevalideerd tegen de allowlist (PDR-009), nooit uit de conversatie. None als
+    de header ontbreekt of een nummer buiten de allowlist draagt.
+    """
+    return kvk_uit_header(request.headers.get("x-test-user", ""))
+
+
 def _extract_api_keys(request: Request) -> dict:
     """Lees optionele API key overrides uit request headers.
 
@@ -108,11 +131,16 @@ def _extract_api_keys(request: Request) -> dict:
 @app.post("/chat", response_model=ChatResponse)
 async def chat(body: ChatRequest, request: Request):
     """Stuur een bericht naar de assistent en ontvang een antwoord."""
+    session_kvk = _resolve_session_kvk(request)
+    if not session_kvk:
+        raise HTTPException(status_code=401, detail=GEEN_SESSIE_MELDING)
     session_id = body.session_id or str(uuid.uuid4())
     VALID_MODES = ("vlam", "claude", "cli:vlam", "cli:claude")
     mode = body.mode if body.mode in VALID_MODES else "vlam"
     api_keys = _extract_api_keys(request)
-    reply = await host.chat(session_id, body.message, mode=mode, **api_keys)
+    reply = await host.chat(
+        session_id, body.message, mode=mode, session_kvk=session_kvk, **api_keys
+    )
     return ChatResponse(
         reply=reply, session_id=session_id, mode=mode, has_tools=host.has_tools
     )
@@ -129,14 +157,32 @@ async def chat_stream(body: ChatRequest, request: Request):
       event: answer  — het definitieve antwoord
       event: done    — stream is afgelopen
     """
+    session_kvk = _resolve_session_kvk(request)
     session_id = body.session_id or str(uuid.uuid4())
     VALID_MODES = ("vlam", "claude", "cli:vlam", "cli:claude")
     mode = body.mode if body.mode in VALID_MODES else "vlam"
     api_keys = _extract_api_keys(request)
     logging.getLogger("vlam.api").info("POST /chat/stream — mode=%r (raw=%r)", mode, body.mode)
 
+    if not session_kvk:
+        # Hard blokkeren zonder geldige sessie: nette melding, geen LLM/bron.
+        async def blocked_generator():
+            payload = json.dumps(
+                {"type": "answer", "message": GEEN_SESSIE_MELDING}, ensure_ascii=False
+            )
+            yield f"event: answer\ndata: {payload}\n\n"
+            yield 'event: done\ndata: {"type": "done"}\n\n'
+
+        return StreamingResponse(
+            blocked_generator(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
     async def event_generator():
-        async for event in host.chat_stream(session_id, body.message, mode=mode, **api_keys):
+        async for event in host.chat_stream(
+            session_id, body.message, mode=mode, session_kvk=session_kvk, **api_keys
+        ):
             event_type = event.get("type", "status")
             # Voeg session_id en mode toe aan answer-events
             if event_type == "answer":
@@ -157,9 +203,12 @@ async def chat_stream(body: ChatRequest, request: Request):
 
 
 @app.delete("/chat/{session_id}")
-async def clear_session(session_id: str):
-    """Wis de gespreksgeschiedenis van een sessie."""
-    host.clear_session(session_id)
+async def clear_session(session_id: str, request: Request):
+    """Wis de gespreksgeschiedenis van een sessie (alleen de eigen identiteit)."""
+    session_kvk = _resolve_session_kvk(request)
+    if not session_kvk:
+        raise HTTPException(status_code=401, detail=GEEN_SESSIE_MELDING)
+    host.clear_session(session_kvk, session_id)
     return {"status": "gewist", "session_id": session_id}
 
 

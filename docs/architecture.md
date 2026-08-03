@@ -43,7 +43,23 @@ De host werkt ook zonder MCP-servers of CLI-tools; de assistent antwoordt dan op
 
 > **MCP vs CLI:** MCP-servers draaien als permanente processen en ondersteunen zowel tools als resources. CLI-tools zijn Bash-scripts die on-demand worden aangeroepen en alleen tools ondersteunen (geen resources). Zie [PDR-005](decisions/PDR-005-cli-vs-mcp-transport.md) voor een uitgebreide vergelijking.
 
-> **KvK testomgeving:** De KvK-server haalt bedrijfsgegevens op via de KvK Test API (`api.kvk.nl/test/api/v1/basisprofielen`). Toegang is beperkt tot het bedrijf van de ingelogde gebruiker (demo: Test BV Donald, KvK 68750110). In productie wordt het KvK-nummer bepaald door de sessie-authenticatie.
+> **KvK testomgeving:** De KvK-server haalt bedrijfsgegevens op via de KvK Test API (`api.kvk.nl/test/api/v1/basisprofielen`) voor het KvK-nummer dat de host per aanroep meegeeft. De host bepaalt dat nummer server-side uit de sessie (zie [PDR-009](decisions/PDR-009-sessie-identiteit-host-side.md)); het LLM en de gebruiker kunnen het niet kiezen. Er is geen hardcoded demo-bedrijf meer. In de Beta wordt het KvK-nummer bepaald door echte authenticatie (eHerkenning/DigiD, BETA-02).
+
+### Testgebruiker toevoegen (gesloten testgroep)
+
+De identiteit wordt server-side vastgesteld en afgedwongen ([PDR-009](decisions/PDR-009-sessie-identiteit-host-side.md)). De frontend stuurt per request het KvK-nummer van de gekozen persona mee in de header `X-Test-User`; de host controleert dat tegen de allowlist `TEST_KVK_NUMMERS` in de backend-env en injecteert het nummer vervolgens bij elke bron-aanroep. Een testgebruiker voeg je toe door het KvK-nummer aan die lijst toe te voegen en de host te herstarten. Staat een nummer er niet in, of ontbreekt de header, dan blokkeert de host met een nette "log eerst in"-melding en raadpleegt geen bron. Wisselen van persona kan zonder herstart.
+
+De allowlist is geen geheim — de KvK-nummers van de persona's staan al publiek in `_data/personas.json` van de frontend. Ze is wél een harde grens: zonder die grens zou de KvK-server voor een willekeurig meegestuurd nummer de echte KvK Test API gaan bevragen. De garantie die er wél toe doet staat hier los van: het LLM ziet `kvk_nummer` niet (het is uit alle tool-schema's gestript) en kan de identiteit dus niet kiezen, ook niet als de gebruiker in het gesprek een ander nummer noemt.
+
+De gesloten testgroep telt drie profielen. Ze zijn zo gekozen dat dezelfde vraag over de informatieplicht energiebesparing drie verschillende kanten op loopt, zodat een gebruikerstest niet één tak van de regel test:
+
+| KvK | Bedrijf | Persona (frontend) | Verbruik | Uitkomst informatieplicht |
+|---|---|---|---|---|
+| 85234567 | Koffiezaak Noon | `koffiezaak` | 61.250 kWh / 9.800 m³ | geldt, elektriciteit boven de drempel |
+| 62345681 | Kwekerij De Bloesem | `bloemenkweker` | 420.000 kWh / 198.000 m³ | geldt, gas boven de drempel én boven de onderzoeksdrempel |
+| 56789012 | Roots & Locks | `haarstylist` | 14.800 kWh / 1.900 m³ | geldt niet, onder beide drempels |
+
+Alle drie zijn volledig mock-bediend in de KvK-server (`MOCK_PROFIELEN`, `MOCK_VESTIGINGEN`, `MOCK_EIGENAREN`, `_BAG_DEMO_FALLBACK`) en de netbeheerder-server (`MOCK_VERBRUIK`), dus ze werken zonder netwerk of API-key. De persona-id's corresponderen met `_data/personas.json` in `MinBZK/moza-poc`. De overige persona's daar hebben bewust géén token: de assistent antwoordt dan "log eerst in" in plaats van gegevens van een bedrijf te tonen dat de backend niet kent. Wil je een profiel toevoegen, dan zijn mockdata in beide servers nodig — `services/host/tests/test_testprofielen.py` bewaakt dat.
 
 ## Routering: welke bron bij welke vraag?
 

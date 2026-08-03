@@ -71,7 +71,7 @@ Voorbeelden:
 Omgevingsvariabelen:
   KVK_API_KEY          API-sleutel (standaard: KvK test-key)
   KVK_API_BASE         API base-URL (standaard: https://api.kvk.nl/test/api)
-  KVK_SESSIE_NUMMER    Sessie-gebonden KvK-nummer (standaard: 68750110)
+  KVK_SESSIE_NUMMER    Sessie-gebonden KvK-nummer (door de host geinjecteerd; geen default)
   KVK_AUDIT_LOG        Pad naar auditlog (standaard: stderr)
 EOF
 }

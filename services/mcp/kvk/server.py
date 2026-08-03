@@ -1,16 +1,18 @@
 """KvK MCP-server — Bedrijfsgegevens van de ingelogde gebruiker via MCP.
 
-Haalt bedrijfsgegevens op via de KvK Test API (api.kvk.nl/test/api) en
-beperkt toegang tot het bedrijf van de ingelogde gebruiker (demo: Robin
-Vogel, KvK-nummer 68750110 — Test BV Donald).
+Haalt bedrijfsgegevens op via de KvK Test API (api.kvk.nl/test/api) voor het
+KvK-nummer dat de host per aanroep meegeeft. De host bepaalt dat nummer
+server-side uit de sessie (MVP-01/PDR-009); de server bedient dat bedrijf en
+is daarmee multi-tenant (cache per KvK-nummer).
 
 Verrijkt het profiel automatisch met BAG-gegevens (gebruiksdoel pand)
 via de PDOK LVBAG API. Hiermee kan de woonfunctie-check automatisch
 worden ingevuld bij de RegelRecht-toets, zonder dat de gebruiker dit
 zelf hoeft op te geven.
 
-In productie wordt het KvK-nummer bepaald door de sessie/authenticatie
-van de ingelogde gebruiker. Voor de poc is dit hardcoded.
+Er is geen hardcoded demo-bedrijf meer. Voor standalone gebruik (buiten de
+host) kan DEMO_KVK_NUMMER als dev-fallback gezet worden; anders weigert de
+server zonder sessie-KvK. Echte authenticatie is BETA-02.
 
 Voldoet aan de MCP-standaard voor Generieke Interactieservices:
 - Provenance metadata bij elke resource-response (§4.1, §7)
@@ -23,6 +25,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from datetime import UTC, datetime
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -54,16 +57,25 @@ SERVER_VERSION = "0.3.0"
 KVK_TEST_BASE = "https://api.kvk.nl/test/api"
 KVK_TEST_API_KEY = "l7xx1f2691f2520d487b902f4e0b57a0b197"
 
-# Sessie-gebonden KvK-nummer. Default: demo-gebruiker Robin Vogel (Test BV
-# Donald, via de KvK Test API). Via DEMO_KVK_NUMMER selecteerbaar — bv.
-# 85234567 voor de mock-persona Claudia van Dam (Koffiezaak Noon), die niet
-# in de KvK Test API bestaat en volledig uit MOCK_PROFIELEN komt (PDR-007).
-# `or` i.p.v. getenv-default: een lege string (bv. compose-passthrough zonder
-# waarde) moet ook op de default terugvallen.
-SESSIE_KVK_NUMMER = os.getenv("DEMO_KVK_NUMMER") or "68750110"
+# Het KvK-nummer wordt per aanroep meegegeven door de host, die het server-side
+# uit de sessie bepaalt (MVP-01/PDR-009). Er is bewust GEEN hardcoded default
+# meer: zonder sessie-KvK (en zonder DEMO_KVK_NUMMER voor standalone dev) weigert
+# de server. Zo ziet niet iedereen hetzelfde demo-bedrijf.
+def _resolve_kvk(arguments: dict | None) -> str | None:
+    """Bepaal het te bedienen KvK-nummer voor deze aanroep.
 
-# Cache voor het basisprofiel (wordt één keer opgehaald per server-lifetime)
-_profiel_cache: dict | None = None
+    Eerst het door de host meegegeven `kvk_nummer`; anders de optionele
+    DEMO_KVK_NUMMER (dev-fallback voor wie de server standalone draait, buiten de
+    host). Geen waarde => None, en de aanroeper krijgt een nette fout.
+    """
+    kvk = str((arguments or {}).get("kvk_nummer") or "").strip()
+    if kvk:
+        return kvk
+    return (os.getenv("DEMO_KVK_NUMMER") or "").strip() or None
+
+
+# Cache per KvK-nummer (de server bedient meerdere bedrijven binnen zijn lifetime)
+_profiel_cache: dict[str, dict] = {}
 
 # ---------------------------------------------------------------------------
 # Mock-persona's — KvK-nummers die niet in de KvK Test API bestaan en
@@ -112,7 +124,103 @@ MOCK_PROFIELEN: dict[str, dict] = {
                 ],
             }
         },
-    }
+    },
+    "62345681": {
+        "kvkNummer": "62345681",
+        "naam": "Kwekerij De Bloesem",
+        "rechtsvorm": "Vennootschap onder firma",
+        "totaalWerkzamePersonen": 7,
+        "handelsnamen": [{"naam": "Kwekerij De Bloesem", "volgorde": 0}],
+        "sbiActiviteiten": [
+            {
+                "sbiCode": "01192",
+                "sbiOmschrijving": (
+                    "Teelt van bloemen, bloembollen en perkplanten (onder glas)"
+                ),
+                "indHoofdactiviteit": "Ja",
+            },
+            {
+                "sbiCode": "01300",
+                "sbiOmschrijving": "Teelt van sierplanten voor vermeerdering",
+                "indHoofdactiviteit": "Nee",
+            },
+        ],
+        "materieleRegistratie": {"datumAanvang": "20110212"},
+        "statusinformatie": "actief",
+        "_embedded": {
+            "hoofdvestiging": {
+                "vestigingsnummer": "000062345681",
+                "eersteHandelsnaam": "Kwekerij De Bloesem",
+                "indHoofdvestiging": "Ja",
+                "totaalWerkzamePersonen": 7,
+                "adressen": [
+                    {
+                        "type": "bezoekadres",
+                        "volledigAdres": "Hoefweg 210, 2665KG Bleiswijk",
+                        "straatnaam": "Hoefweg",
+                        "huisnummer": 210,
+                        "postcode": "2665KG",
+                        "plaats": "Bleiswijk",
+                    }
+                ],
+                "sbiActiviteiten": [
+                    {
+                        "sbiCode": "01192",
+                        "sbiOmschrijving": (
+                            "Teelt van bloemen, bloembollen en perkplanten (onder glas)"
+                        ),
+                        "indHoofdactiviteit": "Ja",
+                    }
+                ],
+            }
+        },
+    },
+    "56789012": {
+        "kvkNummer": "56789012",
+        "naam": "Roots & Locks",
+        "rechtsvorm": "Eenmanszaak",
+        "totaalWerkzamePersonen": 1,
+        "handelsnamen": [{"naam": "Roots & Locks", "volgorde": 0}],
+        "sbiActiviteiten": [
+            {
+                "sbiCode": "96021",
+                "sbiOmschrijving": "Haarverzorging",
+                "indHoofdactiviteit": "Ja",
+            },
+            {
+                "sbiCode": "47750",
+                "sbiOmschrijving": "Winkels in parfums en cosmetica",
+                "indHoofdactiviteit": "Nee",
+            },
+        ],
+        "materieleRegistratie": {"datumAanvang": "20210920"},
+        "statusinformatie": "actief",
+        "_embedded": {
+            "hoofdvestiging": {
+                "vestigingsnummer": "000056789012",
+                "eersteHandelsnaam": "Roots & Locks",
+                "indHoofdvestiging": "Ja",
+                "totaalWerkzamePersonen": 1,
+                "adressen": [
+                    {
+                        "type": "bezoekadres",
+                        "volledigAdres": "Witte de Withstraat 18, 3012BP Rotterdam",
+                        "straatnaam": "Witte de Withstraat",
+                        "huisnummer": 18,
+                        "postcode": "3012BP",
+                        "plaats": "Rotterdam",
+                    }
+                ],
+                "sbiActiviteiten": [
+                    {
+                        "sbiCode": "96021",
+                        "sbiOmschrijving": "Haarverzorging",
+                        "indHoofdactiviteit": "Ja",
+                    }
+                ],
+            }
+        },
+    },
 }
 
 MOCK_VESTIGINGEN: dict[str, dict] = {
@@ -127,7 +235,31 @@ MOCK_VESTIGINGEN: dict[str, dict] = {
                 "volledigAdres": "Witte de Withstraat 27, 3012BL Rotterdam",
             }
         ],
-    }
+    },
+    "62345681": {
+        "kvkNummer": "62345681",
+        "aantalCommercieleVestigingen": 1,
+        "vestigingen": [
+            {
+                "vestigingsnummer": "000062345681",
+                "eersteHandelsnaam": "Kwekerij De Bloesem",
+                "indHoofdvestiging": "Ja",
+                "volledigAdres": "Hoefweg 210, 2665KG Bleiswijk",
+            }
+        ],
+    },
+    "56789012": {
+        "kvkNummer": "56789012",
+        "aantalCommercieleVestigingen": 1,
+        "vestigingen": [
+            {
+                "vestigingsnummer": "000056789012",
+                "eersteHandelsnaam": "Roots & Locks",
+                "indHoofdvestiging": "Ja",
+                "volledigAdres": "Witte de Withstraat 18, 3012BP Rotterdam",
+            }
+        ],
+    },
 }
 
 MOCK_EIGENAREN: dict[str, dict] = {
@@ -139,51 +271,84 @@ MOCK_EIGENAREN: dict[str, dict] = {
             "voornamen": "Claudia",
             "volledigeNaam": "Claudia van Dam",
         },
-    }
+    },
+    # VOF: geen rechtspersoonlijkheid, de vennootschap zelf is de eigenaar.
+    "62345681": {
+        "kvkNummer": "62345681",
+        "rechtsvorm": "Vennootschap onder firma",
+        "rechtspersoon": {
+            "rsin": "62345681",
+            "statutaireNaam": "Kwekerij De Bloesem",
+        },
+    },
+    "56789012": {
+        "kvkNummer": "56789012",
+        "rechtsvorm": "Eenmanszaak",
+        "natuurlijkPersoon": {
+            "geslachtsnaam": "Vogel",
+            "voornamen": "Robin",
+            "volledigeNaam": "Robin Vogel",
+        },
+    },
 }
+
+
+# Het KvK-nummer zit in het API-pad (/v1/basisprofielen/<kvk>/...). Dat nummer
+# is de identiteit van de sessie en hoort niet in de logs — consistent met
+# _audit_log hieronder en met de host, die alleen argument-namen logt (PDR-009).
+_KVK_IN_PAD = re.compile(r"/\d{8}(?=/|$)")
+
+
+def _pad_zonder_kvk(path: str) -> str:
+    """Geef het API-pad terug met het KvK-nummer vervangen, voor logging.
+
+    Welk endpoint is aangeroepen blijft zichtbaar (nuttig bij debuggen); welk
+    bedrijf het betrof niet.
+    """
+    return _KVK_IN_PAD.sub("/<kvk>", path)
 
 
 def _kvk_fetch(path: str) -> dict:
     """Haal data op van de KvK Test API."""
     url = f"{KVK_TEST_BASE}{path}"
     req = Request(url, headers={"apikey": KVK_TEST_API_KEY})
-    logger.info("KVK API call: %s", url)
+    logger.info("KVK API call: %s%s", KVK_TEST_BASE, _pad_zonder_kvk(path))
     with urlopen(req, timeout=10) as resp:
         return json.loads(resp.read())
 
 
-async def _get_basisprofiel() -> dict:
-    """Haal het basisprofiel op (met cache). Mock-persona's komen lokaal."""
-    global _profiel_cache
-    if _profiel_cache is not None:
-        return _profiel_cache
-    if SESSIE_KVK_NUMMER in MOCK_PROFIELEN:
-        _profiel_cache = MOCK_PROFIELEN[SESSIE_KVK_NUMMER]
-        return _profiel_cache
+async def _get_basisprofiel(kvk: str) -> dict:
+    """Haal het basisprofiel op (met cache per KvK). Mock-persona's komen lokaal."""
+    if kvk in _profiel_cache:
+        return _profiel_cache[kvk]
+    if kvk in MOCK_PROFIELEN:
+        _profiel_cache[kvk] = MOCK_PROFIELEN[kvk]
+        return _profiel_cache[kvk]
     loop = asyncio.get_event_loop()
-    _profiel_cache = await loop.run_in_executor(
-        None, _kvk_fetch, f"/v1/basisprofielen/{SESSIE_KVK_NUMMER}"
+    profiel = await loop.run_in_executor(
+        None, _kvk_fetch, f"/v1/basisprofielen/{kvk}"
     )
-    return _profiel_cache
+    _profiel_cache[kvk] = profiel
+    return profiel
 
 
-async def _get_vestigingen() -> dict:
-    """Haal de vestigingen-lijst op voor het sessie-bedrijf."""
-    if SESSIE_KVK_NUMMER in MOCK_VESTIGINGEN:
-        return MOCK_VESTIGINGEN[SESSIE_KVK_NUMMER]
+async def _get_vestigingen(kvk: str) -> dict:
+    """Haal de vestigingen-lijst op voor het meegegeven bedrijf."""
+    if kvk in MOCK_VESTIGINGEN:
+        return MOCK_VESTIGINGEN[kvk]
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(
-        None, _kvk_fetch, f"/v1/basisprofielen/{SESSIE_KVK_NUMMER}/vestigingen"
+        None, _kvk_fetch, f"/v1/basisprofielen/{kvk}/vestigingen"
     )
 
 
-async def _get_eigenaar() -> dict:
-    """Haal de eigenaar-informatie op voor het sessie-bedrijf."""
-    if SESSIE_KVK_NUMMER in MOCK_EIGENAREN:
-        return MOCK_EIGENAREN[SESSIE_KVK_NUMMER]
+async def _get_eigenaar(kvk: str) -> dict:
+    """Haal de eigenaar-informatie op voor het meegegeven bedrijf."""
+    if kvk in MOCK_EIGENAREN:
+        return MOCK_EIGENAREN[kvk]
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(
-        None, _kvk_fetch, f"/v1/basisprofielen/{SESSIE_KVK_NUMMER}/eigenaar"
+        None, _kvk_fetch, f"/v1/basisprofielen/{kvk}/eigenaar"
     )
 
 
@@ -213,6 +378,22 @@ _BAG_DEMO_FALLBACK = {
         "oppervlakte": 140,
         "oorspronkelijkBouwjaar": "1923",
         "nummeraanduidingIdentificatie": "0599200000312345",
+    },
+    # Kwekerij De Bloesem (mock-persona bloemenkweker) — kassencomplex,
+    # industriefunctie, dus geen woonfunctie-uitzondering.
+    "2665KG-210": {
+        "gebruiksdoelen": ["industriefunctie"],
+        "oppervlakte": 18500,
+        "oorspronkelijkBouwjaar": "2004",
+        "nummeraanduidingIdentificatie": "1621200000045678",
+    },
+    # Roots & Locks (mock-persona haarstylist) — kapsalon op de begane grond,
+    # winkelfunctie. Verbruik ligt onder de drempels, dus geen informatieplicht.
+    "3012BP-18": {
+        "gebruiksdoelen": ["winkelfunctie"],
+        "oppervlakte": 65,
+        "oorspronkelijkBouwjaar": "1931",
+        "nummeraanduidingIdentificatie": "0599200000398765",
     },
 }
 
@@ -335,7 +516,9 @@ def _audit_log(tool_name: str, input_data: dict, output_data: dict) -> None:
     entry = {
         "timestamp": datetime.now(UTC).isoformat(),
         "tool": tool_name,
-        "input": input_data,
+        # Alleen veldnamen, geen waarden: het KvK-nummer (identiteit) hoort
+        # niet in de logs — consistent met de CLI-audit (audit.sh) (PDR-009).
+        "input_keys": sorted(str(k) for k in input_data),
         "output": {
             "type": type(output_data).__name__,
             "keys": list(output_data.keys()),
@@ -374,35 +557,32 @@ async def list_resource_templates() -> list[ResourceTemplate]:
 
 @server.read_resource()
 async def read_resource(uri: str) -> list[ReadResourceContents]:
-    """Retourneer het bedrijfsprofiel van de ingelogde gebruiker.
+    """Retourneer het bedrijfsprofiel voor het KvK-nummer in de resource-URI.
 
-    Beveiligingsregel: alleen het KvK-nummer van de actieve sessie wordt
-    geaccepteerd. Elk ander nummer wordt geweigerd en gelogd.
+    De host is de identiteits-autoriteit (PDR-009): hij stelt de URI samen met
+    het KvK-nummer van de ingelogde sessie. De server bedient dat nummer.
+
+    LET OP: deze resource-read is NIET sessie-gebonden — hij vertrouwt het
+    KvK-nummer uit de URI. De host ontsluit op dit moment geen MCP-resource-reads
+    aan het LLM, dus dit is geen live bypass. Wordt dat ooit wel gedaan, dan moet
+    het KvK-nummer hier eerst tegen de sessie gevalideerd/geinjecteerd worden,
+    anders is `kvk://basisprofiel/<willekeurig>` een cross-tenant read.
     """
     kvk_nummer = str(uri).rstrip("/").split("/")[-1]
 
-    if kvk_nummer != SESSIE_KVK_NUMMER:
-        logger.warning(
-            "SECURITY: toegang geweigerd voor kvk-nummer %s (sessie-gebonden aan %s)",
-            kvk_nummer,
-            SESSIE_KVK_NUMMER,
-        )
-        error_body = {
-            "error": "NIET_TOEGESTAAN",
-            "message": (
-                "U kunt alleen uw eigen bedrijfsgegevens inzien. "
-                "Gebruik kvk__mijn_bedrijf om uw gegevens op te halen."
-            ),
-        }
+    if not kvk_nummer:
         return [
             ReadResourceContents(
-                content=json.dumps(error_body, ensure_ascii=False),
+                content=json.dumps(
+                    {"error": "GEEN_SESSIE", "message": "Geen KvK-nummer in URI."},
+                    ensure_ascii=False,
+                ),
                 mime_type="application/json",
             )
         ]
 
     try:
-        profiel = await _get_basisprofiel()
+        profiel = await _get_basisprofiel(kvk_nummer)
     except (HTTPError, URLError) as exc:
         logger.error("KVK API fout: %s", exc)
         return [
@@ -427,9 +607,17 @@ async def read_resource(uri: str) -> list[ReadResourceContents]:
 # ---------------------------------------------------------------------------
 
 
+# kvk_nummer wordt server-side door de host geïnjecteerd (PDR-009) en is uit de
+# LLM-zichtbare schema's gestript (mcp_client._strip_kvk_param). Het staat hier
+# als property zodat de geïnjecteerde waarde niet op additionalProperties botst.
 _SESSION_BOUND_INPUT_SCHEMA = {
     "type": "object",
-    "properties": {},
+    "properties": {
+        "kvk_nummer": {
+            "type": "string",
+            "description": "Server-side gezet door de host; niet door het LLM.",
+        }
+    },
     "additionalProperties": False,
 }
 
@@ -502,41 +690,61 @@ def _api_error(exc: Exception) -> list[TextContent]:
     ]
 
 
+def _geen_sessie_fout(name: str) -> list[TextContent]:
+    """Nette fout als er geen KvK-nummer (sessie) is meegegeven (PDR-009)."""
+    logger.warning("SECURITY: %s aangeroepen zonder sessie-KvK-nummer", name)
+    return [
+        TextContent(
+            type="text",
+            text=json.dumps(
+                {
+                    "error": "GEEN_SESSIE",
+                    "message": (
+                        "Geen ingelogde gebruiker: er is geen KvK-nummer bekend "
+                        "voor deze sessie."
+                    ),
+                },
+                ensure_ascii=False,
+            ),
+        )
+    ]
+
+
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-    """Voer een tool uit en log de aanroep (standaard §2.2)."""
-    if arguments:
-        logger.warning(
-            "SECURITY: %s aangeroepen met onverwachte arguments: %s "
-            "(genegeerd — tools zijn sessie-gebonden)",
-            name,
-            list(arguments.keys()),
-        )
+    """Voer een tool uit en log de aanroep (standaard §2.2).
+
+    Het KvK-nummer wordt server-side door de host meegegeven (PDR-009); de tool
+    bedient dat bedrijf. Zonder KvK-nummer volgt een nette fout.
+    """
+    kvk = _resolve_kvk(arguments)
+    if not kvk:
+        return _geen_sessie_fout(name)
 
     if name == "mijn_bedrijf":
         try:
-            profiel = await _get_basisprofiel()
+            profiel = await _get_basisprofiel(kvk)
         except (HTTPError, URLError) as exc:
             return _api_error(exc)
         # Verrijk met BAG-gegevens (gebruiksdoel pand / woonfunctie)
         profiel = await _enrich_with_bag(profiel)
-        _audit_log("mijn_bedrijf", {}, profiel)
+        _audit_log("mijn_bedrijf", {"kvk_nummer": kvk}, profiel)
         return [TextContent(type="text", text=_wrap_provenance(profiel))]
 
     if name == "vestigingen":
         try:
-            data = await _get_vestigingen()
+            data = await _get_vestigingen(kvk)
         except (HTTPError, URLError) as exc:
             return _api_error(exc)
-        _audit_log("vestigingen", {}, data)
+        _audit_log("vestigingen", {"kvk_nummer": kvk}, data)
         return [TextContent(type="text", text=_wrap_provenance(data))]
 
     if name == "eigenaar":
         try:
-            data = await _get_eigenaar()
+            data = await _get_eigenaar(kvk)
         except (HTTPError, URLError) as exc:
             return _api_error(exc)
-        _audit_log("eigenaar", {}, data)
+        _audit_log("eigenaar", {"kvk_nummer": kvk}, data)
         return [TextContent(type="text", text=_wrap_provenance(data))]
 
     raise ValueError(f"Onbekende tool: {name}")

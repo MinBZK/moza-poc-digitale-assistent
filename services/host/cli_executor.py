@@ -8,6 +8,7 @@ via subprocess in plaats van MCP stdio.
 import asyncio
 import json
 import logging
+import os
 from pathlib import Path
 
 logger = logging.getLogger("vlam.cli")
@@ -16,16 +17,43 @@ logger = logging.getLogger("vlam.cli")
 CLI_DIR = Path(__file__).resolve().parent.parent / "cli"
 
 
-async def _run_cli(cmd: list[str]) -> str:
-    """Voer een CLI-commando uit en retourneer de stdout."""
-    # Toon leesbaar commando (zonder volledig pad)
-    readable = " ".join(c.replace(str(CLI_DIR) + "/", "") for c in cmd)
-    logger.info("$ %s", readable)
+def _kvk_env(arguments: dict) -> dict | None:
+    """Geef het sessie-KvK als env-override voor de kvk-cli (KVK_SESSIE_NUMMER).
 
+    De kvk-cli leest het KvK-nummer uit die env-var; de host injecteert het
+    sessie-KvK zo per aanroep, i.p.v. de proces-brede default (PDR-009).
+    """
+    kvk = str((arguments or {}).get("kvk_nummer") or "").strip()
+    return {"KVK_SESSIE_NUMMER": kvk} if kvk else None
+
+
+def _loggable_cmd(cmd: list[str]) -> str:
+    """Geef alleen de CLI-tool + subcommando terug voor logging, geen argv-waarden.
+
+    De positional argv-waarden kunnen het sessie-KvK-nummer bevatten (bv.
+    `regelrecht-cli check <kvk>`); dat hoort niet in de logs (privacy — het
+    koppelt een sessie aan een bedrijf). We loggen alleen de niet-waarde-tokens:
+    de scriptnaam en de subcommando's/flags.
+    """
+    tokens = [Path(cmd[0]).name] if cmd else []
+    tokens += [c for c in cmd[1:] if c.startswith("-") or c.isalpha()]
+    return " ".join(tokens)
+
+
+async def _run_cli(cmd: list[str], env: dict | None = None) -> str:
+    """Voer een CLI-commando uit en retourneer de stdout.
+
+    `env` bevat optionele extra omgevingsvariabelen (bovenop de proces-env),
+    o.a. het sessie-KvK-nummer voor de kvk-cli (PDR-009).
+    """
+    logger.info("$ %s", _loggable_cmd(cmd))
+
+    subprocess_env = {**os.environ, **env} if env else None
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env=subprocess_env,
     )
     stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
 
@@ -74,7 +102,7 @@ async def execute_cli_tool(tool_key: str, arguments: dict) -> str:
             "--provenance",
             "--output", "raw",
         ]
-        return await _run_cli(_append_fields(cmd, arguments))
+        return await _run_cli(_append_fields(cmd, arguments), env=_kvk_env(arguments))
 
     if tool_key == "kvk__vestigingen":
         cmd = [
@@ -83,7 +111,7 @@ async def execute_cli_tool(tool_key: str, arguments: dict) -> str:
             "--provenance",
             "--output", "raw",
         ]
-        return await _run_cli(_append_fields(cmd, arguments))
+        return await _run_cli(_append_fields(cmd, arguments), env=_kvk_env(arguments))
 
     if tool_key == "kvk__eigenaar":
         cmd = [
@@ -92,7 +120,7 @@ async def execute_cli_tool(tool_key: str, arguments: dict) -> str:
             "--provenance",
             "--output", "raw",
         ]
-        return await _run_cli(_append_fields(cmd, arguments))
+        return await _run_cli(_append_fields(cmd, arguments), env=_kvk_env(arguments))
 
     if tool_key == "koop__lees_regeling":
         bwb_id = arguments.get("bwb_id", "")

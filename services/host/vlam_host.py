@@ -7,6 +7,7 @@ De host fungeert als tussenstap:
 import asyncio
 import json
 import logging
+import re
 from collections.abc import AsyncGenerator
 
 import anthropic
@@ -64,6 +65,80 @@ REGELRECHT_DEFINITIES_ALLOWLIST: dict[str, dict] = {
         },
     },
 }
+
+
+# Tools waarvan het KvK-nummer server-side wordt bepaald door de sessie
+# (MVP-01/PDR-009). De host injecteert/overschrijft het KvK-nummer vlak vóór de
+# aanroep; het LLM en de gebruiker kunnen het niet kiezen.
+_KVK_SESSIE_TOOLS = frozenset(
+    {
+        "kvk__mijn_bedrijf",
+        "kvk__vestigingen",
+        "kvk__eigenaar",
+        "regelrecht__check",
+        "rvo__indienen",
+        "netbeheerder__verbruik",
+    }
+)
+_INFORMATIEPLICHT_LAW = "omgevingswet/energiebesparing/informatieplicht"
+
+# Sleutels die een identiteit dragen (KvK-nummer, BSN, RSIN, burgerservicenummer).
+# Het LLM mag ze nooit meegeven aan de generieke execute_law-tool: identiteit komt
+# uitsluitend uit de sessie. Case-insensitieve substring-match dekt ook varianten
+# (kvk_nummer, KVK). NB: dit is deny-by-default op sleutelnaam; een echte allowlist
+# per wet is een vervolgstap (zie NEXT_STEPS / BETA-02).
+_IDENTITY_KEY_RE = re.compile(r"kvk|bsn|rsin|burgerservicenummer", re.IGNORECASE)
+
+
+def _strip_identity_keys(value):
+    """Verwijder identity-dragende sleutels (KvK/BSN) recursief uit dicts/lists."""
+    if isinstance(value, dict):
+        return {
+            k: _strip_identity_keys(v)
+            for k, v in value.items()
+            if not _IDENTITY_KEY_RE.search(str(k))
+        }
+    if isinstance(value, list):
+        return [_strip_identity_keys(v) for v in value]
+    return value
+
+
+def _arg_keys(arguments: dict) -> str:
+    """Geef alleen de argument-namen terug voor logging (nooit de waarden).
+
+    We loggen bewust geen argument-waarden: die kunnen het sessie-KvK-nummer
+    bevatten (afgeleid van het `X-Test-User`-token) — dat hoort niet in de logs
+    (privacy + het koppelt een sessie aan een bedrijf). Alleen de veldnamen zijn
+    nuttig voor debugging en dragen geen identiteit.
+    """
+    return ", ".join(sorted(str(k) for k in (arguments or {})))
+
+
+def _inject_session_kvk(tool_key: str, arguments: dict, kvk: str) -> dict:
+    """Injecteer/overschrijf het sessie-KvK-nummer in de tool-argumenten.
+
+    Geeft een nieuwe dict terug (muteert de input niet). Voor de generieke
+    RegelRecht-tool zit het KvK-nummer in `parameters.KVK_NUMMER`, en alleen de
+    informatieplicht-regel heeft het nodig — de maatregelen-regel gebruikt
+    `parameters` als feiten en blijft ongemoeid.
+    """
+    args = dict(arguments or {})
+    if tool_key in _KVK_SESSIE_TOOLS:
+        args["kvk_nummer"] = kvk
+    elif tool_key == "regelrecht__execute_law":
+        # Deny-by-default: strip alle identity-sleutels (KvK/BSN) die het LLM
+        # meegaf — in parameters én overrides, recursief — zodat identiteit nooit
+        # uit de conversatie komt. Zet daarna de sessie-KvK alléén voor de wet die
+        # het nodig heeft (informatieplicht). De maatregelen-regel gebruikt
+        # parameters als feiten en krijgt geen KvK.
+        raw = args.get("parameters")
+        params = _strip_identity_keys(raw) if isinstance(raw, dict) else {}
+        if str(args.get("law", "")).strip() == _INFORMATIEPLICHT_LAW:
+            params["KVK_NUMMER"] = kvk
+        args["parameters"] = params
+        if "overrides" in args:
+            args["overrides"] = _strip_identity_keys(args.get("overrides"))
+    return args
 
 
 def _extract_lopende_zaak(tool_name: str, result: str) -> dict | None:
@@ -166,13 +241,14 @@ CLI_TOOL_DEFINITIONS_ANTHROPIC = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "kvk_nummer": {"type": "string", "description": "8-cijferig KvK-nummer"},
+                # kvk_nummer wordt server-side door de sessie bepaald (PDR-009),
+                # niet door het LLM. De host injecteert het bij de aanroep.
                 "jaarlijks_elektriciteitsverbruik_kwh": {"type": "number", "description": "Jaarlijks elektriciteitsverbruik in kWh"},
                 "jaarlijks_gasverbruik_m3": {"type": "number", "description": "Jaarlijks gasverbruik in m³"},
                 "is_woonfunctie": {"type": "boolean", "description": "Of het gebouw uitsluitend een woonfunctie heeft"},
                 "fields": _FIELDS_PARAM,
             },
-            "required": ["kvk_nummer"],
+            "required": [],
         },
     },
     {
@@ -193,11 +269,11 @@ CLI_TOOL_DEFINITIONS_ANTHROPIC = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "kvk_nummer": {"type": "string", "description": "8-cijferig KvK-nummer"},
+                # kvk_nummer wordt server-side door de sessie bepaald (PDR-009).
                 "regeling_id": {"type": "string", "description": "Regeling-ID (bijv. 'EBR-2026')"},
                 "maatregelen": {"type": "array", "items": {"type": "string"}, "description": "Lijst van genomen energiebesparingsmaatregelen"},
             },
-            "required": ["kvk_nummer", "regeling_id", "maatregelen"],
+            "required": ["regeling_id", "maatregelen"],
         },
     },
 ]
@@ -356,6 +432,7 @@ class VLAMHost:
         session_id: str,
         user_message: str,
         mode: str = "vlam",
+        session_kvk: str = "",
         vlam_api_key_override: str = "",
         claude_api_key_override: str = "",
     ) -> str:
@@ -363,12 +440,14 @@ class VLAMHost:
 
         mode: "vlam" (Mistral via UbiOps) of "claude" (Anthropic).
         Beide modi hebben toegang tot dezelfde MCP-tools (indien beschikbaar).
+        session_kvk: het server-side bepaalde KvK-nummer van de sessie (PDR-009);
+        de host injecteert dit bij elke bron-aanroep.
         """
         orig_claude, orig_vlam = self.claude_client, self.vlam_client
         self.claude_client, self.vlam_client = self._resolve_clients(
             vlam_api_key_override, claude_api_key_override
         )
-        conv_key = f"{session_id}:{mode}"
+        conv_key = self._conv_key(session_kvk, session_id, mode)
         if conv_key not in self.conversations:
             self.conversations[conv_key] = []
         messages = self.conversations[conv_key]
@@ -378,8 +457,8 @@ class VLAMHost:
             if mode == "vlam":
                 if not self.vlam_client:
                     return "VLAM-backend is niet geconfigureerd. Stel VLAM_API_KEY en VLAM_BASE_URL in."
-                return await self._chat_vlam(messages)
-            return await self._chat_claude(messages)
+                return await self._chat_vlam(messages, session_kvk)
+            return await self._chat_claude(messages, session_kvk)
         finally:
             self.claude_client, self.vlam_client = orig_claude, orig_vlam
 
@@ -392,6 +471,7 @@ class VLAMHost:
         session_id: str,
         user_message: str,
         mode: str = "vlam",
+        session_kvk: str = "",
         vlam_api_key_override: str = "",
         claude_api_key_override: str = "",
     ) -> AsyncGenerator[dict, None]:
@@ -408,7 +488,7 @@ class VLAMHost:
             vlam_api_key_override, claude_api_key_override
         )
 
-        conv_key = f"{session_id}:{mode}"
+        conv_key = self._conv_key(session_kvk, session_id, mode)
         if conv_key not in self.conversations:
             self.conversations[conv_key] = []
         messages = self.conversations[conv_key]
@@ -429,9 +509,9 @@ class VLAMHost:
                 yield {"type": "done"}
                 return
             if use_cli:
-                gen = self._chat_vlam_cli_stream(messages)
+                gen = self._chat_vlam_cli_stream(messages, session_kvk)
             else:
-                gen = self._chat_vlam_stream(messages)
+                gen = self._chat_vlam_stream(messages, session_kvk)
         elif llm == "claude":
             if not self.claude_client.api_key:
                 yield {
@@ -441,11 +521,11 @@ class VLAMHost:
                 yield {"type": "done"}
                 return
             if use_cli:
-                gen = self._chat_cli_stream(messages)
+                gen = self._chat_cli_stream(messages, session_kvk)
             else:
-                gen = self._chat_claude_stream(messages)
+                gen = self._chat_claude_stream(messages, session_kvk)
         else:
-            gen = self._chat_claude_stream(messages)
+            gen = self._chat_claude_stream(messages, session_kvk)
 
         try:
             async for event in gen:
@@ -460,7 +540,7 @@ class VLAMHost:
     # ------------------------------------------------------------------
 
     async def _chat_claude_stream(
-        self, messages: list[dict]
+        self, messages: list[dict], session_kvk: str = ""
     ) -> AsyncGenerator[dict, None]:
         """Claude agentic loop die status-events yieldt."""
         tools = self.registry.get_anthropic_tools()
@@ -512,7 +592,7 @@ class VLAMHost:
                     "tool": tu.name,
                 }
 
-            tool_results = await self._execute_tools(tool_uses)
+            tool_results = await self._execute_tools(tool_uses, session_kvk)
             # Emit lopende zaak als case-event bij succesvolle indiening
             for tu, tr in zip(tool_uses, tool_results, strict=True):
                 zaak = _extract_lopende_zaak(tu.name, tr.get("content", ""))
@@ -527,7 +607,7 @@ class VLAMHost:
         }
 
     async def _chat_vlam_stream(
-        self, messages: list[dict]
+        self, messages: list[dict], session_kvk: str = ""
     ) -> AsyncGenerator[dict, None]:
         """VLAM agentic loop (native OpenAI tool-calling) die status-events yieldt."""
         tools_openai = self.registry.get_openai_tools()
@@ -582,8 +662,10 @@ class VLAMHost:
                     "tool": tool_key,
                 }
 
-                arguments = json.loads(tc.function.arguments)
-                logger.info("Tool-aanroep [vlam]: %s(%s)", tool_key, arguments)
+                arguments = _inject_session_kvk(
+                    tool_key, json.loads(tc.function.arguments), session_kvk
+                )
+                logger.info("Tool-aanroep [vlam]: %s (velden: %s)", tool_key, _arg_keys(arguments))
                 try:
                     result = await self.registry.call_tool(tool_key, arguments)
                 except Exception as e:
@@ -610,7 +692,7 @@ class VLAMHost:
     # ------------------------------------------------------------------
 
     async def _chat_cli_stream(
-        self, messages: list[dict]
+        self, messages: list[dict], session_kvk: str = ""
     ) -> AsyncGenerator[dict, None]:
         """Claude agentic loop die CLI-tools aanroept i.p.v. MCP-servers."""
         tools = CLI_TOOL_DEFINITIONS_ANTHROPIC
@@ -663,9 +745,10 @@ class VLAMHost:
                     "tool": tu.name,
                 }
 
-                logger.info("CLI tool-aanroep: %s(%s)", tu.name, tu.input)
+                cli_args = _inject_session_kvk(tu.name, tu.input, session_kvk)
+                logger.info("CLI tool-aanroep: %s (velden: %s)", tu.name, _arg_keys(cli_args))
                 try:
-                    result = await execute_cli_tool(tu.name, tu.input)
+                    result = await execute_cli_tool(tu.name, cli_args)
                 except Exception as e:
                     result = f"Fout bij CLI tool '{tu.name}': {e}"
                     logger.error(result)
@@ -695,7 +778,7 @@ class VLAMHost:
     # ------------------------------------------------------------------
 
     async def _chat_vlam_cli_stream(
-        self, messages: list[dict]
+        self, messages: list[dict], session_kvk: str = ""
     ) -> AsyncGenerator[dict, None]:
         """VLAM agentic loop (native tool-calling) met CLI-tools i.p.v. MCP."""
         tools_openai = CLI_TOOL_DEFINITIONS_OPENAI
@@ -745,8 +828,10 @@ class VLAMHost:
                     "tool": tool_key,
                 }
 
-                arguments = json.loads(tc.function.arguments or "{}")
-                logger.info("CLI tool-aanroep [vlam]: %s(%s)", tool_key, arguments)
+                arguments = _inject_session_kvk(
+                    tool_key, json.loads(tc.function.arguments or "{}"), session_kvk
+                )
+                logger.info("CLI tool-aanroep [vlam]: %s (velden: %s)", tool_key, _arg_keys(arguments))
                 try:
                     result = await execute_cli_tool(tool_key, arguments)
                 except Exception as e:
@@ -772,7 +857,7 @@ class VLAMHost:
     # Claude (Anthropic API) — blocking (non-streaming, backwards-compatibel)
     # ------------------------------------------------------------------
 
-    async def _chat_claude(self, messages: list[dict]) -> str:
+    async def _chat_claude(self, messages: list[dict], session_kvk: str = "") -> str:
         if not self.claude_client.api_key:
             return (
                 "De Claude-backend is niet geconfigureerd. "
@@ -814,7 +899,7 @@ class VLAMHost:
                     b.text for b in assistant_content if hasattr(b, "text")
                 )
 
-            tool_results = await self._execute_tools(tool_uses)
+            tool_results = await self._execute_tools(tool_uses, session_kvk)
             messages.append({"role": "user", "content": tool_results})
 
         return "Het antwoord kon niet worden voltooid (te veel stappen)."
@@ -823,7 +908,7 @@ class VLAMHost:
     # VLAM (OpenAI-compatibele API — UbiOps/Mistral) — agentic loop
     # ------------------------------------------------------------------
 
-    async def _chat_vlam(self, messages: list[dict]) -> str:
+    async def _chat_vlam(self, messages: list[dict], session_kvk: str = "") -> str:
         tools_openai = self.registry.get_openai_tools()
         system_prompt = get_system_prompt("vlam", self.has_tools)
         openai_messages = self._to_openai_messages(messages, system_prompt)
@@ -867,9 +952,11 @@ class VLAMHost:
                 return assistant_msg.content or ""
 
             for tc in tool_calls:
-                arguments = json.loads(tc.function.arguments)
                 tool_key = tc.function.name
-                logger.info("Tool-aanroep [vlam]: %s(%s)", tool_key, arguments)
+                arguments = _inject_session_kvk(
+                    tool_key, json.loads(tc.function.arguments), session_kvk
+                )
+                logger.info("Tool-aanroep [vlam]: %s (velden: %s)", tool_key, _arg_keys(arguments))
                 try:
                     result = await self.registry.call_tool(tool_key, arguments)
                 except Exception as e:
@@ -890,13 +977,14 @@ class VLAMHost:
     # Helpers
     # ------------------------------------------------------------------
 
-    async def _execute_tools(self, tool_uses) -> list[dict]:
+    async def _execute_tools(self, tool_uses, session_kvk: str) -> list[dict]:
         """Voer Anthropic tool_use-blokken uit via MCP-servers."""
         tool_results = []
         for tool_use in tool_uses:
-            logger.info("Tool-aanroep [claude]: %s(%s)", tool_use.name, tool_use.input)
+            arguments = _inject_session_kvk(tool_use.name, tool_use.input, session_kvk)
+            logger.info("Tool-aanroep [claude]: %s (velden: %s)", tool_use.name, _arg_keys(arguments))
             try:
-                result = await self.registry.call_tool(tool_use.name, tool_use.input)
+                result = await self.registry.call_tool(tool_use.name, arguments)
             except Exception as e:
                 result = f"Fout bij tool '{tool_use.name}': {e}"
                 logger.error(result)
@@ -920,7 +1008,23 @@ class VLAMHost:
                 openai_msgs.append({"role": msg["role"], "content": content})
         return openai_msgs
 
-    def clear_session(self, session_id: str):
-        """Wis de gespreksgeschiedenis van een sessie (beide modi)."""
-        for mode in ("vlam", "claude", "cli"):
-            self.conversations.pop(f"{session_id}:{mode}", None)
+    @staticmethod
+    def _conv_key(session_kvk: str, session_id: str, mode: str) -> str:
+        """Bucketsleutel voor de gespreksgeschiedenis.
+
+        Gepartitioneerd op identiteit (KvK) én het client-gekozen session_id
+        (PDR-009): zo kan een geldig token met andermans session_id nooit diens
+        historie — met bedrijfsdata — inzien. `|` als scheidingsteken zodat de
+        mode (die zelf een `:` bevat, bv. `cli:vlam`) eenduidig blijft.
+        """
+        return f"{session_kvk}|{session_id}|{mode}"
+
+    def clear_session(self, session_kvk: str, session_id: str):
+        """Wis de gespreksgeschiedenis van een sessie (alle modi).
+
+        Gescoped op identiteit (session_kvk): wist alleen de eigen buckets, niet
+        die van een andere gebruiker met hetzelfde session_id. De sleutels worden
+        exact herbouwd i.p.v. geparsed, zodat een `|` in het session_id niet stoort.
+        """
+        for mode in ("vlam", "claude", "cli:vlam", "cli:claude"):
+            self.conversations.pop(self._conv_key(session_kvk, session_id, mode), None)
