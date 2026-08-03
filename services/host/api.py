@@ -105,6 +105,27 @@ GEEN_SESSIE_MELDING = (
 )
 
 
+def _sse_enkel_bericht(melding: str, event_type: str) -> StreamingResponse:
+    """Stuur één SSE-bericht + `done`, zonder LLM- of bron-aanroep.
+
+    Gebruikt voor de twee hard-blokkeer-routes van `/chat/stream`: geen geldige
+    sessie, en een geweigerde sleutel-header.
+    """
+
+    async def generator():
+        payload = json.dumps(
+            {"type": event_type, "message": melding}, ensure_ascii=False
+        )
+        yield f"event: {event_type}\ndata: {payload}\n\n"
+        yield 'event: done\ndata: {"type": "done"}\n\n'
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 def _resolve_session_kvk(request: Request) -> str | None:
     """Bepaal het KvK-nummer van de sessie uit de `X-Test-User`-header.
 
@@ -114,17 +135,76 @@ def _resolve_session_kvk(request: Request) -> str | None:
     return kvk_uit_header(request.headers.get("x-test-user", ""))
 
 
+class OngeldigeSleutel(Exception):
+    """De client stuurde een sleutel-header met een onbruikbare waarde."""
+
+
+# Bewust generiek: de melding mag nooit (een deel van) de waarde bevatten.
+ONGELDIGE_SLEUTEL_MELDING = (
+    "De meegegeven API-sleutel heeft een ongeldige vorm. Controleer of u de "
+    "sleutel volledig hebt geplakt, zonder spaties of regeleinden."
+)
+
+_MIN_SLEUTEL_LENGTE = 8
+_MAX_SLEUTEL_LENGTE = 512
+
+
+def _valideer_sleutel(waarde: str, header: str) -> str:
+    """Toets de vorm van een sleutel-header; geef de sleutel terug of faal (MVP-02).
+
+    Drie redenen, in volgorde van hoe reëel ze zijn:
+
+    1. Een niet-ASCII sleutel laat de uitgaande LLM-call stuklopen op een
+       `UnicodeEncodeError`. Die valt buiten `except (TimeoutError, APIError)`
+       en levert dus een onafgevangen 500 of een halverwege afgebroken
+       SSE-stream op. De melding bevat de sleutel niet, maar het is een lelijke
+       faalmodus die we hier goedkoop voorkomen.
+    2. Een sleutel met een stuurteken (bv. een regeleinde) levert bij het
+       opbouwen van het verzoek een fout op waarvan de binnenste melding de
+       *volledige sleutel* bevat ("Illegal header value b'sk-ant-...'"). Over
+       normale HTTP kan zo'n waarde ons niet bereiken — clients en servers
+       weigeren stuurtekens in header-waarden — dus dit is defense-in-depth
+       voor het geval de waarde ooit uit een andere bron komt.
+    3. Plakfouten (spatie erin, half gekopieerd) geven nu een duidelijke melding
+       in plaats van het generieke "de assistent is niet bereikbaar".
+
+    Er wordt bewust niets van de waarde gelogd of teruggegeven — alleen de
+    headernaam en de reden-categorie.
+    """
+    if not waarde:
+        return ""
+    if not (_MIN_SLEUTEL_LENGTE <= len(waarde) <= _MAX_SLEUTEL_LENGTE):
+        reden = "lengte buiten bereik"
+    elif not waarde.isascii() or not waarde.isprintable():
+        reden = "niet-printbare of niet-ASCII tekens"
+    elif any(c.isspace() for c in waarde):
+        reden = "bevat witruimte"
+    else:
+        return waarde
+    logging.getLogger("vlam.api").warning(
+        "Sleutel-header %s geweigerd: %s", header, reden
+    )
+    raise OngeldigeSleutel(ONGELDIGE_SLEUTEL_MELDING)
+
+
 def _extract_api_keys(request: Request) -> dict:
     """Lees optionele API key overrides uit request headers.
 
     Alleen actief als ALLOW_API_KEY_OVERRIDE=true in de omgeving.
     Anders worden de headers genegeerd en gebruikt de host de server-env keys.
+
+    Werpt `OngeldigeSleutel` als een header een onbruikbare waarde draagt; de
+    endpoints vertalen dat naar een nette 400 respectievelijk een error-event.
     """
     if not ALLOW_API_KEY_OVERRIDE:
         return {"vlam_api_key_override": "", "claude_api_key_override": ""}
     return {
-        "vlam_api_key_override": request.headers.get("x-vlam-api-key", "").strip(),
-        "claude_api_key_override": request.headers.get("x-claude-api-key", "").strip(),
+        "vlam_api_key_override": _valideer_sleutel(
+            request.headers.get("x-vlam-api-key", "").strip(), "x-vlam-api-key"
+        ),
+        "claude_api_key_override": _valideer_sleutel(
+            request.headers.get("x-claude-api-key", "").strip(), "x-claude-api-key"
+        ),
     }
 
 
@@ -137,7 +217,10 @@ async def chat(body: ChatRequest, request: Request):
     session_id = body.session_id or str(uuid.uuid4())
     VALID_MODES = ("vlam", "claude", "cli:vlam", "cli:claude")
     mode = body.mode if body.mode in VALID_MODES else "vlam"
-    api_keys = _extract_api_keys(request)
+    try:
+        api_keys = _extract_api_keys(request)
+    except OngeldigeSleutel as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
     reply = await host.chat(
         session_id, body.message, mode=mode, session_kvk=session_kvk, **api_keys
     )
@@ -161,23 +244,17 @@ async def chat_stream(body: ChatRequest, request: Request):
     session_id = body.session_id or str(uuid.uuid4())
     VALID_MODES = ("vlam", "claude", "cli:vlam", "cli:claude")
     mode = body.mode if body.mode in VALID_MODES else "vlam"
-    api_keys = _extract_api_keys(request)
     logging.getLogger("vlam.api").info("POST /chat/stream — mode=%r (raw=%r)", mode, body.mode)
 
     if not session_kvk:
         # Hard blokkeren zonder geldige sessie: nette melding, geen LLM/bron.
-        async def blocked_generator():
-            payload = json.dumps(
-                {"type": "answer", "message": GEEN_SESSIE_MELDING}, ensure_ascii=False
-            )
-            yield f"event: answer\ndata: {payload}\n\n"
-            yield 'event: done\ndata: {"type": "done"}\n\n'
+        return _sse_enkel_bericht(GEEN_SESSIE_MELDING, "answer")
 
-        return StreamingResponse(
-            blocked_generator(),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-        )
+    try:
+        api_keys = _extract_api_keys(request)
+    except OngeldigeSleutel as e:
+        # Geen 400 maar een error-event: de UI leest deze route als SSE.
+        return _sse_enkel_bericht(str(e), "error")
 
     async def event_generator():
         async for event in host.chat_stream(
