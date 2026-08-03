@@ -24,12 +24,14 @@ from config import (
     VLAM_PORT,
     kvk_uit_header,
 )
+from log_redaction import installeer_redactie
 from vlam_host import VLAMHost
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
 )
+installeer_redactie()
 
 host = VLAMHost()
 
@@ -37,6 +39,9 @@ host = VLAMHost()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start en stop de VLAM-host met de FastAPI-levenscyclus."""
+    # Nogmaals, nu uvicorn zijn eigen loggers heeft opgetuigd: bij `uvicorn.run`
+    # vanuit __main__ bestaan die bij import nog niet. De aanroep is idempotent.
+    installeer_redactie()
     await host.startup()
     yield
     await host.shutdown()
