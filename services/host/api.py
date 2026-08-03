@@ -71,6 +71,40 @@ logging.getLogger("vlam.api").info(
 )
 
 
+def controleer_origin_grens() -> None:
+    """Waarschuw luid als de origin-grens wagenwijd openstaat (MVP-02).
+
+    Let op de richting: een *lege* `ALLOWED_ORIGINS` is de strikte stand — dan
+    staat er geen enkele cross-origin toegang open. Dat is precies goed voor de
+    deployment, waar de frontend via een same-origin reverse proxy praat en er
+    dus helemaal geen CORS aan te pas komt.
+
+    `*` is het probleem: dan kan elke willekeurige webpagina de browser van een
+    bezoeker dit endpoint laten aanroepen. Met de sleutel-override aan telt daar
+    bij op dat zo'n pagina de assistent ook met een eigen sleutel kan aansturen.
+    Een sleutel van een ánder tabblad kan er niet mee gestolen worden (dat
+    verhindert de browser zelf), maar de host wordt wel een open doorgeefluik.
+
+    Bewust geen harde blokkade: `*` is legitiem tijdens lokale ontwikkeling.
+    """
+    if "*" not in ALLOWED_ORIGINS:
+        return
+    logging.getLogger("vlam.api").warning(
+        "ALLOWED_ORIGINS staat op '*': elke webpagina kan deze host aanroepen. "
+        "Alleen bedoeld voor lokale ontwikkeling — zet een concrete whitelist "
+        "voor een gedeelde of publieke omgeving.%s",
+        (
+            " De sleutel-override staat óók aan, dus zo'n pagina kan de "
+            "assistent met een eigen sleutel aansturen."
+            if ALLOW_API_KEY_OVERRIDE
+            else ""
+        ),
+    )
+
+
+controleer_origin_grens()
+
+
 # --- Request/Response modellen ---
 
 
