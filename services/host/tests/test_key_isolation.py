@@ -17,10 +17,12 @@ overleeft het verzoek niet en de httpx-pool lekt niet weg) en dat de
 server-env-clients onaangeraakt blijven.
 """
 
+import asyncio
 import types
 
 import pytest
 
+import log_redaction
 import vlam_host
 
 KVK_A = "85234567"
@@ -46,6 +48,8 @@ class _FakeClaude:
             (m["content"] for m in kwargs["messages"] if m.get("role") == "user"), "?"
         )
         AANROEPEN.append((vraag, self.api_key))
+        # Momentopname van de redactie mídden in het verzoek.
+        TIJDENS_VERZOEK.append(log_redaction.redigeer(f"fout met {self.api_key}"))
         block = types.SimpleNamespace(type="text", text="klaar")
         return types.SimpleNamespace(content=[block], usage=None)
 
@@ -85,6 +89,7 @@ class _FakeVlam:
 
 
 AANROEPEN: list[tuple[str, str]] = []
+TIJDENS_VERZOEK: list[str] = []
 
 
 @pytest.fixture
@@ -96,6 +101,7 @@ def host(monkeypatch):
     controleren dat de server-clients níét zijn aangeraakt of gesloten.
     """
     AANROEPEN.clear()
+    TIJDENS_VERZOEK.clear()
     _FakeClaude.gemaakt.clear()
     _FakeVlam.gemaakt.clear()
     h = vlam_host.VLAMHost()
@@ -160,6 +166,62 @@ async def test_gelijktijdige_gesprekken_delen_geen_vlam_sleutel(host):
     assert ("vraag-B", KEY_B) in AANROEPEN
     assert ("vraag-A", KEY_B) not in AANROEPEN
     assert ("vraag-B", KEY_A) not in AANROEPEN
+
+
+async def test_gelijktijdige_blocking_chats_delen_geen_sleutel(host):
+    """Zelfde bugklasse als hierboven, maar op het niet-streamende pad.
+
+    `chat()` muteerde dezelfde gedeelde state. Zonder deze test zou een
+    regressie daar ongemerkt terug kunnen komen.
+    """
+    trager = asyncio.Event()
+
+    async def _a():
+        return await host.chat(
+            "sessie-a", "vraag-A", mode="claude", session_kvk=KVK_A,
+            claude_api_key_override=KEY_A,
+        )
+
+    async def _b():
+        await trager.wait()
+        return await host.chat(
+            "sessie-b", "vraag-B", mode="claude", session_kvk=KVK_B,
+            claude_api_key_override=KEY_B,
+        )
+
+    taak_a = asyncio.create_task(_a())
+    taak_b = asyncio.create_task(_b())
+    trager.set()
+    await asyncio.gather(taak_a, taak_b)
+
+    assert ("vraag-A", KEY_A) in AANROEPEN
+    assert ("vraag-B", KEY_B) in AANROEPEN
+    assert ("vraag-A", KEY_B) not in AANROEPEN
+    assert ("vraag-B", KEY_A) not in AANROEPEN
+
+
+async def test_sleutel_is_geredigeerd_tijdens_maar_niet_onthouden_erna(host):
+    """Het log-vangnet kent de sleutel zolang die in gebruik is, daarna niet meer.
+
+    KEY_A heeft bewust géén herkenbare vorm (geen `sk-`-voorvoegsel): dat is
+    precies het geval — een VLAM/UbiOps-token — dat patroonherkenning mist.
+    """
+    await _drain(
+        host.chat_stream(
+            "s1", "hoi", mode="claude", session_kvk=KVK_A,
+            claude_api_key_override=KEY_A,
+        )
+    )
+
+    assert TIJDENS_VERZOEK, "de LLM-call is niet gedaan"
+    assert KEY_A not in TIJDENS_VERZOEK[0], (
+        "tijdens het verzoek hoort de sleutel uit een logregel geredigeerd te worden"
+    )
+    assert log_redaction.REDACTIE in TIJDENS_VERZOEK[0]
+    # En daarna: niet langer vasthouden dan de client zelf (PDR-010).
+    assert KEY_A in log_redaction.redigeer(f"fout met {KEY_A}"), (
+        "na afloop hoort de sleutel niet meer geregistreerd te staan"
+    )
 
 
 async def test_override_client_wordt_gesloten_na_de_stream(host):

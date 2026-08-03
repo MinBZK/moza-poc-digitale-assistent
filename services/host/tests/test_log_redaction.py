@@ -11,9 +11,19 @@ import logging
 
 import pytest
 
-from log_redaction import REDACTIE, RedigerendeFormatter, installeer_redactie, redigeer
+from log_redaction import (
+    REDACTIE,
+    RedigerendeFormatter,
+    geheim_geregistreerd,
+    installeer_redactie,
+    redigeer,
+    registreer_geheim,
+)
 
 SLEUTEL = "sk-ant-api03-ZEERGEHEIM1234567890abcdefg"
+# Een VLAM/UbiOps-achtig token: geen voorvoegsel, geen structuur. Precies wat
+# patroonherkenning niet kan zien.
+VORMLOOS = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
 
 
 @pytest.mark.parametrize(
@@ -23,6 +33,9 @@ SLEUTEL = "sk-ant-api03-ZEERGEHEIM1234567890abcdefg"
         pytest.param(f"Illegal header value b'{SLEUTEL}'", id="in-foutmelding"),
         pytest.param("token: sk-proj-abcdefghijklmnopqrstuvwxyz012345", id="openai-stijl"),
         pytest.param("Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.abcdef", id="bearer"),
+        pytest.param(
+            "token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NSJ9.AbCdEf123", id="kale-jwt"
+        ),
         pytest.param("api_key=abcdefghijklmnop", id="toewijzing"),
         pytest.param('{"apikey": "abcdefghijklmnop"}', id="json-veld"),
         pytest.param("x-claude-api-key: abcdefghijklmnop", id="headernaam"),
@@ -49,6 +62,52 @@ def test_redigeert_sleutelvormen(regel):
 )
 def test_laat_gewone_logregels_ongemoeid(regel):
     assert redigeer(regel) == regel
+
+
+# --- Sleutels die we bij naam kennen -----------------------------------------
+#
+# Patroonherkenning ziet alleen sleutels met een herkenbare vorm. De VLAM-backend
+# gebruikt UbiOps-tokens zonder voorvoegsel; zonder deze registratie zou de helft
+# van de backends buiten het vangnet vallen.
+
+
+def test_vormloos_token_ontsnapt_zonder_registratie():
+    """Vastleggen wat patroonherkenning niet kan: dit is de reden voor het register."""
+    assert VORMLOOS in redigeer(f"call mislukt: {VORMLOOS}")
+
+
+def test_geregistreerd_geheim_wordt_wel_geredigeerd():
+    with geheim_geregistreerd(VORMLOOS):
+        resultaat = redigeer(f"call mislukt: {VORMLOOS}")
+    assert VORMLOOS not in resultaat
+    assert REDACTIE in resultaat
+
+
+def test_registratie_stopt_na_het_verzoek():
+    with geheim_geregistreerd(VORMLOOS):
+        pass
+    assert VORMLOOS in redigeer(f"call mislukt: {VORMLOOS}")
+
+
+def test_twee_verzoeken_met_dezelfde_sleutel_storen_elkaar_niet():
+    """Het aflopen van het ene verzoek mag de registratie van het andere niet wissen."""
+    with geheim_geregistreerd(VORMLOOS):
+        with geheim_geregistreerd(VORMLOOS):
+            pass
+        # Het binnenste verzoek is klaar, het buitenste nog niet.
+        assert VORMLOOS not in redigeer(f"fout: {VORMLOOS}")
+    assert VORMLOOS in redigeer(f"fout: {VORMLOOS}")
+
+
+def test_te_korte_waarde_wordt_niet_geregistreerd():
+    """Anders zou een kort fragment gewone logtekst kunnen verminken."""
+    with geheim_geregistreerd("abc"):
+        assert redigeer("abc is een gewoon woord") == "abc is een gewoon woord"
+
+
+def test_registreer_geheim_is_blijvend():
+    registreer_geheim("SERVER-SLEUTEL-abcdefgh")
+    assert "SERVER-SLEUTEL-abcdefgh" not in redigeer("fout: SERVER-SLEUTEL-abcdefgh")
 
 
 def _logger_met_buffer(naam: str):

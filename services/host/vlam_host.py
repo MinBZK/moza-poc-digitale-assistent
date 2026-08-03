@@ -26,6 +26,7 @@ from config import (
     VLAM_TIMEOUT,
     get_system_prompt,
 )
+from log_redaction import geheim_geregistreerd, registreer_geheim
 from mcp_client import MCPToolRegistry
 
 logger = logging.getLogger("vlam.host")
@@ -289,6 +290,10 @@ class VLAMHost:
     """Orkestrator die twee LLM-backends koppelt aan MCP-servers."""
 
     def __init__(self):
+        # De server-env-sleutels leven zo lang als het proces en kunnen in een
+        # bibliotheek-traceback opduiken; laat het log-vangnet ze bij naam kennen.
+        registreer_geheim(ANTHROPIC_API_KEY)
+        registreer_geheim(VLAM_API_KEY)
         self.claude_client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
         self.vlam_client = (
             openai.AsyncOpenAI(
@@ -434,16 +439,26 @@ class VLAMHost:
         claude = self.claude_client
         vlam = self.vlam_client
         eigen_clients = []
-        if claude_api_key_override:
-            claude = anthropic.AsyncAnthropic(api_key=claude_api_key_override)
-            eigen_clients.append(claude)
-        if vlam_api_key_override and VLAM_BASE_URL:
-            vlam = openai.AsyncOpenAI(
-                api_key=vlam_api_key_override, base_url=VLAM_BASE_URL
-            )
-            eigen_clients.append(vlam)
         try:
-            yield claude, vlam
+            # Registreren gebeurt vóór het aanmaken en duurt tot na het verzoek:
+            # patroonherkenning alleen mist tokens zonder herkenbare vorm
+            # (VLAM/UbiOps), en ook een fout tíjdens het opbouwen van de client
+            # moet geredigeerd de logs in.
+            with (
+                geheim_geregistreerd(claude_api_key_override),
+                geheim_geregistreerd(vlam_api_key_override),
+            ):
+                # Aanmaken staat bewust binnen de try: faalt de tweede
+                # constructor, dan moet de eerste alsnog gesloten worden.
+                if claude_api_key_override:
+                    claude = anthropic.AsyncAnthropic(api_key=claude_api_key_override)
+                    eigen_clients.append(claude)
+                if vlam_api_key_override and VLAM_BASE_URL:
+                    vlam = openai.AsyncOpenAI(
+                        api_key=vlam_api_key_override, base_url=VLAM_BASE_URL
+                    )
+                    eigen_clients.append(vlam)
+                yield claude, vlam
         finally:
             for client in eigen_clients:
                 try:
