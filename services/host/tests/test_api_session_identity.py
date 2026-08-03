@@ -1,7 +1,8 @@
 """Endpoint-laag: bedrijfsidentiteit via de `X-Test-User`-header (MVP-01/PDR-009).
 
-Zonder geldig token blokkeert de host hard: nette melding, geen LLM/bron. Met
-een geldig token wordt het gemapte KvK-nummer server-side aan de host doorgegeven.
+De header draagt het KvK-nummer van de gekozen persona. Buiten de allowlist =>
+de host blokkeert hard (nette melding, geen LLM/bron). Erbinnen => het nummer
+gaat door naar de host, die het bij elke bron-aanroep injecteert.
 
 Draait netwerkloos (geen lifespan => geen MCP-servers, geen LLM-calls: host.chat
 wordt gemonkeypatcht tot een recorder).
@@ -16,11 +17,12 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 client = TestClient(api.app)
 
-_TOKEN_MAP = {"tok_claudia": "85234567", "tok_donald": "68750110"}
+_ALLOWLIST = {"85234567", "68750110"}
 
 
-def _fake_token_resolver(token):
-    return _TOKEN_MAP.get((token or "").strip())
+def _fake_allowlist_check(waarde):
+    kvk = (waarde or "").strip()
+    return kvk if kvk in _ALLOWLIST else None
 
 
 def _install_recorder(monkeypatch):
@@ -32,12 +34,12 @@ def _install_recorder(monkeypatch):
         captured["called"] = True
         return "ok"
 
-    monkeypatch.setattr(api, "kvk_voor_token", _fake_token_resolver)
+    monkeypatch.setattr(api, "kvk_uit_header", _fake_allowlist_check)
     monkeypatch.setattr(api.host, "chat", _fake_chat)
     return captured
 
 
-def test_chat_zonder_token_blokkeert_hard(monkeypatch):
+def test_chat_zonder_header_blokkeert_hard(monkeypatch):
     captured = _install_recorder(monkeypatch)
     r = client.post("/chat", json={"message": "wat zijn mijn bedrijfsgegevens?"})
     assert r.status_code == 401
@@ -46,44 +48,44 @@ def test_chat_zonder_token_blokkeert_hard(monkeypatch):
     assert captured.get("called") is not True
 
 
-def test_chat_onbekend_token_blokkeert_hard(monkeypatch):
+def test_chat_kvk_buiten_allowlist_blokkeert_hard(monkeypatch):
     captured = _install_recorder(monkeypatch)
     r = client.post(
         "/chat",
         json={"message": "hoi"},
-        headers={"X-Test-User": "tok_onbekend"},
+        headers={"X-Test-User": "99999999"},
     )
     assert r.status_code == 401
     assert captured.get("called") is not True
 
 
-def test_chat_geldig_token_geeft_sessie_kvk_door(monkeypatch):
+def test_toegestaan_kvk_gaat_door_naar_de_host(monkeypatch):
     captured = _install_recorder(monkeypatch)
     r = client.post(
         "/chat",
         json={"message": "hoi"},
-        headers={"X-Test-User": "tok_claudia"},
+        headers={"X-Test-User": "85234567"},
     )
     assert r.status_code == 200
     assert captured["session_kvk"] == "85234567"
 
 
-def test_twee_tokens_geven_elk_eigen_kvk(monkeypatch):
+def test_twee_persona_s_geven_elk_eigen_kvk(monkeypatch):
     captured = _install_recorder(monkeypatch)
-    client.post("/chat", json={"message": "x"}, headers={"X-Test-User": "tok_claudia"})
+    client.post("/chat", json={"message": "x"}, headers={"X-Test-User": "85234567"})
     assert captured["session_kvk"] == "85234567"
-    client.post("/chat", json={"message": "x"}, headers={"X-Test-User": "tok_donald"})
+    client.post("/chat", json={"message": "x"}, headers={"X-Test-User": "68750110"})
     assert captured["session_kvk"] == "68750110"
 
 
-def test_chat_stream_zonder_token_blokkeert_hard(monkeypatch):
+def test_chat_stream_zonder_header_blokkeert_hard(monkeypatch):
     called = {"stream": False}
 
     async def _fake_stream(*a, **k):
         called["stream"] = True
         yield {"type": "answer", "message": "mag niet"}
 
-    monkeypatch.setattr(api, "kvk_voor_token", _fake_token_resolver)
+    monkeypatch.setattr(api, "kvk_uit_header", _fake_allowlist_check)
     monkeypatch.setattr(api.host, "chat_stream", _fake_stream)
 
     r = client.post("/chat/stream", json={"message": "hoi"})

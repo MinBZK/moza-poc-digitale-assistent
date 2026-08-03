@@ -22,7 +22,7 @@ from config import (
     ALLOWED_ORIGINS,
     VLAM_HOST,
     VLAM_PORT,
-    kvk_voor_token,
+    kvk_uit_header,
 )
 from vlam_host import VLAMHost
 
@@ -108,11 +108,10 @@ GEEN_SESSIE_MELDING = (
 def _resolve_session_kvk(request: Request) -> str | None:
     """Bepaal het KvK-nummer van de sessie uit de `X-Test-User`-header.
 
-    Het KvK-nummer wordt server-side afgeleid uit een vertrouwd token (PDR-009),
-    niet uit de conversatie. Geeft None als er geen geldig token is.
+    Gevalideerd tegen de allowlist (PDR-009), nooit uit de conversatie. None als
+    de header ontbreekt of een nummer buiten de allowlist draagt.
     """
-    token = request.headers.get("x-test-user", "").strip()
-    return kvk_voor_token(token)
+    return kvk_uit_header(request.headers.get("x-test-user", ""))
 
 
 def _extract_api_keys(request: Request) -> dict:

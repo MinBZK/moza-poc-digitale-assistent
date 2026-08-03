@@ -88,36 +88,31 @@ ALLOW_API_KEY_OVERRIDE: bool = os.getenv("ALLOW_API_KEY_OVERRIDE", "true").lower
     "yes",
 )
 
-# Testgebruikers: token → KvK-nummer (MVP-01 / PDR-009)
-# De frontend stuurt per request de header `X-Test-User: <token>`; de host mapt
-# dat token server-side naar het KvK-nummer van de ingelogde testgebruiker en
-# injecteert dat bij elke bron-aanroep. Het LLM en de gebruiker kunnen het niet
-# kiezen of overschrijven. Formaat: komma-gescheiden `token:kvk`-paren, bv.
-#   TEST_USERS="tok_donald:68750110,tok_claudia:85234567"
-# Echte authenticatie (eHerkenning/DigiD) is BETA-02; dit is de gesloten testgroep.
-def _parse_test_users(raw: str) -> dict[str, str]:
-    users: dict[str, str] = {}
-    for pair in raw.split(","):
-        token, sep, kvk = pair.partition(":")
-        if not sep:
-            continue  # geen dubbele punt => geen geldig paar
-        token, kvk = token.strip(), kvk.strip()
-        if token and kvk:
-            users[token] = kvk
-    return users
+# Toegestane KvK-nummers voor de gesloten testgroep (MVP-01 / PDR-009 addendum).
+# De frontend stuurt `X-Test-User: <kvk-nummer>` van de gekozen persona; de host
+# valideert dat hiertegen en injecteert het nummer server-side bij elke
+# bron-aanroep. Geen geheim (de nummers staan publiek in de frontend), wel een
+# grens: zonder allowlist zou de KvK-server willekeurige nummers opvragen.
+# Formaat: TEST_KVK_NUMMERS="85234567,62345681,56789012". BETA-02 vervangt de
+# lijst door echte authenticatie; de vorm blijft gelijk.
+def _parse_kvk_allowlist(raw: str) -> frozenset[str]:
+    return frozenset(k.strip() for k in raw.split(",") if k.strip())
 
 
-TEST_USERS: dict[str, str] = _parse_test_users(os.getenv("TEST_USERS", ""))
+TEST_KVK_NUMMERS: frozenset[str] = _parse_kvk_allowlist(
+    os.getenv("TEST_KVK_NUMMERS", "")
+)
 
 
-def kvk_voor_token(token: str | None) -> str | None:
-    """Resolve een `X-Test-User`-token naar het KvK-nummer van die testgebruiker.
+def kvk_uit_header(waarde: str | None) -> str | None:
+    """Valideer het KvK-nummer uit de `X-Test-User`-header tegen de allowlist.
 
-    Geeft None terug bij een leeg of onbekend token (=> host blokkeert de vraag).
+    None bij een lege header of een nummer erbuiten => de host blokkeert.
     """
-    if not token:
+    if not waarde:
         return None
-    return TEST_USERS.get(token.strip())
+    kvk = waarde.strip()
+    return kvk if kvk in TEST_KVK_NUMMERS else None
 
 
 # System prompt — assembled from modular blocks
@@ -129,8 +124,8 @@ __all__ = [
     "ANTHROPIC_API_KEY",
     "CLAUDE_MODEL",
     "MCP_SERVERS",
-    "TEST_USERS",
-    "kvk_voor_token",
+    "TEST_KVK_NUMMERS",
+    "kvk_uit_header",
     "VLAM_API_KEY",
     "VLAM_BASE_URL",
     "VLAM_HOST",

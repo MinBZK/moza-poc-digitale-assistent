@@ -22,7 +22,7 @@ SERVICES = Path(__file__).resolve().parent.parent.parent
 MCP_KVK = SERVICES / "mcp" / "kvk" / "server.py"
 MCP_NETBEHEERDER = SERVICES / "mcp" / "netbeheerder" / "server.py"
 
-# persona-id (frontend) -> KvK-nummer (backend). Zie .env.example TEST_USERS.
+# persona-id (frontend) -> KvK-nummer (backend). Zie .env.example TEST_KVK_NUMMERS.
 TESTPROFIELEN = {
     "koffiezaak": "85234567",
     "bloemenkweker": "62345681",

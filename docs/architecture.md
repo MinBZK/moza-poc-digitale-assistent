@@ -47,7 +47,9 @@ De host werkt ook zonder MCP-servers of CLI-tools; de assistent antwoordt dan op
 
 ### Testgebruiker toevoegen (gesloten testgroep)
 
-De identiteit is server-side gebonden aan een vertrouwd token ([PDR-009](decisions/PDR-009-sessie-identiteit-host-side.md)). Een testgebruiker voeg je toe door in de backend-env een `token:kvk`-paar aan `TEST_USERS` toe te voegen (kies niet-raadbare tokens; het is een bearer-credential). De frontend stuurt dat token per request mee in de header `X-Test-User`; de host mapt het naar het KvK-nummer en injecteert dat bij elke bron-aanroep. Zonder geldig token blokkeert de host met een nette "log eerst in"-melding en raadpleegt geen bron. Na het aanpassen van `TEST_USERS` herstart je de host; wisselen van persona hoeft niet meer per herstart (alleen een ander token).
+De identiteit wordt server-side vastgesteld en afgedwongen ([PDR-009](decisions/PDR-009-sessie-identiteit-host-side.md)). De frontend stuurt per request het KvK-nummer van de gekozen persona mee in de header `X-Test-User`; de host controleert dat tegen de allowlist `TEST_KVK_NUMMERS` in de backend-env en injecteert het nummer vervolgens bij elke bron-aanroep. Een testgebruiker voeg je toe door het KvK-nummer aan die lijst toe te voegen en de host te herstarten. Staat een nummer er niet in, of ontbreekt de header, dan blokkeert de host met een nette "log eerst in"-melding en raadpleegt geen bron. Wisselen van persona kan zonder herstart.
+
+De allowlist is geen geheim — de KvK-nummers van de persona's staan al publiek in `_data/personas.json` van de frontend. Ze is wél een harde grens: zonder die grens zou de KvK-server voor een willekeurig meegestuurd nummer de echte KvK Test API gaan bevragen. De garantie die er wél toe doet staat hier los van: het LLM ziet `kvk_nummer` niet (het is uit alle tool-schema's gestript) en kan de identiteit dus niet kiezen, ook niet als de gebruiker in het gesprek een ander nummer noemt.
 
 De gesloten testgroep telt drie profielen. Ze zijn zo gekozen dat dezelfde vraag over de informatieplicht energiebesparing drie verschillende kanten op loopt, zodat een gebruikerstest niet één tak van de regel test:
 

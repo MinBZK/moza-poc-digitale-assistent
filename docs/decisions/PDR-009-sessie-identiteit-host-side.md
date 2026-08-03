@@ -40,6 +40,11 @@ de host het enige vertrouwde punt waar identiteit wordt vastgesteld.
 
 ### 2. Identiteit via een vertrouwd token in een HTTP-header
 
+> **Achterhaald door het [addendum van 2026-08-03](#addendum-2026-08-03-token-indirectie-vervalt-kvk-nummer-in-de-header).**
+> Het token is vervangen door het KvK-nummer zelf, met een allowlist
+> (`TEST_KVK_NUMMERS`). De rest van deze paragraaf beschrijft de oorspronkelijke
+> keuze en blijft staan als audit-trail.
+
 De frontend stuurt per request de header **`X-Test-User: <token>`**. De host
 mapt dat token naar een KvK-nummer via een vooraf ingestelde lijst
 (`TEST_USERS` in de env: `token:kvk,token:kvk,...`). Dit sluit aan op het al
@@ -149,3 +154,54 @@ een lege `kvk_nummer`, waardoor de informatieplicht-flow (PDR-007) strandde op
 MCP-servers en faalt zodra een tool wél `kvk_nummer` vraagt maar buiten de
 injectie valt. Strippen en injecteren horen één lijst te delen; tot die
 refactor bewaakt de test de koppeling.
+
+## Addendum (2026-08-03): token-indirectie vervalt, KvK-nummer in de header
+
+De oorspronkelijke opzet gebruikte een **token** in de `X-Test-User`-header, dat
+de host via `TEST_USERS` (`token:kvk`-paren) naar een KvK-nummer mapte. Dat
+token is vervangen door het **KvK-nummer zelf**; `TEST_KVK_NUMMERS` is nu een
+allowlist van toegestane nummers.
+
+**Aanleiding.** Het token beschermde niets. De KvK-nummers van de testpersona's
+staan al publiek in `_data/personas.json` in de open frontend-repo
+(`MinBZK/moza-poc`), dus er viel geen geheim te bewaren. Wat het token wél
+kostte: een GitHub-secret (`MOZA_TEST_USERS`) voor de frontend-build, een
+tweede lijst in de backend-env die daar exact mee moest matchen, en een stille
+faalmodus wanneer die twee uit de pas liepen — de assistent antwoordde dan
+overal "log eerst in" zonder enige aanwijzing waarom. Bovendien belandde het
+token alsnog in de paginabron (`window.MOZA_TEST_USERS`), waardoor de
+onraadbaarheid in de praktijk niet bestond.
+
+**Wat níét verandert.** De garantie die deze PDR draagt, staat los van waar het
+nummer vandaan komt: het LLM ziet `kvk_nummer` niet (het is uit álle
+LLM-zichtbare tool-schema's gestript) en de host injecteert het server-side vlak
+vóór elke bron-aanroep, in alle vier de transport-paden. Noemt de gebruiker in
+het gesprek een ander KvK-nummer, dan blijft het sessie-nummer leidend. Dat is
+end-to-end beproefd op zowel de Claude- als de VLAM-backend.
+
+**Waarom een header en niet de URL.** Een query-parameter (`?kvk=...`) is
+overwogen en verworpen: nginx logt standaard de volledige request-regel, en dat
+geldt ook voor proxy-logs, browserhistorie en `Referer`-headers. Dat zou de
+log-hygiëne uit deze PDR (`_pad_zonder_kvk`, `_arg_keys`, audit-logs met alleen
+veldnamen) in één keer ongedaan maken. Een header wordt niet gelogd tenzij je
+daar expliciet om vraagt.
+
+**Waarom de allowlist blijft.** Zonder grens zou de KvK-server voor een
+willekeurig meegestuurd nummer de echte KvK Test API gaan bevragen. De allowlist
+is dus geen geheim maar een begrenzing, en levert tegelijk het "log eerst
+in"-gedrag op dat MVP-01 vereist.
+
+**Consequentie voor de frontend.** De hele token-machinerie vervalt:
+`_data/testUsers.js`, `window.MOZA_TEST_USERS` in `base.njk`, de
+`MOZA_TEST_USERS` build-arg in `Containerfile` en de drie workflows, en het
+GitHub-secret. De frontend stuurt het `kvkNummer` van de actieve persona
+rechtstreeks mee.
+
+**Wat dit expliciet níét is.** De gebruiker kan de headerwaarde in de browser
+wijzigen en zo een andere testpersona worden. Dat kon met het token ook al — de
+persona-keuze is client-side en het token stond in de paginabron. Voor een
+gesloten testgroep met uitsluitend fictieve data is dat aanvaardbaar; het is
+géén authenticatie. Echte identiteitsvaststelling (eHerkenning/DigiD, NL GOV
+OAuth/OIDC) is BETA-02. De *vorm* blijft dan gelijk — header naar binnen,
+server-side valideren, server-side injecteren — alleen de allowlist wordt
+vervangen door de authenticatie.
