@@ -105,6 +105,38 @@ def test_te_korte_waarde_wordt_niet_geregistreerd():
         assert redigeer("abc is een gewoon woord") == "abc is een gewoon woord"
 
 
+# Een sleutel uit een verzoek is door een aanvaller te kiezen. Zonder vormeis kan
+# iemand gewone logtekst opgeven en die tijdens zijn eigen verzoek onzichtbaar
+# maken — het vangnet tegen sleutellekken wordt dan een middel om sporen te
+# wissen. Deze waarden moeten dus genegeerd worden.
+@pytest.mark.parametrize(
+    "kwaadaardig",
+    [
+        pytest.param("85234567", id="kvk-nummer"),
+        pytest.param("Tool-aanroep", id="logfragment"),
+        pytest.param("netbeheerder__verbruik", id="toolnaam-lang-genoeg"),
+        pytest.param("geweigerd", id="woord"),
+        pytest.param("abcdefghijklmnopqrstuvwxyz", id="lang-maar-zonder-cijfers"),
+        pytest.param("12345678901234567890", id="lang-maar-zonder-letters"),
+    ],
+)
+def test_logtekst_als_sleutel_wordt_niet_geregistreerd(kwaadaardig):
+    regel = "Tool-aanroep [claude]: netbeheerder__verbruik kvk 85234567 geweigerd"
+    with geheim_geregistreerd(kwaadaardig):
+        assert redigeer(regel) == regel
+
+
+def test_echte_sleutelvormen_worden_wel_geregistreerd():
+    """De vormeis mag geen realistische sleutel buitensluiten."""
+    for echt in [
+        "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",          # UbiOps-achtig, 32 hex
+        "sk-ant-api03-AbCdEf1234567890xyz",           # Anthropic
+        "ubiops-token-9f8e7d6c5b4a3210",              # met streepjes
+    ]:
+        with geheim_geregistreerd(echt):
+            assert echt not in redigeer(f"fout: {echt}"), echt
+
+
 def test_registreer_geheim_is_blijvend():
     registreer_geheim("SERVER-SLEUTEL-abcdefgh")
     assert "SERVER-SLEUTEL-abcdefgh" not in redigeer("fout: SERVER-SLEUTEL-abcdefgh")

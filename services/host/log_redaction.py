@@ -34,16 +34,36 @@ REDACTIE = "[SLEUTEL-GEREDIGEERD]"
 # andere niet weghalen.
 _geheimen: Counter = Counter()
 
-# Onder deze lengte registreren we niets: een kort fragment zou gewone tekst
-# kunnen raken. Sluit aan op de ondergrens van `api._valideer_sleutel`.
+# Twee drempels, omdat de herkomst verschilt.
+#
+# Een server-env-sleutel komt van de beheerder: die vertrouwen we, een lengte-
+# check volstaat.
+#
+# Een sleutel uit een verzoek komt van de gebruiker, en die is dus door een
+# aanvaller te kiezen. Zou elke opgegeven waarde geredigeerd worden, dan kan
+# iemand gewone logtekst opgeven ("Tool-aanroep", een KvK-nummer) en die tijdens
+# zijn eigen verzoek onzichtbaar maken — een vangnet tegen sleutellekken zou dan
+# een middel worden om sporen te wissen. Daarom moet zo'n waarde er ook als een
+# sleutel uitzien: lang genoeg, en een mengsel van letters en cijfers. Dat sluit
+# natuurlijke logtekst uit en laat elke realistische API-sleutel door.
 _MIN_GEHEIM_LENGTE = 8
+_MIN_GEHEIM_LENGTE_ONVERTROUWD = 20
+
+
+def _lijkt_op_een_sleutel(waarde: str) -> bool:
+    """Streng genoeg dat gewone logtekst niet als 'geheim' geregistreerd raakt."""
+    return (
+        len(waarde) >= _MIN_GEHEIM_LENGTE_ONVERTROUWD
+        and any(c.isdigit() for c in waarde)
+        and any(c.isalpha() for c in waarde)
+    )
 
 
 def registreer_geheim(waarde: str) -> None:
     """Registreer een sleutel die voor de rest van het proces bestaat.
 
     Voor de server-env-sleutels: die leven zo lang als de host en kunnen in een
-    bibliotheek-traceback opduiken.
+    bibliotheek-traceback opduiken. Herkomst is de beheerder, niet een verzoek.
     """
     if waarde and len(waarde) >= _MIN_GEHEIM_LENGTE:
         _geheimen[waarde] += 1
@@ -51,12 +71,13 @@ def registreer_geheim(waarde: str) -> None:
 
 @contextmanager
 def geheim_geregistreerd(waarde: str):
-    """Registreer een sleutel voor de duur van één verzoek en haal 'm daarna weg.
+    """Registreer een sleutel uit een verzoek, alleen voor de duur daarvan.
 
     Zo houdt de redactie de sleutel niet langer vast dan de LLM-client zelf
-    (PDR-010: een sleutel overleeft het verzoek niet).
+    (PDR-010: een sleutel overleeft het verzoek niet). Waarden die niet op een
+    sleutel lijken worden genegeerd — zie de toelichting bij de drempels.
     """
-    if not waarde or len(waarde) < _MIN_GEHEIM_LENGTE:
+    if not waarde or not _lijkt_op_een_sleutel(waarde):
         yield
         return
     _geheimen[waarde] += 1

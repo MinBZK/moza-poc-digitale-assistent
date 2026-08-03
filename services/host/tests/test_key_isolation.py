@@ -27,8 +27,12 @@ import vlam_host
 
 KVK_A = "85234567"
 KVK_B = "62345681"
-KEY_A = "sleutel-van-A"
-KEY_B = "sleutel-van-B"
+# Bewust vormloos (geen `sk-`-voorvoegsel), zoals een VLAM/UbiOps-token: dat is
+# het geval dat patroonherkenning niet ziet. Wel lang genoeg en een mengsel van
+# letters en cijfers, want anders wordt de waarde — terecht — niet als sleutel
+# geregistreerd bij het log-vangnet.
+KEY_A = "vlamtoken-a1b2c3d4e5f6a7b8c9d0"
+KEY_B = "vlamtoken-9z8y7x6w5v4u3t2s1r0q"
 
 
 class _FakeClaude:
