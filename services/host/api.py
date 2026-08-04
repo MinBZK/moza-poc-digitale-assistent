@@ -283,7 +283,15 @@ async def chat_stream(body: ChatRequest, request: Request):
     session_id = body.session_id or str(uuid.uuid4())
     VALID_MODES = ("vlam", "claude", "cli:vlam", "cli:claude")
     mode = body.mode if body.mode in VALID_MODES else "vlam"
-    logging.getLogger("vlam.api").info("POST /chat/stream — mode=%r (raw=%r)", mode, body.mode)
+    # Log de gevalideerde mode, en van de rauwe waarde alleen of die afweek —
+    # niet de waarde zelf. Die komt ongefilterd uit het verzoek en had geen
+    # lengtegrens: een `mode` van 64 KB hield de logverwerking tientallen
+    # seconden bezig en daarmee de hele event loop (zie log_redaction.py).
+    logging.getLogger("vlam.api").info(
+        "POST /chat/stream — mode=%r%s",
+        mode,
+        "" if body.mode == mode else " (afwijkende mode gevraagd, teruggevallen)",
+    )
 
     if not session_kvk:
         # Hard blokkeren zonder geldige sessie: nette melding, geen LLM/bron.

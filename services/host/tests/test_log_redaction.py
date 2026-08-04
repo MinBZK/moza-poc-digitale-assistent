@@ -8,6 +8,7 @@ bewust niet aanraakt (KvK-nummers, sessie-ID's, gewone tekst).
 
 import io
 import logging
+import time
 
 import pytest
 
@@ -140,6 +141,41 @@ def test_echte_sleutelvormen_worden_wel_geregistreerd():
 def test_registreer_geheim_is_blijvend():
     registreer_geheim("SERVER-SLEUTEL-abcdefgh")
     assert "SERVER-SLEUTEL-abcdefgh" not in redigeer("fout: SERVER-SLEUTEL-abcdefgh")
+
+
+# --- Terugkrabbelen begrensd houden ------------------------------------------
+
+
+def test_redactie_blijft_lineair_op_vijandige_invoer():
+    """Regressie op py/polynomial-redos (CodeQL, PR #44).
+
+    Een onbegrensde `*` vóór een literal gaf kwadratisch terugkrabbelen: 4x de
+    tijd bij 2x de invoer, en 16k tekens kostte ~1,7 s. Omdat er logregels zijn
+    met door de gebruiker aangeleverde tekst was dat een DoS-route — de event
+    loop stond stil zolang de logregel verwerkt werd.
+
+    We meten de vórm van de groei, niet een absolute drempel: die zou op een
+    trage of belaste machine vals alarm geven. Bij kwadratisch gedrag is de
+    verhouding ~4; lineair is ~2. Alles onder 3 is ruim genoeg om het verschil
+    te zien zonder gevoelig te zijn voor ruis.
+    """
+    vijandig = "a-"  # koppeltekens: woordgrenzen én binnen de tekenklasse
+
+    def duur(n: int) -> float:
+        tekst = vijandig * n
+        start = time.perf_counter()
+        for _ in range(3):
+            redigeer(tekst)
+        return (time.perf_counter() - start) / 3
+
+    basis = duur(4000)
+    dubbel = duur(8000)
+    # Ondergrens tegen deling door bijna-nul op een erg snelle machine.
+    verhouding = dubbel / max(basis, 1e-6)
+    assert verhouding < 3, (
+        f"redactie schaalt superlineair ({verhouding:.1f}x bij dubbele invoer); "
+        "staat er weer een onbegrensde herhaling vóór een literal?"
+    )
 
 
 def _logger_met_buffer(naam: str):

@@ -89,23 +89,51 @@ def geheim_geregistreerd(waarde: str):
             del _geheimen[waarde]
 
 # Elk patroon vervangt óf de hele match, óf alles ná groep 1 (het "label").
+#
+# Alle herhalingen zijn bovenbegrensd, en dat is geen stijlkeuze. Een onbegrensde
+# `*` of `{n,}` vóór een literal geeft polynomiaal terugkrabbelen: de eerdere
+# versie van het api-key-patroon deed er op invoer als "a-a-a-…" viermaal zo lang
+# over bij tweemaal zoveel tekens (16k tekens ≈ 1,7 s). Omdat er logregels zijn
+# die door de gebruiker aangeleverde tekst bevatten, was dat een DoS-route: één
+# verzoek van 64 KB hield de event loop ruim 30 seconden bezet. Met een
+# bovengrens is het aantal terugkrabbelstappen per positie constant en dus
+# lineair in de lengte van de regel. CodeQL merkt dit aan als py/polynomial-redos.
+#
+# De bovengrenzen liggen ruim boven elke realistische sleutel (256 tekens; een
+# Anthropic-sleutel is er ~100).
+_MAX = 256
+
 _PATRONEN: list[tuple[re.Pattern, bool]] = [
     # Anthropic: sk-ant-... (ook admin-/oauth-varianten)
-    (re.compile(r"sk-ant-[A-Za-z0-9._\-]{6,}"), False),
+    (re.compile(rf"sk-ant-[A-Za-z0-9._\-]{{6,{_MAX}}}"), False),
     # OpenAI-stijl: sk-... / sk-proj-...
-    (re.compile(r"\bsk-[A-Za-z0-9._\-]{16,}"), False),
+    (re.compile(rf"\bsk-[A-Za-z0-9._\-]{{16,{_MAX}}}"), False),
     # JWT: drie base64url-segmenten, begint bij een JSON-header ({"alg" → eyJ).
     # Distinctief genoeg om zonder label te redigeren.
-    (re.compile(r"\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}(?:\.[A-Za-z0-9_\-]+)?"), False),
-    # Token-achtige headers: "Token <x>", "X-Api-Token: <x>"
-    (re.compile(r"(?i)\b(token['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9._\-]{8,}"), True),
-    # Authorization: Bearer <token>
-    (re.compile(r"(?i)\b(bearer\s+)[A-Za-z0-9._\-]{8,}"), True),
-    # Toewijzingen: api_key=..., apikey: "...", x-claude-api-key: ...
     (
         re.compile(
-            r"(?i)\b([a-z0-9\-]*api[-_]?key['\"]?\s*[:=]\s*['\"]?)"
-            r"[A-Za-z0-9._\-]{8,}"
+            rf"\beyJ[A-Za-z0-9_\-]{{8,{_MAX}}}\.[A-Za-z0-9_\-]{{8,{_MAX}}}"
+            rf"(?:\.[A-Za-z0-9_\-]{{0,{_MAX}}})?"
+        ),
+        False,
+    ),
+    # Token-achtige headers: "Token <x>", "X-Api-Token: <x>"
+    (
+        re.compile(rf"(?i)\b(token['\"]?[ \t]{{0,4}}[:=][ \t]{{0,4}}['\"]?)[A-Za-z0-9._\-]{{8,{_MAX}}}"),
+        True,
+    ),
+    # Authorization: Bearer <token>
+    (
+        re.compile(rf"(?i)\b(bearer[ \t]{{1,4}})[A-Za-z0-9._\-]{{8,{_MAX}}}"),
+        True,
+    ),
+    # Toewijzingen: api_key=..., apikey: "...", x-claude-api-key: ...
+    # De prefix vóór "api" is bewust kort begrensd: dat dekt headernamen als
+    # "x-claude-" en houdt het terugkrabbelen constant.
+    (
+        re.compile(
+            rf"(?i)\b([a-z0-9\-]{{0,20}}api[-_]?key['\"]?[ \t]{{0,4}}[:=][ \t]{{0,4}}['\"]?)"
+            rf"[A-Za-z0-9._\-]{{8,{_MAX}}}"
         ),
         True,
     ),

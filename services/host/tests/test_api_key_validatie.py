@@ -139,3 +139,24 @@ def test_validator_laat_een_normale_sleutel_door():
 
 def test_validator_beschouwt_leeg_als_geen_override():
     assert api._valideer_sleutel("", "x-claude-api-key") == ""
+
+
+def test_rauwe_mode_wordt_niet_in_de_log_geëchood(caplog, _sessie_en_recorder):
+    """Regressie: `body.mode` ging ongefilterd en zonder lengtegrens de log in.
+
+    Dat was de route waarlangs een verzoek van 64 KB de logverwerking — en
+    daarmee de event loop — tientallen seconden bezet hield (CodeQL
+    py/polynomial-redos op de redactiepatronen). De logregel noemt nu alleen de
+    gevalideerde mode plus of er iets afwijkends gevraagd werd.
+    """
+    kwaadaardig = "a-" * 500
+    with caplog.at_level("INFO", logger="vlam.api"):
+        r = client.post(
+            "/chat/stream",
+            json={"message": "hoi", "mode": kwaadaardig},
+            headers={"X-Test-User": KVK},
+        )
+    assert r.status_code == 200
+    assert kwaadaardig not in caplog.text
+    assert "afwijkende mode" in caplog.text  # wél zichtbaar dát het afweek
+    assert "'vlam'" in caplog.text  # en waarop is teruggevallen
