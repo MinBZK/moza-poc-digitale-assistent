@@ -258,8 +258,15 @@ async def chat(body: ChatRequest, request: Request):
     mode = body.mode if body.mode in VALID_MODES else "vlam"
     try:
         api_keys = _extract_api_keys(request)
-    except OngeldigeSleutel as e:
-        raise HTTPException(status_code=400, detail=str(e)) from None
+    except OngeldigeSleutel:
+        # Bewust de vaste tekst en niet `str(e)`: de respons hoort niet aan de
+        # inhoud van een exception te hangen (CodeQL py/stack-trace-exposure).
+        # Vandaag is die inhoud onze eigen generieke melding, maar dat breekt
+        # zodra iemand deze exception ergens anders met andere tekst opwerpt.
+        # De reden staat al server-side in de log, met de headernaam erbij.
+        raise HTTPException(
+            status_code=400, detail=ONGELDIGE_SLEUTEL_MELDING
+        ) from None
     reply = await host.chat(
         session_id, body.message, mode=mode, session_kvk=session_kvk, **api_keys
     )
@@ -299,9 +306,10 @@ async def chat_stream(body: ChatRequest, request: Request):
 
     try:
         api_keys = _extract_api_keys(request)
-    except OngeldigeSleutel as e:
+    except OngeldigeSleutel:
         # Geen 400 maar een error-event: de UI leest deze route als SSE.
-        return _sse_enkel_bericht(str(e), "error")
+        # En de vaste tekst i.p.v. `str(e)`, om dezelfde reden als bij /chat.
+        return _sse_enkel_bericht(ONGELDIGE_SLEUTEL_MELDING, "error")
 
     async def event_generator():
         async for event in host.chat_stream(

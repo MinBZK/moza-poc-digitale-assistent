@@ -141,6 +141,31 @@ def test_validator_beschouwt_leeg_als_geen_override():
     assert api._valideer_sleutel("", "x-claude-api-key") == ""
 
 
+@pytest.mark.parametrize("pad", ["/chat", "/chat/stream"])
+def test_exception_inhoud_bereikt_de_client_nooit(monkeypatch, pad, _sessie_en_recorder):
+    """Regressie op CodeQL py/stack-trace-exposure (PR #44).
+
+    De endpoints gaven `str(e)` terug. Vandaag is dat onze eigen generieke
+    melding, dus onschuldig — maar het koppelt de respons aan de inhoud van een
+    exception, en dat breekt zodra die exception ergens anders met andere tekst
+    wordt opgeworpen. Deze test bewijst de eigenschap zelf: wát er ook in de
+    exception zit, de client krijgt alleen de vaste tekst.
+    """
+
+    def _lekkende_validatie(waarde, header):
+        raise api.OngeldigeSleutel(
+            "INTERN: /opt/app/services/host/api.py regel 42, sleutel sk-ant-GEHEIM"
+        )
+
+    monkeypatch.setattr(api, "_valideer_sleutel", _lekkende_validatie)
+    r = client.post(pad, json={"message": "hoi"}, headers=_headers(GEHEIM))
+
+    assert "INTERN" not in r.text
+    assert "api.py" not in r.text
+    assert "sk-ant-GEHEIM" not in r.text
+    assert api.ONGELDIGE_SLEUTEL_MELDING in r.text
+
+
 def test_rauwe_mode_wordt_niet_in_de_log_geëchood(caplog, _sessie_en_recorder):
     """Regressie: `body.mode` ging ongefilterd en zonder lengtegrens de log in.
 
