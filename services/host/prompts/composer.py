@@ -45,12 +45,35 @@ def _load_examples() -> list[str]:
     ]
 
 
-def compose_system_prompt(mode: str, has_tools: bool) -> str:
+def _compose_bronnen_status(bronnen_offline: list[str]) -> str | None:
+    """Build the block listing the sources that are currently unavailable.
+
+    Without this the model has no idea a source is missing: it either invents an
+    answer or reports a vague failure. Labels and alternatives are reused from
+    the error catalogue (`errors.py`) so the wording matches what the user sees
+    when a source fails mid-conversation.
+    """
+    if not bronnen_offline:
+        return None
+    from errors import BRON_ALTERNATIEF, BRON_LABELS
+
+    regels = [
+        f"- {BRON_LABELS.get(bron, bron)} - alternatief voor de gebruiker: "
+        f"{BRON_ALTERNATIEF.get(bron, 'de website van de betreffende instantie')}"
+        for bron in bronnen_offline
+    ]
+    return _load("shared/bronnen_status.md").replace("{bronnen}", "\n".join(regels))
+
+
+def compose_system_prompt(
+    mode: str, has_tools: bool, bronnen_offline: list[str] | None = None
+) -> str:
     """Assemble the system prompt from modular blocks.
 
     Args:
         mode: "vlam" or "claude".
         has_tools: Whether MCP tools are available.
+        bronnen_offline: Sources that failed to start, by server name.
 
     Returns:
         Complete system prompt string.
@@ -72,6 +95,11 @@ def compose_system_prompt(mode: str, has_tools: bool) -> str:
         blocks.extend(_load_domain_blocks())
     else:
         blocks.append(_load("shared/no_tools.md"))
+
+    # 3b. Welke bronnen nu uitliggen (alleen als er iets uitligt)
+    status = _compose_bronnen_status(bronnen_offline or [])
+    if status:
+        blocks.append(status)
 
     # 4. Model-specific hints (optional fine-tuning per model)
     hint = _load_if_exists(f"model_specific/{mode}_hints.md")

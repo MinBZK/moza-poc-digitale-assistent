@@ -20,10 +20,12 @@ from pydantic import BaseModel
 from config import (
     ALLOW_API_KEY_OVERRIDE,
     ALLOWED_ORIGINS,
+    MAX_VRAAG_TEKENS,
     VLAM_HOST,
     VLAM_PORT,
     kvk_uit_header,
 )
+from errors import FoutMelding, maak_fout, naar_event
 from vlam_host import VLAMHost
 
 logging.basicConfig(
@@ -99,10 +101,36 @@ class ToolInfo(BaseModel):
 
 # Nette melding als er geen geldige sessie is (MVP-01/PDR-009). De host raadpleegt
 # dan géén bron en roept het LLM niet aan; de identiteit wordt server-side bepaald.
-GEEN_SESSIE_MELDING = (
-    "Log eerst in om uw bedrijfsgegevens te kunnen gebruiken. "
-    "Zonder geldige sessie raadpleegt de assistent geen overheidsbronnen."
-)
+# De tekst komt uit de foutcatalogus, zodat er één plek is waar meldingen staan.
+GEEN_SESSIE_MELDING = maak_fout("GEEN_SESSIE").tekst
+
+
+def _controleer_vraag(bericht: str) -> FoutMelding | None:
+    """Weiger een lege of buitensporig lange vraag met een concrete melding.
+
+    Zonder deze check gaat een leeg bericht gewoon naar het LLM en komt de
+    gebruiker verderop uit bij een vage fout; een bericht zonder bovengrens
+    belandt ongelezen in de gespreksgeschiedenis.
+    """
+    if not (bericht or "").strip():
+        return maak_fout("LEGE_VRAAG")
+    if len(bericht) > MAX_VRAAG_TEKENS:
+        return maak_fout("VRAAG_TE_LANG", maximum=f"{MAX_VRAAG_TEKENS} tekens")
+    return None
+
+
+def _sse_melding(payload: dict) -> StreamingResponse:
+    """Stuur één event plus `done` terug, zonder het LLM of een bron te raken."""
+
+    async def generator():
+        yield f"event: {payload['type']}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+        yield 'event: done\ndata: {"type": "done"}\n\n'
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 def _resolve_session_kvk(request: Request) -> str | None:
@@ -134,6 +162,9 @@ async def chat(body: ChatRequest, request: Request):
     session_kvk = _resolve_session_kvk(request)
     if not session_kvk:
         raise HTTPException(status_code=401, detail=GEEN_SESSIE_MELDING)
+    fout = _controleer_vraag(body.message)
+    if fout:
+        raise HTTPException(status_code=fout.http_status, detail=fout.tekst)
     session_id = body.session_id or str(uuid.uuid4())
     VALID_MODES = ("vlam", "claude", "cli:vlam", "cli:claude")
     mode = body.mode if body.mode in VALID_MODES else "vlam"
@@ -166,18 +197,13 @@ async def chat_stream(body: ChatRequest, request: Request):
 
     if not session_kvk:
         # Hard blokkeren zonder geldige sessie: nette melding, geen LLM/bron.
-        async def blocked_generator():
-            payload = json.dumps(
-                {"type": "answer", "message": GEEN_SESSIE_MELDING}, ensure_ascii=False
-            )
-            yield f"event: answer\ndata: {payload}\n\n"
-            yield 'event: done\ndata: {"type": "done"}\n\n'
+        # Blijft een `answer`-event: de frontend toont dat als gewone tekst en
+        # niet als storing, want dit is geen fout maar een instructie.
+        return _sse_melding({"type": "answer", "message": GEEN_SESSIE_MELDING})
 
-        return StreamingResponse(
-            blocked_generator(),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-        )
+    fout = _controleer_vraag(body.message)
+    if fout:
+        return _sse_melding(naar_event(fout))
 
     async def event_generator():
         async for event in host.chat_stream(

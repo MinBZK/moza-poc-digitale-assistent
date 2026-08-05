@@ -252,8 +252,39 @@ sequenceDiagram
     KOOP->>SRU: GET zoekservice.overheid.nl/sru/Search...
     SRU--xKOOP: timeout / 503
     KOOP-->>Host: error: SOURCE_UNAVAILABLE
-    Host->>Gebruiker: "De KOOP Regelingenbank is op dit moment<br/>niet bereikbaar. U kunt het rechtstreeks<br/>proberen via wetten.overheid.nl."
+    Host->>Gebruiker: "De regelgeving-database (KOOP Regelingenbank)<br/>is op dit moment niet bereikbaar. Probeer het<br/>over een minuut opnieuw, of kijk rechtstreeks<br/>op wetten.overheid.nl."
 ```
+
+De melding komt uit de foutcatalogus in `services/host/errors.py`
+([PDR-011](decisions/PDR-011-foutmeldingen-catalogus.md)) en bestaat altijd uit
+twee delen: **wat er gebeurde** en **wat de gebruiker kan doen**. De host
+vertaalt de foutcode van de bron; het LLM krijgt de melding mét de instructie om
+niets te verzinnen, en de technische oorzaak blijft in de log.
+
+Wat de gebruiker per situatie ziet:
+
+| Situatie | Foutcode | Wat de gebruiker ziet |
+|---|---|---|
+| Bron reageert niet of geeft 5xx | `SOURCE_UNAVAILABLE` | naam van de bron + het alternatief (bijv. wetten.overheid.nl) |
+| Bron kwam bij het starten niet op | `BRON_NIET_GESTART` | welke bron ontbreekt, dat de andere bronnen wél werken |
+| Bron vindt niets | `NIET_GEVONDEN` | waar niets is gevonden, met het advies een algemener trefwoord te proberen |
+| Bron mist een gegeven | `ONTBREKEND_VELD` | welk gegeven ontbreekt |
+| LLM te traag | `LLM_TIMEOUT` | hoelang er is gewacht, met het advies de vraag korter te stellen |
+| LLM-sleutel geweigerd | `LLM_SLEUTEL_ONGELDIG` | dat de sleutel niet wordt geaccepteerd (opnieuw proberen heeft geen zin) |
+| LLM overbelast of rate limit | `LLM_OVERBELAST` / `LLM_TE_DRUK` | dat het tijdelijk is, met het advies het over een minuut te proberen |
+| Gesprek te lang voor het model | `LLM_GESPREK_TE_LANG` | het advies een nieuw gesprek te beginnen |
+| Te veel stappen nodig | `LLM_MAX_STAPPEN` | het advies de vraag op te splitsen, met een voorbeeld |
+| Lege of te lange vraag | `LEGE_VRAAG` / `VRAAG_TE_LANG` | wat er mis is met de invoer, vóór er een bron of LLM wordt geraakt |
+| Geen geldige sessie | `GEEN_SESSIE` | dat er eerst ingelogd moet worden ([PDR-009](decisions/PDR-009-sessie-identiteit-host-side.md)) |
+
+Ligt een bron er al bij het starten uit, dan komt dat ook in de systeemprompt te
+staan (`prompts/blocks/shared/bronnen_status.md`), zodat de assistent er niet
+overheen praat en niet terugvalt op eigen kennis.
+
+Het SSE-`error`-event draagt naast `message` (de volledige zin) ook `code`,
+`bericht`, `actie`, `bron` en `herstelbaar`, zodat de frontend een retry-knop of
+een bron-vermelding kan tonen. Valt een bron uit terwijl het gesprek doorloopt,
+dan stuurt de host een `bron_fout`-event; het antwoord zelf volgt daarna gewoon.
 
 ## Mappenstructuur
 
@@ -276,6 +307,7 @@ moza-poc-digitale-assistent/
       mcp_client.py         MCP-server verbindingen
       cli_executor.py       CLI tool-aanroepen via subprocess
       config.py             Configuratie
+      errors.py             Foutcatalogus (melding + actie per foutcode)
       prompts/              Modulaire systeemprompts
         composer.py         Stelt blokken samen tot system prompt
         blocks/

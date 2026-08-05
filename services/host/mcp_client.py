@@ -9,6 +9,8 @@ from pathlib import Path
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+from errors import bron_uit_tool
+
 logger = logging.getLogger("vlam.mcp_client")
 
 # Alleen deze env-vars gaan naar MCP-subprocessen. Bewust GEEN LLM-sleutels
@@ -184,7 +186,13 @@ class MCPToolRegistry:
     async def call_tool(self, tool_key: str, arguments: dict) -> str:
         """Roep een tool aan via de juiste server."""
         if tool_key not in self.tool_map:
-            return f"Onbekende tool: {tool_key}"
+            # Een bron die bij startup niet opkwam heeft geen tools in de
+            # registry: de aanroep landt hier. Onderscheid maken tussen "bron
+            # ligt eruit" en "deze tool bestaat helemaal niet" scheelt de
+            # gebruiker een zoektocht — het eerste gaat vanzelf over.
+            code = "BRON_NIET_GESTART" if bron_uit_tool(tool_key) else "ONBEKENDE_TOOL"
+            logger.warning("Tool niet in de registry: %s (%s)", tool_key, code)
+            return json.dumps({"error": code}, ensure_ascii=False)
 
         server_name, _ = self.tool_map[tool_key]
         # Haal de originele tool-naam terug (zonder server-prefix)
