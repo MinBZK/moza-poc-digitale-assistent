@@ -16,24 +16,24 @@ def _draai(monkeypatch, caplog, origins, override):
     monkeypatch.setattr(api, "ALLOWED_ORIGINS", origins)
     monkeypatch.setattr(api, "ALLOW_API_KEY_OVERRIDE", override)
     with caplog.at_level("WARNING", logger="vlam.api"):
-        api.controleer_origin_grens()
+        api.check_origin_boundary()
     return caplog.text
 
 
 def test_ster_waarschuwt(monkeypatch, caplog):
-    tekst = _draai(monkeypatch, caplog, ["*"], False)
-    assert "ALLOWED_ORIGINS staat op '*'" in tekst
+    text = _draai(monkeypatch, caplog, ["*"], False)
+    assert "ALLOWED_ORIGINS staat op '*'" in text
 
 
 def test_ster_met_override_benoemt_de_combinatie(monkeypatch, caplog):
-    tekst = _draai(monkeypatch, caplog, ["*"], True)
-    assert "eigen sleutel" in tekst
+    text = _draai(monkeypatch, caplog, ["*"], True)
+    assert "eigen sleutel" in text
 
 
 def test_ster_zonder_override_benoemt_de_combinatie_niet(monkeypatch, caplog):
-    tekst = _draai(monkeypatch, caplog, ["*"], False)
-    assert "ALLOWED_ORIGINS staat op '*'" in tekst
-    assert "eigen sleutel" not in tekst
+    text = _draai(monkeypatch, caplog, ["*"], False)
+    assert "ALLOWED_ORIGINS staat op '*'" in text
+    assert "eigen sleutel" not in text
 
 
 def test_leeg_is_de_strikte_stand_en_waarschuwt_niet(monkeypatch, caplog):
@@ -41,10 +41,10 @@ def test_leeg_is_de_strikte_stand_en_waarschuwt_niet(monkeypatch, caplog):
 
 
 def test_concrete_whitelist_waarschuwt_niet(monkeypatch, caplog):
-    tekst = _draai(monkeypatch, caplog, ["https://moza.overheid.nl"], True)
-    assert tekst == ""
+    text = _draai(monkeypatch, caplog, ["https://moza.overheid.nl"], True)
+    assert text == ""
 
 
 def test_whitelist_met_ster_ertussen_waarschuwt_wel(monkeypatch, caplog):
-    tekst = _draai(monkeypatch, caplog, ["https://moza.overheid.nl", "*"], True)
-    assert "ALLOWED_ORIGINS staat op '*'" in tekst
+    text = _draai(monkeypatch, caplog, ["https://moza.overheid.nl", "*"], True)
+    assert "ALLOWED_ORIGINS staat op '*'" in text

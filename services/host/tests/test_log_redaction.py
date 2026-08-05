@@ -13,12 +13,12 @@ import time
 import pytest
 
 from log_redaction import (
-    REDACTIE,
-    RedigerendeFormatter,
-    geheim_geregistreerd,
-    installeer_redactie,
-    redigeer,
-    registreer_geheim,
+    REDACTED,
+    RedactingFormatter,
+    install_redaction,
+    redact,
+    redact_always,
+    redact_temporarily,
 )
 
 SLEUTEL = "sk-ant-api03-ZEERGEHEIM1234567890abcdefg"
@@ -28,7 +28,7 @@ VORMLOOS = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
 
 
 @pytest.mark.parametrize(
-    "regel",
+    "line",
     [
         pytest.param(f"Claude-call mislukt: {SLEUTEL}", id="anthropic-sleutel"),
         pytest.param(f"Illegal header value b'{SLEUTEL}'", id="in-foutmelding"),
@@ -42,16 +42,16 @@ VORMLOOS = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
         pytest.param("x-claude-api-key: abcdefghijklmnop", id="headernaam"),
     ],
 )
-def test_redigeert_sleutelvormen(regel):
-    resultaat = redigeer(regel)
-    assert REDACTIE in resultaat
-    assert "ZEERGEHEIM" not in resultaat
-    assert "abcdefghijklmnop" not in resultaat
-    assert "eyJhbGciOiJIUzI1NiJ9" not in resultaat
+def test_redigeert_sleutelvormen(line):
+    result = redact(line)
+    assert REDACTED in result
+    assert "ZEERGEHEIM" not in result
+    assert "abcdefghijklmnop" not in result
+    assert "eyJhbGciOiJIUzI1NiJ9" not in result
 
 
 @pytest.mark.parametrize(
-    "regel",
+    "line",
     [
         # Bewust geen entropie-heuristiek: dit zou anders vals-positief raken.
         "Tool-aanroep [claude]: kvk__mijn_bedrijf (velden: ['naam'])",
@@ -61,8 +61,8 @@ def test_redigeert_sleutelvormen(regel):
         "GET /health HTTP/1.1 200",
     ],
 )
-def test_laat_gewone_logregels_ongemoeid(regel):
-    assert redigeer(regel) == regel
+def test_laat_gewone_logregels_ongemoeid(line):
+    assert redact(line) == line
 
 
 # --- Sleutels die we bij naam kennen -----------------------------------------
@@ -74,36 +74,36 @@ def test_laat_gewone_logregels_ongemoeid(regel):
 
 def test_vormloos_token_ontsnapt_zonder_registratie():
     """Vastleggen wat patroonherkenning niet kan: dit is de reden voor het register."""
-    assert VORMLOOS in redigeer(f"call mislukt: {VORMLOOS}")
+    assert VORMLOOS in redact(f"call mislukt: {VORMLOOS}")
 
 
 def test_geregistreerd_geheim_wordt_wel_geredigeerd():
-    with geheim_geregistreerd(VORMLOOS):
-        resultaat = redigeer(f"call mislukt: {VORMLOOS}")
-    assert VORMLOOS not in resultaat
-    assert REDACTIE in resultaat
+    with redact_temporarily(VORMLOOS):
+        result = redact(f"call mislukt: {VORMLOOS}")
+    assert VORMLOOS not in result
+    assert REDACTED in result
 
 
 def test_registratie_stopt_na_het_verzoek():
-    with geheim_geregistreerd(VORMLOOS):
+    with redact_temporarily(VORMLOOS):
         pass
-    assert VORMLOOS in redigeer(f"call mislukt: {VORMLOOS}")
+    assert VORMLOOS in redact(f"call mislukt: {VORMLOOS}")
 
 
 def test_twee_verzoeken_met_dezelfde_sleutel_storen_elkaar_niet():
     """Het aflopen van het ene verzoek mag de registratie van het andere niet wissen."""
-    with geheim_geregistreerd(VORMLOOS):
-        with geheim_geregistreerd(VORMLOOS):
+    with redact_temporarily(VORMLOOS):
+        with redact_temporarily(VORMLOOS):
             pass
         # Het binnenste verzoek is klaar, het buitenste nog niet.
-        assert VORMLOOS not in redigeer(f"fout: {VORMLOOS}")
-    assert VORMLOOS in redigeer(f"fout: {VORMLOOS}")
+        assert VORMLOOS not in redact(f"fout: {VORMLOOS}")
+    assert VORMLOOS in redact(f"fout: {VORMLOOS}")
 
 
 def test_te_korte_waarde_wordt_niet_geregistreerd():
     """Anders zou een kort fragment gewone logtekst kunnen verminken."""
-    with geheim_geregistreerd("abc"):
-        assert redigeer("abc is een gewoon woord") == "abc is een gewoon woord"
+    with redact_temporarily("abc"):
+        assert redact("abc is een gewoon woord") == "abc is een gewoon woord"
 
 
 # Een sleutel uit een verzoek is door een aanvaller te kiezen. Zonder vormeis kan
@@ -111,7 +111,7 @@ def test_te_korte_waarde_wordt_niet_geregistreerd():
 # maken — het vangnet tegen sleutellekken wordt dan een middel om sporen te
 # wissen. Deze waarden moeten dus genegeerd worden.
 @pytest.mark.parametrize(
-    "kwaadaardig",
+    "malicious",
     [
         pytest.param("85234567", id="kvk-nummer"),
         pytest.param("Tool-aanroep", id="logfragment"),
@@ -121,68 +121,62 @@ def test_te_korte_waarde_wordt_niet_geregistreerd():
         pytest.param("12345678901234567890", id="lang-maar-zonder-letters"),
     ],
 )
-def test_logtekst_als_sleutel_wordt_niet_geregistreerd(kwaadaardig):
-    regel = "Tool-aanroep [claude]: netbeheerder__verbruik kvk 85234567 geweigerd"
-    with geheim_geregistreerd(kwaadaardig):
-        assert redigeer(regel) == regel
+def test_logtekst_als_sleutel_wordt_niet_geregistreerd(malicious):
+    line = "Tool-aanroep [claude]: netbeheerder__verbruik kvk 85234567 geweigerd"
+    with redact_temporarily(malicious):
+        assert redact(line) == line
 
 
 def test_echte_sleutelvormen_worden_wel_geregistreerd():
     """De vormeis mag geen realistische sleutel buitensluiten."""
-    for echt in [
+    for real_key in [
         "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",          # UbiOps-achtig, 32 hex
         "sk-ant-api03-AbCdEf1234567890xyz",           # Anthropic
         "ubiops-token-9f8e7d6c5b4a3210",              # met streepjes
     ]:
-        with geheim_geregistreerd(echt):
-            assert echt not in redigeer(f"fout: {echt}"), echt
+        with redact_temporarily(real_key):
+            assert real_key not in redact(f"fout: {real_key}"), real_key
 
 
 def test_registreer_geheim_is_blijvend():
-    registreer_geheim("SERVER-SLEUTEL-abcdefgh")
-    assert "SERVER-SLEUTEL-abcdefgh" not in redigeer("fout: SERVER-SLEUTEL-abcdefgh")
+    redact_always("SERVER-SLEUTEL-abcdefgh")
+    assert "SERVER-SLEUTEL-abcdefgh" not in redact("fout: SERVER-SLEUTEL-abcdefgh")
 
 
 # --- Terugkrabbelen begrensd houden ------------------------------------------
 
 
 def test_redactie_blijft_lineair_op_vijandige_invoer():
-    """Regressie op py/polynomial-redos (CodeQL, PR #44).
-
-    Een onbegrensde `*` vóór een literal gaf kwadratisch terugkrabbelen: 4x de
-    tijd bij 2x de invoer, en 16k tekens kostte ~1,7 s. Omdat er logregels zijn
-    met door de gebruiker aangeleverde tekst was dat een DoS-route — de event
-    loop stond stil zolang de logregel verwerkt werd.
+    """Regressie op kwadratisch terugkrabbelen (py/polynomial-redos).
 
     We meten de vórm van de groei, niet een absolute drempel: die zou op een
-    trage of belaste machine vals alarm geven. Bij kwadratisch gedrag is de
-    verhouding ~4; lineair is ~2. Alles onder 3 is ruim genoeg om het verschil
-    te zien zonder gevoelig te zijn voor ruis.
+    trage machine vals alarm geven. Kwadratisch is ~4x bij dubbele invoer,
+    lineair ~2x.
     """
-    vijandig = "a-"  # koppeltekens: woordgrenzen én binnen de tekenklasse
+    hostile = "a-"  # koppeltekens: woordgrenzen én binnen de tekenklasse
 
-    def duur(n: int) -> float:
-        tekst = vijandig * n
+    def duration(n: int) -> float:
+        text = hostile * n
         start = time.perf_counter()
         for _ in range(3):
-            redigeer(tekst)
+            redact(text)
         return (time.perf_counter() - start) / 3
 
-    basis = duur(4000)
-    dubbel = duur(8000)
+    base = duration(4000)
+    doubled = duration(8000)
     # Ondergrens tegen deling door bijna-nul op een erg snelle machine.
-    verhouding = dubbel / max(basis, 1e-6)
-    assert verhouding < 3, (
-        f"redactie schaalt superlineair ({verhouding:.1f}x bij dubbele invoer); "
+    ratio = doubled / max(base, 1e-6)
+    assert ratio < 3, (
+        f"redactie schaalt superlineair ({ratio:.1f}x bij dubbele invoer); "
         "staat er weer een onbegrensde herhaling vóór een literal?"
     )
 
 
-def _logger_met_buffer(naam: str):
+def _logger_met_buffer(name: str):
     stream = io.StringIO()
     handler = logging.StreamHandler(stream)
     handler.setFormatter(logging.Formatter("%(message)s"))
-    logger = logging.getLogger(naam)
+    logger = logging.getLogger(name)
     logger.handlers = [handler]
     logger.propagate = False
     logger.setLevel(logging.INFO)
@@ -196,7 +190,7 @@ def test_traceback_wordt_ook_geredigeerd():
     dus de traceback zou er ongefilterd doorheen glippen.
     """
     logger, handler, stream = _logger_met_buffer("test.redactie.traceback")
-    handler.setFormatter(RedigerendeFormatter(handler.formatter))
+    handler.setFormatter(RedactingFormatter(handler.formatter))
 
     try:
         raise ValueError(f"Illegal header value b'{SLEUTEL}'")
@@ -206,21 +200,21 @@ def test_traceback_wordt_ook_geredigeerd():
     uitvoer = stream.getvalue()
     assert "Traceback" in uitvoer, "de traceback hoort wél zichtbaar te blijven"
     assert SLEUTEL not in uitvoer
-    assert REDACTIE in uitvoer
+    assert REDACTED in uitvoer
 
 
 def test_installeer_redactie_haakt_aan_en_is_idempotent():
     logger, handler, stream = _logger_met_buffer("test.redactie.installatie")
-    origineel = handler.formatter
+    original = handler.formatter
 
-    installeer_redactie()
-    assert isinstance(handler.formatter, RedigerendeFormatter)
-    assert handler.formatter.binnenste is origineel
+    install_redaction()
+    assert isinstance(handler.formatter, RedactingFormatter)
+    assert handler.formatter.inner is original
 
     # Tweede aanroep mag niet nóg een laag omhullen.
-    installeer_redactie()
-    assert handler.formatter.binnenste is origineel
+    install_redaction()
+    assert handler.formatter.inner is original
 
     logger.info("sleutel %s in een logregel", SLEUTEL)
     assert SLEUTEL not in stream.getvalue()
-    assert REDACTIE in stream.getvalue()
+    assert REDACTED in stream.getvalue()

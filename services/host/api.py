@@ -24,14 +24,14 @@ from config import (
     VLAM_PORT,
     kvk_uit_header,
 )
-from log_redaction import installeer_redactie
+from log_redaction import install_redaction
 from vlam_host import VLAMHost
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
 )
-installeer_redactie()
+install_redaction()
 
 host = VLAMHost()
 
@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
     """Start en stop de VLAM-host met de FastAPI-levenscyclus."""
     # Nogmaals, nu uvicorn zijn eigen loggers heeft opgetuigd: bij `uvicorn.run`
     # vanuit __main__ bestaan die bij import nog niet. De aanroep is idempotent.
-    installeer_redactie()
+    install_redaction()
     await host.startup()
     yield
     await host.shutdown()
@@ -71,21 +71,13 @@ logging.getLogger("vlam.api").info(
 )
 
 
-def controleer_origin_grens() -> None:
-    """Waarschuw luid als de origin-grens wagenwijd openstaat (MVP-02).
+def check_origin_boundary() -> None:
+    """Waarschuw als de origin-grens openstaat (MVP-02).
 
-    Let op de richting: een *lege* `ALLOWED_ORIGINS` is de strikte stand — dan
-    staat er geen enkele cross-origin toegang open. Dat is precies goed voor de
-    deployment, waar de frontend via een same-origin reverse proxy praat en er
-    dus helemaal geen CORS aan te pas komt.
-
-    `*` is het probleem: dan kan elke willekeurige webpagina de browser van een
-    bezoeker dit endpoint laten aanroepen. Met de sleutel-override aan telt daar
-    bij op dat zo'n pagina de assistent ook met een eigen sleutel kan aansturen.
-    Een sleutel van een ánder tabblad kan er niet mee gestolen worden (dat
-    verhindert de browser zelf), maar de host wordt wel een open doorgeefluik.
-
-    Bewust geen harde blokkade: `*` is legitiem tijdens lokale ontwikkeling.
+    Let op de richting: een *lege* `ALLOWED_ORIGINS` is de strikte stand, en de
+    stand voor de deployment (same-origin proxy, dus geen CORS in het spel).
+    `*` is het probleem: dan kan elke webpagina deze host aanroepen. Geen harde
+    blokkade, want `*` is legitiem tijdens lokale ontwikkeling.
     """
     if "*" not in ALLOWED_ORIGINS:
         return
@@ -102,7 +94,7 @@ def controleer_origin_grens() -> None:
     )
 
 
-controleer_origin_grens()
+check_origin_boundary()
 
 
 # --- Request/Response modellen ---
@@ -144,7 +136,7 @@ GEEN_SESSIE_MELDING = (
 )
 
 
-def _sse_enkel_bericht(melding: str, event_type: str) -> StreamingResponse:
+def _sse_single_message(message: str, event_type: str) -> StreamingResponse:
     """Stuur één SSE-bericht + `done`, zonder LLM- of bron-aanroep.
 
     Gebruikt voor de twee hard-blokkeer-routes van `/chat/stream`: geen geldige
@@ -153,7 +145,7 @@ def _sse_enkel_bericht(melding: str, event_type: str) -> StreamingResponse:
 
     async def generator():
         payload = json.dumps(
-            {"type": event_type, "message": melding}, ensure_ascii=False
+            {"type": event_type, "message": message}, ensure_ascii=False
         )
         yield f"event: {event_type}\ndata: {payload}\n\n"
         yield 'event: done\ndata: {"type": "done"}\n\n'
@@ -174,56 +166,48 @@ def _resolve_session_kvk(request: Request) -> str | None:
     return kvk_uit_header(request.headers.get("x-test-user", ""))
 
 
-class OngeldigeSleutel(Exception):
+class InvalidApiKey(Exception):
     """De client stuurde een sleutel-header met een onbruikbare waarde."""
 
 
 # Bewust generiek: de melding mag nooit (een deel van) de waarde bevatten.
-ONGELDIGE_SLEUTEL_MELDING = (
+INVALID_API_KEY_MESSAGE = (
     "De meegegeven API-sleutel heeft een ongeldige vorm. Controleer of u de "
     "sleutel volledig hebt geplakt, zonder spaties of regeleinden."
 )
 
-_MIN_SLEUTEL_LENGTE = 8
-_MAX_SLEUTEL_LENGTE = 512
+_MIN_API_KEY_LENGTH = 8
+_MAX_API_KEY_LENGTH = 512
 
 
-def _valideer_sleutel(waarde: str, header: str) -> str:
+def _validate_api_key(value: str, header: str) -> str:
     """Toets de vorm van een sleutel-header; geef de sleutel terug of faal (MVP-02).
 
-    Drie redenen, in volgorde van hoe reëel ze zijn:
+    Drie redenen, aflopend in hoe reëel ze zijn:
 
-    1. Een niet-ASCII sleutel laat de uitgaande LLM-call stuklopen op een
-       `UnicodeEncodeError`. Die valt buiten `except (TimeoutError, APIError)`
-       en levert dus een onafgevangen 500 of een halverwege afgebroken
-       SSE-stream op. De melding bevat de sleutel niet, maar het is een lelijke
-       faalmodus die we hier goedkoop voorkomen.
-    2. Een sleutel met een stuurteken (bv. een regeleinde) levert bij het
-       opbouwen van het verzoek een fout op waarvan de binnenste melding de
-       *volledige sleutel* bevat ("Illegal header value b'sk-ant-...'"). Over
-       normale HTTP kan zo'n waarde ons niet bereiken — clients en servers
-       weigeren stuurtekens in header-waarden — dus dit is defense-in-depth
-       voor het geval de waarde ooit uit een andere bron komt.
-    3. Plakfouten (spatie erin, half gekopieerd) geven nu een duidelijke melding
-       in plaats van het generieke "de assistent is niet bereikbaar".
+    1. Een niet-ASCII sleutel laat de LLM-call stuklopen op een
+       `UnicodeEncodeError`, buiten `except (TimeoutError, APIError)` om: een
+       onafgevangen 500 of een afgebroken SSE-stream.
+    2. Een stuurteken levert een fout op waarvan de binnenste melding de volledige
+       sleutel bevat. Over HTTP niet bereikbaar, dus defense-in-depth.
+    3. Plakfouten geven nu een bruikbare melding.
 
-    Er wordt bewust niets van de waarde gelogd of teruggegeven — alleen de
-    headernaam en de reden-categorie.
+    Bewust niets van de waarde gelogd of teruggegeven: alleen headernaam en reden.
     """
-    if not waarde:
+    if not value:
         return ""
-    if not (_MIN_SLEUTEL_LENGTE <= len(waarde) <= _MAX_SLEUTEL_LENGTE):
-        reden = "lengte buiten bereik"
-    elif not waarde.isascii() or not waarde.isprintable():
-        reden = "niet-printbare of niet-ASCII tekens"
-    elif any(c.isspace() for c in waarde):
-        reden = "bevat witruimte"
+    if not (_MIN_API_KEY_LENGTH <= len(value) <= _MAX_API_KEY_LENGTH):
+        reason = "lengte buiten bereik"
+    elif not value.isascii() or not value.isprintable():
+        reason = "niet-printbare of niet-ASCII tekens"
+    elif any(c.isspace() for c in value):
+        reason = "bevat witruimte"
     else:
-        return waarde
+        return value
     logging.getLogger("vlam.api").warning(
-        "Sleutel-header %s geweigerd: %s", header, reden
+        "Sleutel-header %s geweigerd: %s", header, reason
     )
-    raise OngeldigeSleutel(ONGELDIGE_SLEUTEL_MELDING)
+    raise InvalidApiKey(INVALID_API_KEY_MESSAGE)
 
 
 def _extract_api_keys(request: Request) -> dict:
@@ -232,16 +216,16 @@ def _extract_api_keys(request: Request) -> dict:
     Alleen actief als ALLOW_API_KEY_OVERRIDE=true in de omgeving.
     Anders worden de headers genegeerd en gebruikt de host de server-env keys.
 
-    Werpt `OngeldigeSleutel` als een header een onbruikbare waarde draagt; de
+    Werpt `InvalidApiKey` als een header een onbruikbare waarde draagt; de
     endpoints vertalen dat naar een nette 400 respectievelijk een error-event.
     """
     if not ALLOW_API_KEY_OVERRIDE:
         return {"vlam_api_key_override": "", "claude_api_key_override": ""}
     return {
-        "vlam_api_key_override": _valideer_sleutel(
+        "vlam_api_key_override": _validate_api_key(
             request.headers.get("x-vlam-api-key", "").strip(), "x-vlam-api-key"
         ),
-        "claude_api_key_override": _valideer_sleutel(
+        "claude_api_key_override": _validate_api_key(
             request.headers.get("x-claude-api-key", "").strip(), "x-claude-api-key"
         ),
     }
@@ -258,14 +242,11 @@ async def chat(body: ChatRequest, request: Request):
     mode = body.mode if body.mode in VALID_MODES else "vlam"
     try:
         api_keys = _extract_api_keys(request)
-    except OngeldigeSleutel:
-        # Bewust de vaste tekst en niet `str(e)`: de respons hoort niet aan de
-        # inhoud van een exception te hangen (CodeQL py/stack-trace-exposure).
-        # Vandaag is die inhoud onze eigen generieke melding, maar dat breekt
-        # zodra iemand deze exception ergens anders met andere tekst opwerpt.
-        # De reden staat al server-side in de log, met de headernaam erbij.
+    except InvalidApiKey:
+        # De vaste tekst, niet `str(e)`: de respons hoort niet aan de inhoud van
+        # een exception te hangen (CodeQL py/stack-trace-exposure).
         raise HTTPException(
-            status_code=400, detail=ONGELDIGE_SLEUTEL_MELDING
+            status_code=400, detail=INVALID_API_KEY_MESSAGE
         ) from None
     reply = await host.chat(
         session_id, body.message, mode=mode, session_kvk=session_kvk, **api_keys
@@ -290,10 +271,8 @@ async def chat_stream(body: ChatRequest, request: Request):
     session_id = body.session_id or str(uuid.uuid4())
     VALID_MODES = ("vlam", "claude", "cli:vlam", "cli:claude")
     mode = body.mode if body.mode in VALID_MODES else "vlam"
-    # Log de gevalideerde mode, en van de rauwe waarde alleen of die afweek —
-    # niet de waarde zelf. Die komt ongefilterd uit het verzoek en had geen
-    # lengtegrens: een `mode` van 64 KB hield de logverwerking tientallen
-    # seconden bezig en daarmee de hele event loop (zie log_redaction.py).
+    # Alleen de gevalideerde mode; de rauwe waarde komt ongefilterd en zonder
+    # lengtegrens uit het verzoek (zie de ReDoS-noot in log_redaction.py).
     logging.getLogger("vlam.api").info(
         "POST /chat/stream — mode=%r%s",
         mode,
@@ -302,14 +281,13 @@ async def chat_stream(body: ChatRequest, request: Request):
 
     if not session_kvk:
         # Hard blokkeren zonder geldige sessie: nette melding, geen LLM/bron.
-        return _sse_enkel_bericht(GEEN_SESSIE_MELDING, "answer")
+        return _sse_single_message(GEEN_SESSIE_MELDING, "answer")
 
     try:
         api_keys = _extract_api_keys(request)
-    except OngeldigeSleutel:
-        # Geen 400 maar een error-event: de UI leest deze route als SSE.
-        # En de vaste tekst i.p.v. `str(e)`, om dezelfde reden als bij /chat.
-        return _sse_enkel_bericht(ONGELDIGE_SLEUTEL_MELDING, "error")
+    except InvalidApiKey:
+        # Error-event i.p.v. 400: de UI leest deze route als SSE.
+        return _sse_single_message(INVALID_API_KEY_MESSAGE, "error")
 
     async def event_generator():
         async for event in host.chat_stream(

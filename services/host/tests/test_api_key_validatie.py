@@ -49,7 +49,7 @@ def _headers(sleutel: str) -> dict:
 # Wat een browser daadwerkelijk over de lijn kan zetten. Stuurtekens en
 # niet-ASCII komen niet door de HTTP-laag heen (de testclient weigert ze al bij
 # het opbouwen van het verzoek), dus die toetsen we een niveau lager, direct op
-# `_valideer_sleutel`.
+# `_validate_api_key`.
 ONGELDIG = [
     pytest.param(f"{GEHEIM} met spatie", id="witruimte"),
     pytest.param("kort", id="te-kort"),
@@ -127,61 +127,56 @@ def test_geweigerde_sleutel_komt_niet_in_de_log(caplog, _sessie_en_recorder):
     ],
 )
 def test_validator_weigert_onbruikbare_waarden(sleutel):
-    with pytest.raises(api.OngeldigeSleutel) as excinfo:
-        api._valideer_sleutel(sleutel, "x-claude-api-key")
+    with pytest.raises(api.InvalidApiKey) as excinfo:
+        api._validate_api_key(sleutel, "x-claude-api-key")
     # De melding aan de gebruiker verklapt niets van de waarde.
     assert "geheim" not in str(excinfo.value)
 
 
 def test_validator_laat_een_normale_sleutel_door():
-    assert api._valideer_sleutel(GEHEIM, "x-claude-api-key") == GEHEIM
+    assert api._validate_api_key(GEHEIM, "x-claude-api-key") == GEHEIM
 
 
 def test_validator_beschouwt_leeg_als_geen_override():
-    assert api._valideer_sleutel("", "x-claude-api-key") == ""
+    assert api._validate_api_key("", "x-claude-api-key") == ""
 
 
 @pytest.mark.parametrize("pad", ["/chat", "/chat/stream"])
 def test_exception_inhoud_bereikt_de_client_nooit(monkeypatch, pad, _sessie_en_recorder):
-    """Regressie op CodeQL py/stack-trace-exposure (PR #44).
+    """Regressie op py/stack-trace-exposure: de respons hangt niet aan `str(e)`.
 
-    De endpoints gaven `str(e)` terug. Vandaag is dat onze eigen generieke
-    melding, dus onschuldig — maar het koppelt de respons aan de inhoud van een
-    exception, en dat breekt zodra die exception ergens anders met andere tekst
-    wordt opgeworpen. Deze test bewijst de eigenschap zelf: wát er ook in de
-    exception zit, de client krijgt alleen de vaste tekst.
+    Bewijst de eigenschap, niet de huidige tekst: wát er ook in de exception
+    zit, de client krijgt alleen de vaste melding.
     """
 
-    def _lekkende_validatie(waarde, header):
-        raise api.OngeldigeSleutel(
+    def _lekkende_validatie(value, header):
+        raise api.InvalidApiKey(
             "INTERN: /opt/app/services/host/api.py regel 42, sleutel sk-ant-GEHEIM"
         )
 
-    monkeypatch.setattr(api, "_valideer_sleutel", _lekkende_validatie)
+    monkeypatch.setattr(api, "_validate_api_key", _lekkende_validatie)
     r = client.post(pad, json={"message": "hoi"}, headers=_headers(GEHEIM))
 
     assert "INTERN" not in r.text
     assert "api.py" not in r.text
     assert "sk-ant-GEHEIM" not in r.text
-    assert api.ONGELDIGE_SLEUTEL_MELDING in r.text
+    assert api.INVALID_API_KEY_MESSAGE in r.text
 
 
 def test_rauwe_mode_wordt_niet_in_de_log_geëchood(caplog, _sessie_en_recorder):
     """Regressie: `body.mode` ging ongefilterd en zonder lengtegrens de log in.
 
-    Dat was de route waarlangs een verzoek van 64 KB de logverwerking — en
-    daarmee de event loop — tientallen seconden bezet hield (CodeQL
-    py/polynomial-redos op de redactiepatronen). De logregel noemt nu alleen de
-    gevalideerde mode plus of er iets afwijkends gevraagd werd.
+    Dat was de route waarlangs 64 KB de event loop tientallen seconden bezet
+    hield. De logregel noemt nu alleen de gevalideerde mode.
     """
-    kwaadaardig = "a-" * 500
+    malicious = "a-" * 500
     with caplog.at_level("INFO", logger="vlam.api"):
         r = client.post(
             "/chat/stream",
-            json={"message": "hoi", "mode": kwaadaardig},
+            json={"message": "hoi", "mode": malicious},
             headers={"X-Test-User": KVK},
         )
     assert r.status_code == 200
-    assert kwaadaardig not in caplog.text
+    assert malicious not in caplog.text
     assert "afwijkende mode" in caplog.text  # wél zichtbaar dát het afweek
     assert "'vlam'" in caplog.text  # en waarop is teruggevallen

@@ -1,20 +1,12 @@
 """Vangnet: sleutel-achtige tokens uit logregels redigeren (MVP-02).
 
-Dit is nadrukkelijk een *tweede* verdedigingslinie. De eerste is dat de host
-geen sleutels logt: de foutafhandeling rond LLM-calls geeft generieke meldingen,
-en `_valideer_sleutel` in `api.py` weigert waarden die anders in een
-bibliotheek-foutmelding terecht zouden komen. Dit vangnet dekt wat we niet
-vooraf zien: een onverwachte traceback, een toekomstige `exc_info=True`, of een
-bibliotheek die een verzoek-header in zijn eigen debuglog zet.
+Tweede verdedigingslinie — de eerste is dat de host geen sleutels logt. Dit dekt
+wat we niet vooraf zien: een onverwachte traceback, een bibliotheek die zijn
+eigen headers logt. Geen entropie-heuristiek, want die raakt ook tool-resultaten
+en KvK-nummers.
 
-Bewust géén generieke entropie-detectie: dat zou ook tool-resultaten, KvK-nummers
-en sessie-ID's raken. We redigeren herkenbare sleutelvormen. Dat betekent ook
-dat een sleutel in een onbekend formaat hier doorheen kan komen — het vangnet
-vervangt de maatregelen erboven niet.
-
-Aangehaakt op de *formatter* en niet op een `logging.Filter`: een filter draait
-vóór het formatteren en ziet `record.exc_text` dan nog niet, dus tracebacks
-zouden erdoorheen glippen.
+Aangehaakt op de formatter en niet op een `logging.Filter`: een filter draait
+vóór het formatteren en ziet `record.exc_text` dan nog niet.
 """
 
 import logging
@@ -22,88 +14,62 @@ import re
 from collections import Counter
 from contextlib import contextmanager
 
-REDACTIE = "[SLEUTEL-GEREDIGEERD]"
+REDACTED = "[SLEUTEL-GEREDIGEERD]"
 
-# Patroonherkenning dekt alleen sleutels met een herkenbare vorm. De
-# VLAM-backend gebruikt UbiOps-tokens zonder zo'n voorvoegsel; die zouden er
-# dus doorheen glippen — precies het geval waarin je denkt gedekt te zijn.
-# Daarom kennen we de sleutels die op dit moment in gebruik zijn ook bij naam.
-#
-# Een Counter en geen set: twee gelijktijdige verzoeken kunnen dezelfde sleutel
-# gebruiken, en dan mag het aflopen van het ene verzoek de registratie van het
-# andere niet weghalen.
-_geheimen: Counter = Counter()
+# Patronen zien alleen sleutels met een herkenbare vorm; een UbiOps-token heeft
+# die niet. Daarom kennen we de sleutels die nu in gebruik zijn ook bij naam.
+# Counter i.p.v. set: twee verzoeken kunnen dezelfde sleutel gebruiken, en dan
+# mag het aflopen van het ene de registratie van het andere niet wissen.
+_literals_to_redact: Counter = Counter()
 
-# Twee drempels, omdat de herkomst verschilt.
-#
-# Een server-env-sleutel komt van de beheerder: die vertrouwen we, een lengte-
-# check volstaat.
-#
-# Een sleutel uit een verzoek komt van de gebruiker, en die is dus door een
-# aanvaller te kiezen. Zou elke opgegeven waarde geredigeerd worden, dan kan
-# iemand gewone logtekst opgeven ("Tool-aanroep", een KvK-nummer) en die tijdens
-# zijn eigen verzoek onzichtbaar maken — een vangnet tegen sleutellekken zou dan
-# een middel worden om sporen te wissen. Daarom moet zo'n waarde er ook als een
-# sleutel uitzien: lang genoeg, en een mengsel van letters en cijfers. Dat sluit
-# natuurlijke logtekst uit en laat elke realistische API-sleutel door.
-_MIN_GEHEIM_LENGTE = 8
-_MIN_GEHEIM_LENGTE_ONVERTROUWD = 20
+# Twee drempels, want de herkomst verschilt. Een server-sleutel komt van de
+# beheerder. Een sleutel uit een verzoek is door een aanvaller te kiezen: zonder
+# vormeis kan iemand gewone logtekst opgeven ("Tool-aanroep", een KvK-nummer) en
+# die tijdens zijn eigen verzoek onzichtbaar maken.
+_MIN_SECRET_LENGTH = 8
+_MIN_SECRET_LENGTH_UNTRUSTED = 20
 
 
-def _lijkt_op_een_sleutel(waarde: str) -> bool:
-    """Streng genoeg dat gewone logtekst niet als 'geheim' geregistreerd raakt."""
+def _looks_like_a_key(value: str) -> bool:
+    """Streng genoeg dat gewone logtekst niet als geheim geregistreerd raakt."""
     return (
-        len(waarde) >= _MIN_GEHEIM_LENGTE_ONVERTROUWD
-        and any(c.isdigit() for c in waarde)
-        and any(c.isalpha() for c in waarde)
+        len(value) >= _MIN_SECRET_LENGTH_UNTRUSTED
+        and any(c.isdigit() for c in value)
+        and any(c.isalpha() for c in value)
     )
 
 
-def registreer_geheim(waarde: str) -> None:
-    """Registreer een sleutel die voor de rest van het proces bestaat.
-
-    Voor de server-env-sleutels: die leven zo lang als de host en kunnen in een
-    bibliotheek-traceback opduiken. Herkomst is de beheerder, niet een verzoek.
-    """
-    if waarde and len(waarde) >= _MIN_GEHEIM_LENGTE:
-        _geheimen[waarde] += 1
+def redact_always(value: str) -> None:
+    """Voor server-env-sleutels: die leven zo lang als het proces."""
+    if value and len(value) >= _MIN_SECRET_LENGTH:
+        _literals_to_redact[value] += 1
 
 
 @contextmanager
-def geheim_geregistreerd(waarde: str):
-    """Registreer een sleutel uit een verzoek, alleen voor de duur daarvan.
+def redact_temporarily(value: str):
+    """Voor een sleutel uit een verzoek: registratie duurt zo lang als het verzoek.
 
     Zo houdt de redactie de sleutel niet langer vast dan de LLM-client zelf
-    (PDR-010: een sleutel overleeft het verzoek niet). Waarden die niet op een
-    sleutel lijken worden genegeerd — zie de toelichting bij de drempels.
+    (PDR-010). Waarden die niet op een sleutel lijken worden genegeerd.
     """
-    if not waarde or not _lijkt_op_een_sleutel(waarde):
+    if not value or not _looks_like_a_key(value):
         yield
         return
-    _geheimen[waarde] += 1
+    _literals_to_redact[value] += 1
     try:
         yield
     finally:
-        _geheimen[waarde] -= 1
-        if _geheimen[waarde] <= 0:
-            del _geheimen[waarde]
+        _literals_to_redact[value] -= 1
+        if _literals_to_redact[value] <= 0:
+            del _literals_to_redact[value]
 
-# Elk patroon vervangt óf de hele match, óf alles ná groep 1 (het "label").
-#
-# Alle herhalingen zijn bovenbegrensd, en dat is geen stijlkeuze. Een onbegrensde
-# `*` of `{n,}` vóór een literal geeft polynomiaal terugkrabbelen: de eerdere
-# versie van het api-key-patroon deed er op invoer als "a-a-a-…" viermaal zo lang
-# over bij tweemaal zoveel tekens (16k tekens ≈ 1,7 s). Omdat er logregels zijn
-# die door de gebruiker aangeleverde tekst bevatten, was dat een DoS-route: één
-# verzoek van 64 KB hield de event loop ruim 30 seconden bezet. Met een
-# bovengrens is het aantal terugkrabbelstappen per positie constant en dus
-# lineair in de lengte van de regel. CodeQL merkt dit aan als py/polynomial-redos.
-#
-# De bovengrenzen liggen ruim boven elke realistische sleutel (256 tekens; een
-# Anthropic-sleutel is er ~100).
+# Elk patroon vervangt de hele match, óf alles ná groep 1 (het "label").
+# Alle herhalingen zijn bovenbegrensd: een onbegrensde `*` vóór een literal geeft
+# polynomiaal terugkrabbelen, en logregels kunnen gebruikerstekst bevatten
+# (py/polynomial-redos; 64 KB kostte ruim 30 s). 256 ligt ruim boven elke sleutel.
 _MAX = 256
 
-_PATRONEN: list[tuple[re.Pattern, bool]] = [
+_PATTERNS: list[tuple[re.Pattern, bool]] = [
     # Anthropic: sk-ant-... (ook admin-/oauth-varianten)
     (re.compile(rf"sk-ant-[A-Za-z0-9._\-]{{6,{_MAX}}}"), False),
     # OpenAI-stijl: sk-... / sk-proj-...
@@ -140,55 +106,51 @@ _PATRONEN: list[tuple[re.Pattern, bool]] = [
 ]
 
 
-def redigeer(tekst: str) -> str:
+def redact(text: str) -> str:
     """Vervang bekende sleutels en herkenbare sleutelvormen door een marker.
 
-    Eerst de sleutels die we bij naam kennen (exacte vervanging, werkt ongeacht
-    het formaat — nodig voor VLAM/UbiOps-tokens zonder herkenbaar voorvoegsel),
-    daarna de patronen voor sleutels die we niet kennen.
+    Eerst de sleutels die we bij naam kennen (werkt ongeacht het formaat), daarna
+    de patronen voor sleutels die we niet kennen.
     """
-    # Momentopname: loggen kan ook vanuit een worker-thread gebeuren, terwijl de
-    # event loop een sleutel registreert of opruimt.
-    for geheim in list(_geheimen):
-        if geheim in tekst:
-            tekst = tekst.replace(geheim, REDACTIE)
-    for patroon, behoud_label in _PATRONEN:
-        tekst = patroon.sub(
-            (r"\1" + REDACTIE) if behoud_label else REDACTIE, tekst
+    # Momentopname: loggen kan ook vanuit een worker-thread komen.
+    for secret in list(_literals_to_redact):
+        if secret in text:
+            text = text.replace(secret, REDACTED)
+    for pattern, keep_label in _PATTERNS:
+        text = pattern.sub(
+            (r"\1" + REDACTED) if keep_label else REDACTED, text
         )
-    return tekst
+    return text
 
 
-class RedigerendeFormatter(logging.Formatter):
+class RedactingFormatter(logging.Formatter):
     """Omhulsel om een bestaande formatter dat de uitvoer redigeert."""
 
-    def __init__(self, binnenste: logging.Formatter):
+    def __init__(self, inner: logging.Formatter):
         super().__init__()
-        self.binnenste = binnenste
+        self.inner = inner
 
     def format(self, record: logging.LogRecord) -> str:
-        return redigeer(self.binnenste.format(record))
+        return redact(self.inner.format(record))
 
 
-def _omhul(handler: logging.Handler) -> None:
-    if isinstance(handler.formatter, RedigerendeFormatter):
+def _wrap_formatter(handler: logging.Handler) -> None:
+    if isinstance(handler.formatter, RedactingFormatter):
         return  # al aangehaakt (idempotent)
-    handler.setFormatter(RedigerendeFormatter(handler.formatter or logging.Formatter()))
+    handler.setFormatter(RedactingFormatter(handler.formatter or logging.Formatter()))
 
 
-def installeer_redactie() -> None:
-    """Haak de redactie aan op alle bestaande log-handlers.
+def install_redaction() -> None:
+    """Haak de redactie aan op alle bestaande log-handlers; idempotent.
 
     Ook op de uvicorn-loggers: die hebben `propagate=False` en eigen handlers,
-    dus alleen de root afdekken is niet genoeg. Idempotent, zodat een tweede
-    aanroep (bv. bij het opstarten van de app, ná uvicorn) niets stukmaakt.
+    dus alleen de root afdekken is niet genoeg.
     """
     for handler in logging.getLogger().handlers:
-        _omhul(handler)
-    # Kopie: een import of een andere thread kan tijdens het itereren een logger
-    # aanmaken, en dat zou hier anders een RuntimeError geven — bij het opstarten
-    # van de host, waar dat het hele proces onderuit haalt.
-    for naam in list(logging.root.manager.loggerDict):
-        logger = logging.getLogger(naam)
+        _wrap_formatter(handler)
+    # Kopie: een import of thread kan tijdens het itereren een logger aanmaken,
+    # en een RuntimeError hier haalt het opstarten onderuit.
+    for name in list(logging.root.manager.loggerDict):
+        logger = logging.getLogger(name)
         for handler in getattr(logger, "handlers", []):
-            _omhul(handler)
+            _wrap_formatter(handler)

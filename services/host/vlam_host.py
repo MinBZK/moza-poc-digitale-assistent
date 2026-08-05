@@ -26,7 +26,7 @@ from config import (
     VLAM_TIMEOUT,
     get_system_prompt,
 )
-from log_redaction import geheim_geregistreerd, registreer_geheim
+from log_redaction import redact_always, redact_temporarily
 from mcp_client import MCPToolRegistry
 
 logger = logging.getLogger("vlam.host")
@@ -290,10 +290,10 @@ class VLAMHost:
     """Orkestrator die twee LLM-backends koppelt aan MCP-servers."""
 
     def __init__(self):
-        # De server-env-sleutels leven zo lang als het proces en kunnen in een
-        # bibliotheek-traceback opduiken; laat het log-vangnet ze bij naam kennen.
-        registreer_geheim(ANTHROPIC_API_KEY)
-        registreer_geheim(VLAM_API_KEY)
+        # Server-env-sleutels leven zo lang als het proces; laat het log-vangnet
+        # ze bij naam kennen.
+        redact_always(ANTHROPIC_API_KEY)
+        redact_always(VLAM_API_KEY)
         self.claude_client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
         self.vlam_client = (
             openai.AsyncOpenAI(
@@ -425,42 +425,38 @@ class VLAMHost:
     ) -> AsyncGenerator[tuple, None]:
         """Lever (claude_client, vlam_client) voor de duur van één verzoek.
 
-        Bewust een contextmanager met lokale clients i.p.v. `self.*` overschrijven
-        (MVP-02). De host is één gedeeld object en de endpoints zijn async: bij
-        twee gelijktijdige gesprekken kon de sleutel van gebruiker A blijven
-        hangen en het verzoek van gebruiker B bedienen — of zelfs procesbreed
-        blijven staan nadat A weg was.
+        Lokale clients i.p.v. `self.*` overschrijven (MVP-02). De host is één
+        gedeeld object en de endpoints zijn async: bij twee gelijktijdige
+        gesprekken kon de sleutel van A het verzoek van B bedienen, en daarna
+        procesbreed blijven staan.
 
-        Een op basis van een override aangemaakte client wordt na afloop gesloten:
-        de sleutel van de gebruiker overleeft het verzoek niet, en de httpx-pool
-        van die client lekt niet weg. De server-env-clients blijven onaangeraakt
-        (die zijn procesbreed en worden hier nooit gesloten).
+        Een override-client wordt na afloop gesloten: de sleutel overleeft het
+        verzoek niet en de httpx-pool lekt niet weg. De server-env-clients zijn
+        procesbreed en worden hier nooit gesloten.
         """
         claude = self.claude_client
         vlam = self.vlam_client
-        eigen_clients = []
+        own_clients = []
         try:
-            # Registreren gebeurt vóór het aanmaken en duurt tot na het verzoek:
-            # patroonherkenning alleen mist tokens zonder herkenbare vorm
-            # (VLAM/UbiOps), en ook een fout tíjdens het opbouwen van de client
-            # moet geredigeerd de logs in.
+            # Registreren vóór het aanmaken: ook een fout tijdens het opbouwen
+            # van de client moet geredigeerd de logs in.
             with (
-                geheim_geregistreerd(claude_api_key_override),
-                geheim_geregistreerd(vlam_api_key_override),
+                redact_temporarily(claude_api_key_override),
+                redact_temporarily(vlam_api_key_override),
             ):
-                # Aanmaken staat bewust binnen de try: faalt de tweede
-                # constructor, dan moet de eerste alsnog gesloten worden.
+                # Binnen de try: faalt de tweede constructor, dan moet de
+                # eerste alsnog gesloten worden.
                 if claude_api_key_override:
                     claude = anthropic.AsyncAnthropic(api_key=claude_api_key_override)
-                    eigen_clients.append(claude)
+                    own_clients.append(claude)
                 if vlam_api_key_override and VLAM_BASE_URL:
                     vlam = openai.AsyncOpenAI(
                         api_key=vlam_api_key_override, base_url=VLAM_BASE_URL
                     )
-                    eigen_clients.append(vlam)
+                    own_clients.append(vlam)
                 yield claude, vlam
         finally:
-            for client in eigen_clients:
+            for client in own_clients:
                 try:
                     await client.close()
                 except Exception as e:  # sluiten mag nooit het antwoord breken
@@ -530,8 +526,7 @@ class VLAMHost:
         use_cli = mode.startswith("cli:")
         llm = mode.split(":")[-1] if use_cli else mode
 
-        # De clients leven precies zo lang als deze stream (MVP-02): een
-        # override-client wordt bij het verlaten van het blok gesloten.
+        # De clients leven precies zo lang als deze stream (MVP-02).
         async with self._request_clients(
             vlam_api_key_override, claude_api_key_override
         ) as (claude, vlam):

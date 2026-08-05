@@ -1,24 +1,18 @@
 """Gedeelde env-allowlist voor subprocessen (MCP-servers én CLI-wrappers).
 
-De host start twee soorten kindprocessen: de vijf MCP-servers (stdio) en de
-bash-CLI-wrappers. Geen van beide heeft een LLM-sleutel nodig. Ze in extra
-processen laten leven vergroot het lek-oppervlak zonder dat er iets tegenover
-staat (PDR-007: identiteit/config bij de bron; sleutel-blootstelling
-minimaliseren).
+Geen van beide kindprocessen heeft een LLM-sleutel nodig; ze in extra processen
+laten leven vergroot alleen het lek-oppervlak (PDR-007). Het MCP-transport had
+zo'n allowlist al, het CLI-transport gaf de volledige `os.environ` door — deze
+module is de ene plek waar de regel vastligt.
 
-Het MCP-transport had zo'n allowlist al; het CLI-transport gaf de volledige
-`os.environ` door — dezelfde regel werd dus door het ene pad wel en door het
-andere niet gevolgd. Deze module is de ene plek waar dat vastligt.
-
-Beide lijsten delen een systeembasis (interpreter kunnen starten, TLS en een
-eventuele forward proxy kunnen gebruiken) en hebben daarnaast hun eigen
-app-config: de MCP-servers en de CLI-scripts lezen andere variabelen.
+Beide lijsten delen een systeembasis en hebben hun eigen app-config: de
+MCP-servers en de CLI-scripts lezen andere variabelen.
 """
 
 import os
 
 # Systeem: nodig om überhaupt een proces te starten en uitgaand verkeer te doen.
-_SYSTEEM = (
+_SYSTEM = (
     "PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TZ",
     "TMPDIR", "TEMP", "TMP", "TERM",
     "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
@@ -41,20 +35,18 @@ _CLI_CONFIG = (
     "REGELRECHT_RPC_URL", "KOOP_SRU_URL", "KOOP_SRU_CONNECTION",
 )
 
-MCP_ALLOWLIST: tuple[str, ...] = _SYSTEEM + _MCP_CONFIG
-CLI_ALLOWLIST: tuple[str, ...] = _SYSTEEM + _CLI_CONFIG
+MCP_ALLOWLIST: tuple[str, ...] = _SYSTEM + _MCP_CONFIG
+CLI_ALLOWLIST: tuple[str, ...] = _SYSTEM + _CLI_CONFIG
 
-# Wat er onder geen beding in een kindproces terecht mag komen. Puur een
-# vangnet voor de test: de allowlists noemen deze namen simpelweg niet.
-NOOIT_DOORGEVEN: tuple[str, ...] = ("ANTHROPIC_API_KEY", "VLAM_API_KEY")
+# Vangnet voor de test: de allowlists noemen deze namen simpelweg niet.
+NEVER_PASS_THROUGH: tuple[str, ...] = ("ANTHROPIC_API_KEY", "VLAM_API_KEY")
 
 
 def subprocess_env(allowlist: tuple[str, ...], extra: dict | None = None) -> dict:
     """Bouw de omgeving voor een kindproces: alleen de allowlist, plus `extra`.
 
-    `extra` is per-aanroep-config die de host zelf injecteert (bijvoorbeeld
-    `KVK_SESSIE_NUMMER` voor de kvk-cli, PDR-009) en staat los van wat er in de
-    proces-omgeving toevallig gezet is.
+    `extra` is per-aanroep-config die de host injecteert (bv. `KVK_SESSIE_NUMMER`
+    voor de kvk-cli, PDR-009), los van de proces-omgeving.
     """
     env = {k: v for k, v in os.environ.items() if k in allowlist}
     if extra:

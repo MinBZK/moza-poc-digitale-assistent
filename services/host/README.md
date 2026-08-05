@@ -70,7 +70,7 @@ accepteren — staat in [PDR-010](../../docs/decisions/PDR-010-sleutel-van-de-ge
 verzoek. `_request_clients` maakt er een LLM-client mee, geeft die als argument
 door aan het dispatch-pad en sluit hem daarna — geen gedeelde state, dus de
 sleutel van de één kan nooit het verzoek van de ander bedienen. Daarvóór toetst
-`api._valideer_sleutel` de vorm (lengte, ASCII, geen witruimte of stuurtekens);
+`api._validate_api_key` de vorm (lengte, ASCII, geen witruimte of stuurtekens);
 een geweigerde sleutel geeft een 400 respectievelijk een `error`-event, zonder
 iets van de waarde prijs te geven. Sleutels gaan nooit mee naar een subprocess
 (`subprocess_env.py`) en worden uit logregels geredigeerd (`log_redaction.py`).

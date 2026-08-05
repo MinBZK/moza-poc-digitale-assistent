@@ -1,20 +1,9 @@
 """Sleutels blijven binnen één verzoek (MVP-02).
 
-De host is één gedeeld object en de endpoints zijn async. Vóór MVP-02 zette
-`chat`/`chat_stream` de per-verzoek client op `self.claude_client` /
-`self.vlam_client` en herstelde die in een `finally`. Bij twee gelijktijdige
-gesprekken kon daardoor de sleutel van gebruiker A het verzoek van gebruiker B
-bedienen — en procesbreed blijven staan nadat A weg was.
-
-Deze tests forceren precies die interleaving en falen op de oude implementatie:
-
-  1. A start (mutatie van de gedeelde state gebeurde daar)
-  2. B start (overschrijft de gedeelde state)
-  3. A doet zijn LLM-call → las de client van B
-
-Daarnaast borgen we dat een override-client na afloop gesloten wordt (de sleutel
-overleeft het verzoek niet en de httpx-pool lekt niet weg) en dat de
-server-env-clients onaangeraakt blijven.
+De host is één gedeeld object en de endpoints zijn async; vóór MVP-02 stond de
+per-verzoek client op `self.*`. Deze tests forceren de interleaving die dat liet
+misgaan — A start, B start, pas dán doet A zijn LLM-call — en falen op de oude
+implementatie. Verder: een override-client wordt gesloten, server-clients niet.
 """
 
 import asyncio
@@ -53,7 +42,7 @@ class _FakeClaude:
         )
         AANROEPEN.append((vraag, self.api_key))
         # Momentopname van de redactie mídden in het verzoek.
-        TIJDENS_VERZOEK.append(log_redaction.redigeer(f"fout met {self.api_key}"))
+        TIJDENS_VERZOEK.append(log_redaction.redact(f"fout met {self.api_key}"))
         block = types.SimpleNamespace(type="text", text="klaar")
         return types.SimpleNamespace(content=[block], usage=None)
 
@@ -98,11 +87,10 @@ TIJDENS_VERZOEK: list[str] = []
 
 @pytest.fixture
 def host(monkeypatch):
-    """Host met echte server-env-clients, maar fakes voor override-clients.
+    """Host met echte server-env-clients, fakes voor override-clients.
 
-    Volgorde is bewust: eerst de host bouwen (die krijgt de echte, lege
-    server-env-clients), daarna de SDK-klassen patchen. Zo kunnen we ook
-    controleren dat de server-clients níét zijn aangeraakt of gesloten.
+    Eerst de host bouwen, daarna de SDK-klassen patchen: zo kunnen we ook zien
+    dat de server-clients niet zijn aangeraakt.
     """
     AANROEPEN.clear()
     TIJDENS_VERZOEK.clear()
@@ -221,9 +209,9 @@ async def test_sleutel_is_geredigeerd_tijdens_maar_niet_onthouden_erna(host):
     assert KEY_A not in TIJDENS_VERZOEK[0], (
         "tijdens het verzoek hoort de sleutel uit een logregel geredigeerd te worden"
     )
-    assert log_redaction.REDACTIE in TIJDENS_VERZOEK[0]
+    assert log_redaction.REDACTED in TIJDENS_VERZOEK[0]
     # En daarna: niet langer vasthouden dan de client zelf (PDR-010).
-    assert KEY_A in log_redaction.redigeer(f"fout met {KEY_A}"), (
+    assert KEY_A in log_redaction.redact(f"fout met {KEY_A}"), (
         "na afloop hoort de sleutel niet meer geregistreerd te staan"
     )
 

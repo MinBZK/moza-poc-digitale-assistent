@@ -87,7 +87,7 @@ ALLOWED_ORIGINS: list[str] = (
 #
 # Wat er aan de kant van de host tegenover staat (MVP-02): een sleutel leeft
 # precies één verzoek (`vlam_host._request_clients`), wordt op vorm getoetst
-# vóór gebruik (`api._valideer_sleutel`), gaat nooit mee naar een subprocess
+# vóór gebruik (`api._validate_api_key`), gaat nooit mee naar een subprocess
 # (`subprocess_env.py`) en wordt uit logregels geredigeerd (`log_redaction.py`).
 ALLOW_API_KEY_OVERRIDE: bool = os.getenv("ALLOW_API_KEY_OVERRIDE", "true").lower() in (
     "true",

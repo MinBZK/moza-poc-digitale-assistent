@@ -14,7 +14,7 @@ import mcp_client
 from subprocess_env import (
     CLI_ALLOWLIST,
     MCP_ALLOWLIST,
-    NOOIT_DOORGEVEN,
+    NEVER_PASS_THROUGH,
     subprocess_env,
 )
 
@@ -26,7 +26,7 @@ ALLE_LIJSTEN = [
 
 @pytest.mark.parametrize("allowlist", ALLE_LIJSTEN)
 def test_llm_sleutels_staan_niet_op_de_allowlist(allowlist):
-    assert not set(allowlist) & set(NOOIT_DOORGEVEN)
+    assert not set(allowlist) & set(NEVER_PASS_THROUGH)
 
 
 @pytest.mark.parametrize("allowlist", ALLE_LIJSTEN)
@@ -46,7 +46,7 @@ def test_onbekende_variabelen_worden_weggelaten(monkeypatch, allowlist):
 
 
 @pytest.mark.parametrize(
-    "naam",
+    "name",
     [
         # Wat de bash-wrappers daadwerkelijk uitlezen: services/cli/lib/config.sh
         # plus de `${VAR:-default}`-regels boven in koop-cli en regelrecht-cli.
@@ -59,25 +59,25 @@ def test_onbekende_variabelen_worden_weggelaten(monkeypatch, allowlist):
         "KOOP_SRU_CONNECTION",
     ],
 )
-def test_cli_config_komt_er_wel_doorheen(monkeypatch, naam):
-    monkeypatch.setenv(naam, "test-waarde")
-    assert subprocess_env(CLI_ALLOWLIST)[naam] == "test-waarde"
+def test_cli_config_komt_er_wel_doorheen(monkeypatch, name):
+    monkeypatch.setenv(name, "test-waarde")
+    assert subprocess_env(CLI_ALLOWLIST)[name] == "test-waarde"
 
 
 @pytest.mark.parametrize(
-    "naam", ["DEMO_KVK_NUMMER", "REGELRECHT_RPC_URL", "BAG_API_KEY", "KVK_TEST_API_KEY"]
+    "name", ["DEMO_KVK_NUMMER", "REGELRECHT_RPC_URL", "BAG_API_KEY", "KVK_TEST_API_KEY"]
 )
-def test_mcp_config_komt_er_wel_doorheen(monkeypatch, naam):
-    monkeypatch.setenv(naam, "test-waarde")
-    assert subprocess_env(MCP_ALLOWLIST)[naam] == "test-waarde"
+def test_mcp_config_komt_er_wel_doorheen(monkeypatch, name):
+    monkeypatch.setenv(name, "test-waarde")
+    assert subprocess_env(MCP_ALLOWLIST)[name] == "test-waarde"
 
 
 @pytest.mark.parametrize("allowlist", ALLE_LIJSTEN)
-@pytest.mark.parametrize("naam", ["PATH", "HOME", "HTTPS_PROXY", "SSL_CERT_FILE"])
-def test_systeembasis_blijft_doorgegeven(monkeypatch, allowlist, naam):
+@pytest.mark.parametrize("name", ["PATH", "HOME", "HTTPS_PROXY", "SSL_CERT_FILE"])
+def test_systeembasis_blijft_doorgegeven(monkeypatch, allowlist, name):
     """Zonder PATH start er niets; zonder proxy/TLS-vars breekt uitgaand verkeer."""
-    monkeypatch.setenv(naam, "test-waarde")
-    assert subprocess_env(allowlist)[naam] == "test-waarde"
+    monkeypatch.setenv(name, "test-waarde")
+    assert subprocess_env(allowlist)[name] == "test-waarde"
 
 
 def test_extra_overschrijft_de_proces_env(monkeypatch):

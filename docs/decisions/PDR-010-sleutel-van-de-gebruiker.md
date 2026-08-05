@@ -60,7 +60,7 @@ dat en faalt op de oude implementatie.
 
 ### 3. Een sleutel wordt op vorm getoetst vóór gebruik
 
-`_valideer_sleutel` in `api.py` weigert waarden die niet-ASCII zijn, stuurtekens
+`_validate_api_key` in `api.py` weigert waarden die niet-ASCII zijn, stuurtekens
 of witruimte bevatten, of buiten een redelijke lengte vallen. `/chat` antwoordt
 met 400, `/chat/stream` met een `error`-event. De melding en de logregel noemen
 alleen de headernaam en de reden, nooit iets van de waarde.
