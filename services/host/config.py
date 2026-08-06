@@ -58,6 +58,8 @@ MCP_SERVERS: dict[str, Path] = {
     "netbeheerder": _resolve_server_path(
         "MCP_SERVER_NETBEHEERDER", SERVERS_DIR / "netbeheerder" / "server.py"
     ),
+    # Demo-bron voor de werksessie arbeidsmarkt: kent regelingen, geen personen.
+    "uwv": _resolve_server_path("MCP_SERVER_UWV", SERVERS_DIR / "uwv" / "server.py"),
 }
 
 # Host

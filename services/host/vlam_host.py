@@ -41,6 +41,9 @@ TOOL_LABELS = {
     "regelrecht__check": "RegelRecht: verplichting toetsen",  # CLI-transport (zie PDR-008)
     "rvo__zoek_regeling": "RVO: subsidieregeling zoeken",
     "rvo__indienen": "RVO: rapportage indienen",
+    "uwv__regelingen": "UWV: regelingen personeel opzoeken",
+    "uwv__plichten": "UWV: verplichtingen werkgever opzoeken",
+    "uwv__werkgeversservicepunt": "UWV: werkgeversservicepunt opzoeken",
 }
 
 
@@ -78,6 +81,7 @@ _KVK_SESSIE_TOOLS = frozenset(
         "regelrecht__check",
         "rvo__indienen",
         "netbeheerder__verbruik",
+        "uwv__werkgeversservicepunt",
     }
 )
 _INFORMATIEPLICHT_LAW = "omgevingswet/energiebesparing/informatieplicht"
