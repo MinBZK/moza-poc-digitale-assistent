@@ -18,7 +18,7 @@ import pytest
 
 SERVICES = Path(__file__).resolve().parent.parent.parent
 MCP_DIR = SERVICES / "mcp"
-SERVERS = ["kvk", "koop", "regelrecht", "rvo", "netbeheerder"]
+SERVERS = ["kvk", "koop", "regelrecht", "rvo", "netbeheerder", "uwv"]
 
 
 def _load_mcp_server(naam: str):
