@@ -23,7 +23,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import anthropic
 import openai
 
+from config import ALLOW_API_KEY_OVERRIDE
 from vlam_host import VLAMHost
+
+
+def _geen_sleutel_code() -> str:
+    """Welke melding hoort bij "geen sleutel" in deze omgeving?
+
+    Staat de override uit, dan negeert de host een ingevulde sleutel en verwijst
+    de melding naar de beheerder in plaats van naar het instellingenpaneel.
+    """
+    return "LLM_GEEN_SLEUTEL" if ALLOW_API_KEY_OVERRIDE else "LLM_NIET_INGESTELD"
 
 
 async def collect(gen):
@@ -35,14 +45,20 @@ def summary(events):
     return [(e["type"], e.get("message", e.get("data", ""))[:80]) for e in events]
 
 
-def assert_has_event(events, event_type, message_contains=None):
+def assert_has_event(events, event_type, code=None):
+    """Zoek een event, desgewenst met een specifieke foutcode.
+
+    Op `code` en niet op een tekstfragment (PDR-011): de melding is bewust
+    herschrijfbaar, de code is het contract. Zo breekt dit script niet op een
+    betere formulering, wel op een verkeerde classificatie.
+    """
     for e in events:
         if e["type"] != event_type:
             continue
-        if message_contains is None or message_contains in e.get("message", ""):
+        if code is None or e.get("code") == code:
             return e
     raise AssertionError(
-        f"Geen {event_type!r}-event met {message_contains!r} gevonden. "
+        f"Geen {event_type!r}-event met code {code!r} gevonden. "
         f"Events: {summary(events)}"
     )
 
@@ -76,7 +92,7 @@ async def scenario_vlam_no_key():
     """VLAM geselecteerd, geen API-sleutel, geen override."""
     host = VLAMHost()
     events = await collect(host.chat_stream("s1", "hi", mode="vlam"))
-    assert_has_event(events, "error", "VLAM-backend is niet geconfigureerd")
+    assert_has_event(events, "error", _geen_sleutel_code())
     assert_has_event(events, "done")
     return events
 
@@ -85,7 +101,7 @@ async def scenario_claude_no_key():
     """Claude geselecteerd, geen API-sleutel, geen override."""
     host = VLAMHost()
     events = await collect(host.chat_stream("s2", "hi", mode="claude"))
-    assert_has_event(events, "error", "Claude-backend is niet geconfigureerd")
+    assert_has_event(events, "error", _geen_sleutel_code())
     assert_has_event(events, "done")
     return events
 
@@ -94,7 +110,7 @@ async def scenario_cli_vlam_no_key():
     """CLI:vlam geselecteerd, geen API-sleutel — zelfde check als MCP."""
     host = VLAMHost()
     events = await collect(host.chat_stream("s3", "hi", mode="cli:vlam"))
-    assert_has_event(events, "error", "VLAM-backend is niet geconfigureerd")
+    assert_has_event(events, "error", _geen_sleutel_code())
     return events
 
 
@@ -102,7 +118,7 @@ async def scenario_cli_claude_no_key():
     """CLI:claude geselecteerd, geen API-sleutel — zelfde check als MCP."""
     host = VLAMHost()
     events = await collect(host.chat_stream("s4", "hi", mode="cli:claude"))
-    assert_has_event(events, "error", "Claude-backend is niet geconfigureerd")
+    assert_has_event(events, "error", _geen_sleutel_code())
     return events
 
 
@@ -134,7 +150,8 @@ async def scenario_claude_upstream_error():
                 "s5", "hi", mode="claude", claude_api_key_override="sk-fake"
             )
         )
-    assert_has_event(events, "error", "niet bereikbaar")
+    # 401 upstream = een geweigerde sleutel, geen algemene storing.
+    assert_has_event(events, "error", "LLM_SLEUTEL_ONGELDIG")
     return events
 
 
@@ -168,7 +185,8 @@ async def scenario_vlam_upstream_error():
                 "s6", "hi", mode="vlam", vlam_api_key_override="fake"
             )
         )
-    assert_has_event(events, "error", "niet bereikbaar")
+    # 500 upstream = het model ligt er tijdelijk uit.
+    assert_has_event(events, "error", "LLM_OVERBELAST")
     return events
 
 

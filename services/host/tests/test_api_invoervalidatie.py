@@ -108,3 +108,44 @@ def test_sessiecontrole_gaat_voor_op_invoercontrole(monkeypatch):
     r = client.post("/chat", json={"message": ""})
     assert r.status_code == 401
     assert "log eerst in" in r.text.lower()
+
+
+def test_lege_allowlist_wijst_naar_de_beheerder_niet_naar_inloggen(monkeypatch):
+    """Zonder allowlist komt niemand erdoor; "log eerst in" is dan doodlopend.
+
+    Er is in deze PoC geen inlog die dat oplost, dus de gebruiker zou eindeloos
+    hetzelfde proberen. Dit is een configuratiefout van de beheerder en hoort
+    ook zo te klinken.
+    """
+    monkeypatch.setattr(api, "TEST_KVK_NUMMERS", frozenset())
+    r = client.post("/chat", json={"message": "hoi"})
+
+    assert r.status_code == 503
+    body = r.json()
+    assert body["code"] == "SESSIE_NIET_INGESTELD"
+    assert "beheerder" in body["actie"]
+    assert "log eerst in" not in r.text.lower()
+
+
+def test_foutmeldingen_hebben_overal_dezelfde_vorm():
+    """Eén envelop voor elke HTTP-fout, anders heeft een client twee codepaden."""
+    zonder_sessie = client.post("/chat", json={"message": "hoi"})
+    leeg = client.post("/chat", json={"message": ""}, headers=HEADERS)
+    ongeldig = client.post("/chat", json={"message": 42}, headers=HEADERS)
+
+    for respons in (zonder_sessie, leeg, ongeldig):
+        body = respons.json()
+        assert set(("type", "code", "message", "bericht", "actie", "herstelbaar")) <= set(body), (
+            f"{respons.status_code} wijkt af van het foutcontract: {body}"
+        )
+
+
+def test_stream_wijst_bij_lege_allowlist_ook_naar_de_beheerder(monkeypatch):
+    """De chat-UI loopt over `/chat/stream`; juist daar mag het niet doodlopen."""
+    monkeypatch.setattr(api, "TEST_KVK_NUMMERS", frozenset())
+    r = client.post("/chat/stream", json={"message": "hoi"})
+
+    payloads = _events(r)
+    assert payloads[0]["code"] == "SESSIE_NIET_INGESTELD"
+    assert "log eerst in" not in r.text.lower()
+    assert payloads[-1]["type"] == "done"

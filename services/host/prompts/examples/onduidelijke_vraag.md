@@ -1,3 +1,5 @@
+<!-- bronnen: -->
+<!-- bronnen-optioneel: regelrecht, koop, rvo, netbeheerder -->
 Voorbeeld: onduidelijke vraag, een gerichte verduidelijking
 
 Gebruiker: hoe zit dat dan met die verplichting
@@ -22,4 +24,4 @@ Assistent gebruikt GEEN tools.
 Assistent:
 Ik weet nog niet waar "dat" naar verwijst. Gaat het om uw energieverbruik, om een drempelwaarde uit de regelgeving, of om een bedrag uit een subsidieregeling?
 
-Als u uw energieverbruik bedoelt, kunt u vragen: "Hoeveel elektriciteit en gas verbruikt mijn bedrijf per jaar?" Ik haal die gegevens dan met uw toestemming op uit uw Business Wallet.
+Als u uw energieverbruik bedoelt, kunt u vragen: "Hoeveel elektriciteit en gas verbruikt mijn bedrijf per jaar?"

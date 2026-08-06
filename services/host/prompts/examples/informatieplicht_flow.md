@@ -1,3 +1,5 @@
+<!-- bronnen: kvk, regelrecht, rvo -->
+<!-- bronnen-optioneel: netbeheerder -->
 # Voorbeeld: informatieplicht-flow met bronnen, feitelijke vragen en restvraag
 
 Gebruiker: "Ik kreeg een melding dat de informatieplicht energiebesparing binnenkort voor mijn bedrijf geldt. Wat moet ik doen?"

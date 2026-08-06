@@ -71,12 +71,39 @@ Bij een mislukte bron-aanroep krijgt het model een JSON-resultaat met
 door, verzin geen gegevens"). De exception-tekst blijft in de log.
 
 Waar de bron zélf een foutcode teruggeeft, verrijken we het antwoord in plaats
-van het te vervangen: RegelRecht meldt in `ontbrekende_gegevens` welke feiten
-het model nog aan de gebruiker moet vragen, en die informatie is nodig om verder
-te kunnen. Het technische `message`-veld van de bron gaat er wel uit.
+van het te vervangen: RegelRecht gebruikt `ontbrekende_gegevens`/`benodigde_feiten`
+om te melden welke feiten het model nog aan de gebruiker moet vragen. Vandaag
+staan die velden op een geslaagd antwoord (zonder `error`), dus de allowlist is
+daar defensief; zet een bron ze ooit náást een foutcode, dan overleven ze. Het technische `message`-veld van de bron gaat er wel uit, op beide
+niveaus: de provenance-envelope van de MCP-standaard zet de foutdict onder
+`data`, en die vorm wordt eerst uitgepakt. Zonder die uitpakstap glipt juist
+RegelRecht (de bron met een externe engine erachter) langs de hele catalogus.
+
+Twee gaten in het transport horen bij dezelfde beslissing. De MCP-SDK vangt élke
+onafgevangen exception in een server-handler af en levert `str(exc)` als gewone
+tekst met `isError=True`; die vlag wordt nu gelezen, anders gaat precies zo'n
+tekst als geslaagd resultaat het gesprek in. En een bron-aanroep valt nu onder een
+time-out (`TOOL_TIMEOUT` in `config.py`; de melding is `SOURCE_UNAVAILABLE`):
+een server die het verzoek aanneemt maar nooit antwoordt liet de stream staan
+zonder antwoord, zonder melding en zonder afsluiting.
 
 Dit lost meteen een openstaande bevinding op: de host gaf exception-inhoud door
 aan het LLM, dat het aan de gebruiker kon doorvertellen.
+
+### 3b. Een bron bepaalt wát er misging, niet wie er schuldig is
+
+De foutcode komt uit de bron-payload en indexeert de catalogus. Die bevat ook
+meldingen over de host zelf, dus zonder grens zou een bron die
+`{"error": "LLM_SLEUTEL_ONGELDIG"}` stuurt de assistent de gebruiker om zijn
+API-sleutel laten vragen, en `GEEN_SESSIE` een "log opnieuw in" opleveren dat als
+phishing te misbruiken is. Alleen codes uit `_BRON_CODES` zijn daarom door een
+bron te kiezen; de rest wordt `TOOL_ONVERWACHT`.
+
+Om dezelfde reden wordt tekst uit een bron begrensd en geschoond (`schoon_echo`)
+voordat die in een melding belandt: de melding gaat naar de UI én naar het model
+met de instructie 'm door te geven, dus daar is de host met zijn gezag achter de
+zin de partij die de grens moet zetten. Veldnamen komen uitsluitend uit een
+gestructureerde `velden`-lijst, nooit uit het technische `message`-veld.
 
 ### 4. Het model weet welke bronnen eruit liggen
 
@@ -84,8 +111,18 @@ aan het LLM, dat het aan de gebruiker kon doorvertellen.
 het model niet. De systeemprompt krijgt nu een blok
 (`prompts/blocks/shared/bronnen_status.md`) met de uitgevallen bronnen, hun
 gebruikersnaam en het alternatief — alleen als er iets uitligt. De CLI-paden
-geven een lege lijst mee: die gebruiken een ander transport, dus de MCP-status
-zegt daar niets.
+stellen hun eigen lijst samen: de MCP-status zegt daar niets, maar het
+CLI-transport heeft zijn eigen gaten. Er is geen netbeheerder-wrapper (PDR-005:
+het CLI-transport loopt bewust achter), dus in `cli:*`-modus staat die bron
+altijd als niet-beschikbaar in de prompt. Zonder dat volgde het model de
+routeringstabel naar een tool die daar niet bestaat.
+
+Ligt *alles* eruit, dan vervangt `geen_bronnen.md` het bestaande
+`no_tools.md`-blok in plaats van ernaast te staan. Dat laatste blok zegt
+"beantwoord vragen op basis van je eigen kennis", precies het tegenovergestelde
+van wat het statusblok voorschrijft; twee tegengestelde instructies in één prompt
+is slechter dan één. De nieuwe tekst staat algemene uitleg wél toe, maar geen
+gegevens die uit een bron hadden moeten komen.
 
 ### 5. Afwijzen mag, doodlopen niet
 
@@ -94,6 +131,20 @@ geen codepad — het model formuleert. Daarom staat het in de prompt, in de vorm
 van een patroon (benoem het herkende onderwerp, zeg dat het buiten het taakgebied
 valt, geef een concrete voorbeeldvraag die wél kan) plus twee few-shot
 voorbeelden, die in deze codebase het sterkste stuursignaal zijn.
+
+Dat stuursignaal snijdt twee kanten op: een voorbeeld dat `koop__zoek_regelgeving`
+aanroept terwijl KOOP eruit ligt, demonstreert precies wat het statusblok net
+verbood. De composer laat daarom alleen de voorbeelden staan die passen bij de
+bronnen die nu bereikbaar zijn.
+
+Twee bestaande prompt-regels moesten daarvoor wijken. De routeringstabel in
+`tool_usage.md` stuurde élke onbekende vraag naar "beantwoord op basis van eigen
+kennis", en die tabel is specifieker en operationeler dan een guardrail — dus
+die won in de praktijk. Die catch-all is nu gesplitst: buiten het taakgebied gaat
+naar de afwijzing, binnen het taakgebied naar eigen kennis met een disclaimer. En
+`format.md` verbood het noemen van specifieke onderwerpen waar de gebruiker niet
+om vroeg, wat precies de gevraagde voorbeeldvraag uitsloot; daar staat nu een
+uitzondering voor afwijzingen.
 
 ### 6. Het SSE-contract blijft achterwaarts compatibel
 
@@ -106,8 +157,13 @@ frontend genegeerd, dus dat kan vooruitlopen op de UI-wijziging.
 ## Consequenties
 
 - (+) Elk foutscenario heeft een eigen melding met handelingsperspectief; een
-  test bewaakt dat elke code die een bronserver uitstuurt in de catalogus staat.
-- (+) Geen paden, URL's of exception-teksten meer richting gebruiker of LLM.
+  test bewaakt dat elke code die een MCP-server, een bash-CLI-wrapper of
+  `services/cli/lib/` uitstuurt in de catalogus staat, en dat een "ontbrekend veld"-antwoord ook echt zegt
+  wélk veld.
+- (+) Geen paden, URL's of exception-teksten meer richting gebruiker of LLM. Enige
+  uitzondering: de begrensde schemavalidatie-melding van de MCP-SDK, die het model
+  nodig heeft om zijn eigen tool-aanroep te corrigeren (zie §3) en die de gebruiker
+  nooit te zien krijgt.
 - (+) De UI kan op `code` en `herstelbaar` sturen (retry-knop, bron-badge).
 - (-) De catalogus is een tweede plek die bijgewerkt moet worden als een bron een
   nieuwe foutcode introduceert. De broncode-scan in
@@ -150,16 +206,47 @@ zonder wijziging blijft werken. `bron` is de servernaam (`kvk`, `koop`,
 ### Het `bron_fout`-event
 
 Zelfde vorm, `type: "bron_fout"`. Verschil: dit is **geen** eindpunt van het
-gesprek. Een bron viel uit terwijl de assistent doorwerkt; het `answer`-event
-volgt daarna gewoon. Bedoeld om inline te tonen ("KOOP is even niet bereikbaar")
+gesprek; het `answer`-event volgt daarna gewoon. Meestal viel er een bron uit,
+maar hetzelfde event draagt ook de niet-terminale meldingen over het antwoord
+zelf (`LLM_ANTWOORD_AFGEKAPT`, `LLM_TOOLCALL_ONLEESBAAR`); die hebben `bron: null`. Bedoeld om inline te tonen ("KOOP is even niet bereikbaar")
 zonder de chat af te breken. Onbekende event-types worden door de huidige
 frontend genegeerd, dus dit kan vooruitlopen op de UI-wijziging.
+
+### De HTTP-foutrespons (let op: breaking)
+
+De niet-streamende endpoints geven dezelfde payload terug, maar **op topniveau
+in plaats van onder `detail`**:
+
+```json
+{"type": "error", "code": "GEEN_SESSIE", "message": "...", "bericht": "...",
+ "actie": "...", "bron": null, "herstelbaar": false}
+```
+
+Dat geldt voor `POST /chat` (401 geen sessie, 400 lege vraag, 413 te lange
+vraag, 422 verzoek voldoet niet aan het model), `DELETE /chat/{id}` (401),
+`GET /regelrecht/definities` en `/regelrecht/drempels` (404/503, en 422 als de
+`law`-parameter ontbreekt), en voor elke
+onafgevangen fout (500).
+
+Op `main` was `detail` bij een 401 een platte string. Een client die
+`data.detail` als tekst rendert, toont vanaf nu niets of `[object Object]` —
+juist op de plek waar dit ticket een specifieke melding wil. Eén vorm voor elke
+fout scheelt de frontend twee codepaden en maakt `code`/`herstelbaar` ook buiten
+de chat beschikbaar, maar het frontend-ticket moet deze wijziging expliciet
+meenemen.
+
+Twee statussen voor dezelfde `LEGE_VRAAG`-code: 400 als het veld leeg is, 422
+als het helemaal ontbreekt. Die 422 is de afgesproken semantiek voor een
+verzoek dat niet aan het model voldoet; stuur daarom op `code`, niet op status.
 
 ### Wat de UI ermee kan
 
 - **`herstelbaar: true`** → toon een "probeer opnieuw"-knop die het laatste
   bericht opnieuw verstuurt. Bij `false` heeft dat geen zin (ongeldige sleutel,
-  lege vraag, bron niet gestart) en hoort de knop weg te blijven.
+  lege vraag, bron niet gestart) en hoort de knop weg te blijven. De actietekst
+  van een melding met `false` vraagt nooit om hetzelfde verzoek ónveranderd nog
+  eens te sturen; "verander eerst iets en verstuur dan opnieuw" mag wél, en is
+  juist het handelingsperspectief dat we willen. Een test bewaakt dat.
 - **`bron`** → toon bij welke bron het misging, in dezelfde bewoording als de
   databronnen-weergave.
 - **`code`** → stem de bestaande generieke `catch`-fallbacks in

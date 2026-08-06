@@ -97,12 +97,16 @@ flowchart TD
     Q6 -- nee --> Q7{Algemene vraag\nover regelgeving?}
 
     Q7 -- ja --> KOOP_TOOL
-    Q7 -- nee --> EIGEN[Eigen kennis\n+ disclaimer]
+    Q7 -- nee --> Q8{Binnen het taakgebied?\nbedrijf, verplichting,\nregelgeving, subsidie}
+
+    Q8 -- ja --> EIGEN[Eigen kennis\n+ disclaimer]
+    Q8 -- nee --> AFWIJZING[Afwijzing in 3 delen:\nonderwerp benoemen,\nbuiten taakgebied,\nvoorbeeldvraag die wel kan]
 
     KOOP_RES --> Antwoord([Antwoord aan gebruiker])
     RVO_ZOEK --> Antwoord
     RVO_IND --> Antwoord
     EIGEN --> Antwoord
+    AFWIJZING --> Antwoord
 
     style KVK_TOOL fill:#4A90D9,color:#fff
     style KOOP_RES fill:#48BB78,color:#fff
@@ -111,13 +115,14 @@ flowchart TD
     style RVO_ZOEK fill:#4A90D9,color:#fff
     style RVO_IND fill:#ED8936,color:#fff
     style EIGEN fill:#A0AEC0,color:#fff
+    style AFWIJZING fill:#A0AEC0,color:#fff
 ```
 
 Legenda:
 **groen** = Resource (read-only ophalen)
 **blauw** = Tool (read-only zoeken/berekenen)
 **oranje** = Tool (muterend, vereist bevestiging)
-**grijs** = eigen kennis
+**grijs** = geen bron geraadpleegd (eigen kennis of een afwijzing met brug)
 
 Bij gecombineerde vragen geldt de volgorde: KvK (wie?) → RegelRecht (wat geldt er?) → KOOP (verdieping wettekst) → RVO (actie ondernemen).
 
@@ -231,7 +236,7 @@ sequenceDiagram
     Host->>RVO: tools/call [indienen, kvk_nummer="68750110",<br/>regeling_id="EBR-2026",<br/>maatregelen=["LED-verlichting","HR++ beglazing"]]
     Note over RVO: Mock: simuleert succesvolle<br/>indiening en genereert<br/>referentienummer
     RVO-->>Host: status=INGEDIEND,<br/>ref=RVO-EBR-2026-68750110-001 + lopende_zaak + provenance
-    Host->>Gebruiker: "Uw rapportage is ingediend (ref. RVO-EBR-2026-68750110-001)<br/>en in behandeling genomen. U vindt de status terug onder 'Lopende zaken';<br/>u hoort het zodra er een vervolgactie nodig is."
+    Host->>Gebruiker: "Uw rapportage is ingediend (ref. RVO-EBR-2026-68750110-001)<br/>en in behandeling genomen. U vindt de status terug onder 'Lopende zaken',<br/>u hoort het zodra er een vervolgactie nodig is."
 ```
 
 > **Let op:** De `indienen`-tool is muterend. Het AI-platform vraagt daarom *altijd* om expliciete bevestiging van de gebruiker voordat de tool wordt aangeroepen. Dit is afgedwongen via de `ToolAnnotations` (`readOnlyHint=False`) én de systeemprompt.
@@ -266,11 +271,19 @@ Wat de gebruiker per situatie ziet:
 | Situatie | Foutcode | Wat de gebruiker ziet |
 |---|---|---|
 | Bron reageert niet of geeft 5xx | `SOURCE_UNAVAILABLE` | naam van de bron + het alternatief (bijv. wetten.overheid.nl) |
-| Bron kwam bij het starten niet op | `BRON_NIET_GESTART` | welke bron ontbreekt, dat de andere bronnen wél werken |
+| Bron geeft een 4xx op de aanvraag | `API_FOUT` | idem; de bron werkt wel, maar wees deze aanvraag af |
+| Antwoord afgekapt op `max_tokens` | `LLM_ANTWOORD_AFGEKAPT` | dat het antwoord niet compleet is, mét de deeltekst erbij |
+| Model gaf niets terug | `LLM_LEEG_ANTWOORD` | dat er geen antwoord kwam, met het advies anders te formuleren |
+| Bron kwam bij het starten niet op | `BRON_NIET_GESTART` | welke bron ontbreekt, en dat wachten daar niet bij helpt |
+| Tool bestaat niet in dit transport | `TOOL_NIET_IN_TRANSPORT` | dat de mogelijkheid hier ontbreekt (CLI kent minder tools dan MCP, PDR-005) |
+| Bron reageert niet binnen `TOOL_TIMEOUT` | `SOURCE_UNAVAILABLE` | idem als hierboven; zonder deze grens bleef de stream hangen |
 | Bron vindt niets | `NIET_GEVONDEN` | waar niets is gevonden, met het advies een algemener trefwoord te proberen |
-| Bron mist een gegeven | `ONTBREKEND_VELD` | welk gegeven ontbreekt |
+| Bron mist een gegeven van de gebruiker | `ONTBREKEND_VELD` / `ONTBREKENDE_VELDEN` | welk gegeven ontbreekt, in woorden die de ondernemer herkent (niet de tekst van de bron) |
+| Bron mist een gegeven van de assistent | `ONTBREKEND_INTERN_VELD` | dat de gebruiker er zelf niets aan kan doen (bv. het KvK-nummer uit de sessie) |
 | LLM te traag | `LLM_TIMEOUT` | hoelang er is gewacht, met het advies de vraag korter te stellen |
 | LLM-sleutel geweigerd | `LLM_SLEUTEL_ONGELDIG` | dat de sleutel niet wordt geaccepteerd (opnieuw proberen heeft geen zin) |
+| Geen sleutel, override uit | `LLM_NIET_INGESTELD` | dat de beheerder aan zet is (een sleutel invullen wordt tóch genegeerd) |
+| Fout in de assistent zelf | `HOST_FOUT` | dat de vraag niet kon worden afgerond, zonder het aan het model toe te schrijven |
 | LLM overbelast of rate limit | `LLM_OVERBELAST` / `LLM_TE_DRUK` | dat het tijdelijk is, met het advies het over een minuut te proberen |
 | Gesprek te lang voor het model | `LLM_GESPREK_TE_LANG` | het advies een nieuw gesprek te beginnen |
 | Te veel stappen nodig | `LLM_MAX_STAPPEN` | het advies de vraag op te splitsen, met een voorbeeld |
@@ -279,7 +292,10 @@ Wat de gebruiker per situatie ziet:
 
 Ligt een bron er al bij het starten uit, dan komt dat ook in de systeemprompt te
 staan (`prompts/blocks/shared/bronnen_status.md`), zodat de assistent er niet
-overheen praat en niet terugvalt op eigen kennis.
+overheen praat en niet terugvalt op eigen kennis. Liggen *alle* bronnen eruit,
+dan vervangt `geen_bronnen.md` het `no_tools.md`-blok: dat laatste zegt juist
+"antwoord op eigen kennis", en twee tegengestelde instructies in één prompt is
+slechter dan één.
 
 Het SSE-`error`-event draagt naast `message` (de volledige zin) ook `code`,
 `bericht`, `actie`, `bron` en `herstelbaar`, zodat de frontend een retry-knop of
@@ -297,7 +313,7 @@ moza-poc-digitale-assistent/
     architecture.md         (dit document)
     ai-verantwoording.md    Verantwoording inzet Claude Code in ontwikkeling
     test-vragen.md          Handmatige testvragen
-    decisions/              Product Decision Records (PDR-001 t/m PDR-008)
+    decisions/              Product Decision Records
   scripts/
     validate-mcp-servers.sh Validatie tegen mcp-standaard
   services/

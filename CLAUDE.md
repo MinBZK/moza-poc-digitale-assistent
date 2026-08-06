@@ -44,8 +44,9 @@ Handmatige integratie-scripts (vereisen een `.env` met echte API-keys) staan in
   `test-vragen.md`, `ai-verantwoording.md`.
 
 Vier `mode`-waarden op `/chat`: `vlam`, `claude` (MCP-transport) en `cli:vlam`,
-`cli:claude` (CLI-transport). Default `vlam`. De host werkt ook zónder
-MCP-servers/CLI-tools (antwoordt dan op eigen kennis).
+`cli:claude` (CLI-transport). Default `vlam`. De host werkt ook zónder MCP-servers/CLI-tools; zijn er bronnen
+geconfigureerd die niet opkwamen, dan meldt de assistent dat en verzint hij geen
+gegevens ter vervanging (PDR-011).
 
 Volledig overzicht en de routerings-beslisboom: [`docs/architecture.md`](docs/architecture.md).
 

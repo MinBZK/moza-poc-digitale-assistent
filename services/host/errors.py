@@ -16,12 +16,34 @@ gebruiker en niet naar het LLM.
 
 import json
 import logging
+import re
 from dataclasses import dataclass, replace
 
 import anthropic
 import openai
 
 logger = logging.getLogger("vlam.errors")
+
+# Bovengrens voor tekst uit een bron of uit de vraag die we in een melding
+# terugkaatsen. Die melding gaat naar de UI én naar het LLM met de instructie om
+# 'm door te geven; zonder grens kan een bron er een lap tekst of een eigen
+# "instructie" in kwijt en spreekt de assistent die met gezag uit.
+MAX_ECHO_TEKENS = 80
+
+
+def schoon_echo(waarde: object, maximum: int = MAX_ECHO_TEKENS) -> str:
+    """Maak tekst van buiten geschikt om in een melding te herhalen.
+
+    Regeleindes en opmaaktekens eruit (een melding is één zin, geen HTML en geen
+    tweede instructie aan het model), en afkappen op een lengte die in een zin
+    past. Dit is geen beveiligingsgrens maar wel de grens tussen "een bron meldt
+    iets" en "een bron dicteert wat de assistent zegt".
+    """
+    tekst = re.sub(r"[\s]+", " ", str(waarde)).strip()
+    tekst = re.sub(r"[<>{}\[\]]", "", tekst)
+    if len(tekst) > maximum:
+        tekst = tekst[:maximum].rstrip() + "..."
+    return tekst
 
 
 @dataclass(frozen=True)
@@ -34,6 +56,13 @@ class FoutMelding:
     bron: str | None = None
     herstelbaar: bool = True
     http_status: int = 502
+    # Zichtbaar voor de gebruiker? Een fout die het model zelf kan herstellen
+    # (een verkeerd opgebouwde tool-aanroep) hoort niet als storing in de UI:
+    # het model corrigeert en gaat door, de gebruiker merkt er niets van.
+    zichtbaar: bool = True
+    # Wat het model met deze fout moet doen. Standaard: doorvertellen. Bij een
+    # eigen fout van het model juist niet.
+    llm_instructie: str = ""
 
     @property
     def tekst(self) -> str:
@@ -53,12 +82,17 @@ BRON_LABELS: dict[str, str] = {
     "netbeheerder": "uw Business Wallet (energiegegevens van de netbeheerder)",
 }
 
+# Hoe we de twee LLM-backends aan de gebruiker noemen. De host accepteert twee
+# losse sleutels (`x-vlam-api-key`, `x-claude-api-key`), dus "vul uw sleutel in"
+# zonder te zeggen wélke laat de gebruiker raden welk veld hij moet vullen.
+BACKEND_LABELS: dict[str, str] = {"vlam": "VLAM", "claude": "Claude"}
+
 BRON_ALTERNATIEF: dict[str, str] = {
     "kvk": "kvk.nl",
     "koop": "wetten.overheid.nl",
     "regelrecht": "rvo.nl",
     "rvo": "rvo.nl",
-    "netbeheerder": "uw energierekening of het portaal van uw netbeheerder",
+    "netbeheerder": "uw energierekening",
 }
 
 
@@ -77,6 +111,7 @@ _STANDAARD_INVULLING: dict[str, str] = {
     "bron_label": "de bron",
     "alternatief": "de website van de betreffende instantie",
     "seconden": "de ingestelde tijd",
+    "backend_label": "het AI-model",
     "maximum": "toegestaan",
     "veld": "een verplicht gegeven",
     "zoekterm": "uw zoekopdracht",
@@ -100,15 +135,34 @@ FOUTEN: dict[str, FoutMelding] = {
     ),
     "LLM_GEEN_SLEUTEL": FoutMelding(
         code="LLM_GEEN_SLEUTEL",
-        bericht="Er is geen API-sleutel ingesteld voor dit AI-model.",
-        actie="Vul uw sleutel in via het instellingenpaneel en verstuur de vraag opnieuw.",
+        bericht="De assistent heeft nog geen toegangssleutel voor {backend_label}.",
+        actie=(
+            "Vul de sleutel voor {backend_label} in bij Instellingen en verstuur "
+            "uw vraag opnieuw."
+        ),
+        herstelbaar=False,
+        http_status=503,
+    ),
+    "LLM_NIET_INGESTELD": FoutMelding(
+        code="LLM_NIET_INGESTELD",
+        # Zelfde oorzaak als LLM_GEEN_SLEUTEL, ander advies: staat
+        # ALLOW_API_KEY_OVERRIDE uit, dan negeert de host een ingevulde sleutel
+        # en blijft de gebruiker anders eindeloos hetzelfde proberen.
+        bericht="De assistent is in deze omgeving niet volledig ingesteld.",
+        actie=(
+            "Hier kunt u zelf niets aan doen. Meld dit bij de beheerder van "
+            "deze omgeving."
+        ),
         herstelbaar=False,
         http_status=503,
     ),
     "LLM_SLEUTEL_ONGELDIG": FoutMelding(
         code="LLM_SLEUTEL_ONGELDIG",
-        bericht="De API-sleutel wordt niet geaccepteerd door het AI-model.",
-        actie="Controleer de sleutel in het instellingenpaneel en probeer het opnieuw.",
+        bericht="De toegangssleutel voor {backend_label} wordt niet geaccepteerd.",
+        actie=(
+            "Controleer de sleutel voor {backend_label} bij Instellingen en "
+            "verstuur uw vraag daarna opnieuw."
+        ),
         herstelbaar=False,
         http_status=401,
     ),
@@ -126,8 +180,15 @@ FOUTEN: dict[str, FoutMelding] = {
     ),
     "LLM_ONBEREIKBAAR": FoutMelding(
         code="LLM_ONBEREIKBAAR",
-        bericht="Er is geen verbinding met het AI-model.",
-        actie="Controleer uw netwerkverbinding en probeer het opnieuw.",
+        # Dit gaat over de verbinding van de assistent naar het AI-model, niet
+        # over die van de gebruiker: lag díé eruit, dan had hij deze melding
+        # nooit ontvangen. "Controleer uw netwerkverbinding" is hier dus een
+        # gegarandeerd zinloze opdracht.
+        bericht="De assistent kan het AI-model op dit moment niet bereiken.",
+        actie=(
+            "Probeer het over een minuut opnieuw. Blijft het misgaan, meld het "
+            "dan bij de beheerder van deze omgeving."
+        ),
         http_status=503,
     ),
     "LLM_GESPREK_TE_LANG": FoutMelding(
@@ -151,7 +212,7 @@ FOUTEN: dict[str, FoutMelding] = {
     ),
     "LLM_MODEL_ONBEKEND": FoutMelding(
         code="LLM_MODEL_ONBEKEND",
-        bericht="Het ingestelde AI-model bestaat niet (meer).",
+        bericht="Het ingestelde model voor {backend_label} bestaat niet (meer).",
         actie=(
             "Dit is een instelling van de beheerder. "
             "Meld het bij de beheerder van deze omgeving."
@@ -168,15 +229,68 @@ FOUTEN: dict[str, FoutMelding] = {
         ),
         http_status=504,
     ),
+    "LLM_TOOLCALL_ONGELDIG": FoutMelding(
+        code="LLM_TOOLCALL_ONGELDIG",
+        # De MCP-SDK valideert de argumenten tegen het tool-schema en meldt een
+        # schending terug. Dat is een fout van het model, geen storing: het kan
+        # de aanroep corrigeren. Behandelen als bronstoring zou het model de
+        # gebruiker een niet-bestaande storing laten melden, én het beroven van
+        # de informatie waarmee het zichzelf kan herstellen.
+        bericht="De assistent stelde een vraag aan een bron in de verkeerde vorm.",
+        actie="Probeer het opnieuw, het liefst met een iets concretere vraag.",
+        zichtbaar=False,
+        llm_instructie=(
+            "Dit is een fout in UW eigen tool-aanroep, geen storing bij de bron. "
+            "Meld dit NIET aan de gebruiker. Lees `validatiefout`, corrigeer de "
+            "argumenten en roep de tool opnieuw aan."
+        ),
+        http_status=400,
+    ),
     "LLM_TOOLCALL_ONLEESBAAR": FoutMelding(
         code="LLM_TOOLCALL_ONLEESBAAR",
+        # Zelfde soort fout als LLM_TOOLCALL_ONGELDIG: het model bouwde de
+        # aanroep verkeerd op en corrigeert dat zelf in de volgende ronde. Een
+        # storing melden die er niet is, in termen waar een ondernemer niets mee
+        # kan, maakt een gesprek dat verder gewoon slaagt onnodig verwarrend.
         bericht="Het AI-model gaf een onleesbare opdracht aan een bron.",
         actie="Probeer het opnieuw, en formuleer uw vraag eventueel iets anders.",
+        zichtbaar=False,
+        llm_instructie=(
+            "Dit is een fout in UW eigen tool-aanroep. Meld dit NIET aan de "
+            "gebruiker. Bouw de argumenten opnieuw op als geldige JSON en roep "
+            "de tool nog een keer aan."
+        ),
+    ),
+    "LLM_ANTWOORD_AFGEKAPT": FoutMelding(
+        code="LLM_ANTWOORD_AFGEKAPT",
+        # Het model liep tegen zijn max_tokens aan. Zonder melding stopt het
+        # antwoord midden in een zin en toont de UI het als geslaagd.
+        bericht="Het antwoord was te lang en is halverwege afgebroken.",
+        actie="Stel uw vraag in delen, of vraag om een kortere samenvatting.",
+    ),
+    "LLM_LEEG_ANTWOORD": FoutMelding(
+        code="LLM_LEEG_ANTWOORD",
+        # Een lege antwoordbel is voor de gebruiker niet te onderscheiden van
+        # een vastgelopen assistent; een content-filter of een afgekapte
+        # generatie levert precies dat op.
+        bericht="Het AI-model gaf geen antwoord terug.",
+        actie="Probeer het opnieuw, het liefst met een iets andere formulering.",
     ),
     "LLM_ONBEKEND": FoutMelding(
         code="LLM_ONBEKEND",
         bericht="Het AI-model gaf een onverwachte reactie.",
         actie="Probeer het opnieuw. Blijft het misgaan, meld het bij de beheerder.",
+    ),
+    "HOST_FOUT": FoutMelding(
+        code="HOST_FOUT",
+        # Apart van LLM_ONBEKEND: een fout in de assistent zelf toeschrijven aan
+        # het AI-model zet iedereen die het onderzoekt op een dwaalspoor.
+        bericht="De assistent kon uw vraag niet afronden.",
+        actie=(
+            "Probeer het opnieuw. Blijft het misgaan, meld het dan bij de "
+            "beheerder van deze omgeving."
+        ),
+        http_status=500,
     ),
     # --- De bronnen ---
     "SOURCE_UNAVAILABLE": FoutMelding(
@@ -193,10 +307,13 @@ FOUTEN: dict[str, FoutMelding] = {
     ),
     "BRON_NIET_GESTART": FoutMelding(
         code="BRON_NIET_GESTART",
-        bericht="{bron_label} is bij het starten van de assistent niet beschikbaar gekomen.",
+        bericht="{bron_label} is op dit moment niet beschikbaar, en komt niet vanzelf terug.",
+        # Bewust geen belofte dat de andere bronnen het wél doen: dat weet deze
+        # melding niet. Het bronnen-statusblok in de systeemprompt vertelt het
+        # model welke bronnen er nog zijn; dat mag het invullen.
         actie=(
-            "Meld dit bij de beheerder van deze omgeving. "
-            "De overige bronnen werken wel; u kunt daar wel vragen over stellen."
+            "Wachten helpt hier niet. Meld dit bij de beheerder van deze omgeving, "
+            "of stel een vraag waarvoor deze gegevens niet nodig zijn."
         ),
         herstelbaar=False,
         http_status=503,
@@ -214,6 +331,15 @@ FOUTEN: dict[str, FoutMelding] = {
         herstelbaar=False,
         http_status=404,
     ),
+    "IDENTIFICATIE_NIET_GEVONDEN": FoutMelding(
+        code="IDENTIFICATIE_NIET_GEVONDEN",
+        # Apart van NIET_GEVONDEN: bij een nummer heeft "probeer een algemener
+        # trefwoord" geen betekenis, want een nummer kent geen algemenere variant.
+        bericht="In {bron_label} bestaat {zoekterm} niet.",
+        actie="Controleer het nummer, of zoek de regeling eerst op naam.",
+        herstelbaar=False,
+        http_status=404,
+    ),
     "INPUT_INVALID": FoutMelding(
         code="INPUT_INVALID",
         bericht="De zoekopdracht voor {bron_label} was niet compleet.",
@@ -223,17 +349,29 @@ FOUTEN: dict[str, FoutMelding] = {
     ),
     "ONTBREKEND_VELD": FoutMelding(
         code="ONTBREKEND_VELD",
-        bericht="Er ontbreekt een gegeven om {bron_label} te kunnen raadplegen: {veld}.",
+        bericht="Er ontbreekt een gegeven om deze stap bij {bron_label} te kunnen doen: {veld}.",
         actie="Geef dit gegeven door, dan gaat de assistent verder.",
         herstelbaar=False,
         http_status=400,
     ),
     "ONTBREKENDE_VELDEN": FoutMelding(
         code="ONTBREKENDE_VELDEN",
-        bericht="Er ontbreken gegevens om {bron_label} te kunnen raadplegen: {veld}.",
+        bericht="Er ontbreken gegevens om deze stap bij {bron_label} te kunnen doen: {veld}.",
         actie="Geef deze gegevens door, dan gaat de assistent verder.",
         herstelbaar=False,
         http_status=400,
+    ),
+    "ONTBREKEND_INTERN_VELD": FoutMelding(
+        code="ONTBREKEND_INTERN_VELD",
+        bericht=(
+            "Deze stap bij {bron_label} lukte niet doordat een gegeven "
+            "ontbrak dat de assistent zelf aanlevert."
+        ),
+        actie=(
+            "Hier kunt u zelf niets aan doen. Probeer het opnieuw; blijft het "
+            "misgaan, meld het dan bij de beheerder van deze omgeving."
+        ),
+        http_status=502,
     ),
     "EXECUTION_ERROR": FoutMelding(
         code="EXECUTION_ERROR",
@@ -266,8 +404,52 @@ FOUTEN: dict[str, FoutMelding] = {
         code="ONBEKENDE_TOOL",
         bericht="De assistent probeerde een bron te raadplegen die hier niet beschikbaar is.",
         actie=(
-            "Stel uw vraag opnieuw. Blijft het misgaan, meld het bij de beheerder "
-            "van deze omgeving."
+            "Stel uw vraag opnieuw, het liefst iets concreter. Blijft het misgaan, "
+            "meld het dan bij de beheerder van deze omgeving."
+        ),
+        # Opnieuw proberen is hier wél het advies (het model koos een tool die
+        # niet bestaat), dus de retry-knop mag blijven staan.
+        http_status=501,
+    ),
+    "NIET_TOEGESTAAN": FoutMelding(
+        code="NIET_TOEGESTAAN",
+        bericht="U kunt via de assistent alleen gegevens van uw eigen bedrijf inzien.",
+        actie="Stel uw vraag over uw eigen bedrijf, dan zoekt de assistent het op.",
+        herstelbaar=False,
+        http_status=403,
+    ),
+    "MISSING_DEPENDENCY": FoutMelding(
+        code="MISSING_DEPENDENCY",
+        bericht="{bron_label} kan hier niet worden geraadpleegd: de assistent is niet compleet geïnstalleerd.",
+        actie=(
+            "Hier kunt u zelf niets aan doen. Meld dit bij de beheerder van "
+            "deze omgeving."
+        ),
+        herstelbaar=False,
+        http_status=503,
+    ),
+    "INVALID_INPUT": FoutMelding(
+        code="INVALID_INPUT",
+        bericht="De opdracht aan {bron_label} had niet de juiste vorm.",
+        actie="Stel uw vraag opnieuw in andere woorden, of noem een concreter trefwoord.",
+        herstelbaar=False,
+        http_status=400,
+    ),
+    "PARSE_FOUT": FoutMelding(
+        code="PARSE_FOUT",
+        bericht="{bron_label} gaf een antwoord dat de assistent niet kon lezen.",
+        actie="Probeer het over een minuut opnieuw, of kijk rechtstreeks op {alternatief}.",
+        http_status=502,
+    ),
+    "TOOL_NIET_IN_TRANSPORT": FoutMelding(
+        code="TOOL_NIET_IN_TRANSPORT",
+        # Het CLI-transport loopt bewust achter op MCP (PDR-005/PDR-008). Opnieuw
+        # vragen kan hier per definitie niet slagen, dus dat mag de melding ook
+        # niet suggereren.
+        bericht="Deze mogelijkheid is in deze versie van de assistent niet beschikbaar.",
+        actie=(
+            "Hier kunt u zelf niets aan doen. Meld dit bij de beheerder van deze "
+            "omgeving. Andere vragen kunt u gewoon blijven stellen."
         ),
         herstelbaar=False,
         http_status=501,
@@ -275,9 +457,24 @@ FOUTEN: dict[str, FoutMelding] = {
     "TOOL_ONVERWACHT": FoutMelding(
         code="TOOL_ONVERWACHT",
         bericht="{bron_label} gaf een onverwachte fout.",
-        actie="Probeer het opnieuw. Blijft het misgaan, meld het bij de beheerder.",
+        actie=(
+            "Probeer het opnieuw, of kijk rechtstreeks op {alternatief}. "
+            "Blijft het misgaan, meld het dan bij de beheerder."
+        ),
     ),
     # --- De vraag van de gebruiker ---
+    "BRON_GEEN_SESSIE": FoutMelding(
+        code="BRON_GEEN_SESSIE",
+        bericht="{bron_label} kreeg niet door om welk bedrijf het gaat en kon niets opzoeken.",
+        # Bewust géén "log opnieuw in": deze melding komt van een bron, en een
+        # bron die de assistent een inlog-instructie kan laten uitspreken is een
+        # phishing-vector. Wie er echt uit ligt, hoort de host te bepalen.
+        actie=(
+            "Probeer het opnieuw. Blijft het misgaan, meld het dan bij de "
+            "beheerder van deze omgeving."
+        ),
+        http_status=502,
+    ),
     "GEEN_SESSIE": FoutMelding(
         code="GEEN_SESSIE",
         bericht=(
@@ -289,6 +486,31 @@ FOUTEN: dict[str, FoutMelding] = {
         ),
         herstelbaar=False,
         http_status=401,
+    ),
+    "AANVRAAG_ONGELDIG": FoutMelding(
+        code="AANVRAAG_ONGELDIG",
+        # Het verzoek voldeed niet aan het API-model (een veld ontbreekt of heeft
+        # het verkeerde type). Dat is een fout in de aanroepende software, niet
+        # iets wat de gebruiker verkeerd deed, dus geen "stel uw vraag anders".
+        bericht="Het verzoek aan de assistent was niet compleet.",
+        actie=(
+            "Ververs de pagina en verstuur uw vraag opnieuw. Blijft het misgaan, "
+            "meld het dan bij de beheerder van deze omgeving."
+        ),
+        herstelbaar=False,
+        http_status=422,
+    ),
+    "SESSIE_NIET_INGESTELD": FoutMelding(
+        code="SESSIE_NIET_INGESTELD",
+        # Lege allowlist: niemand komt erdoor, ook niet na opnieuw inloggen.
+        # "Log eerst in" zou hier een doodlopend advies zijn.
+        bericht="De assistent kent in deze omgeving nog geen gebruikers.",
+        actie=(
+            "Hier kunt u zelf niets aan doen. Meld dit bij de beheerder van "
+            "deze omgeving."
+        ),
+        herstelbaar=False,
+        http_status=503,
     ),
     "LEGE_VRAAG": FoutMelding(
         code="LEGE_VRAAG",
@@ -318,9 +540,14 @@ def maak_fout(code: str, **invulling) -> FoutMelding:
     """
     sjabloon = FOUTEN.get(code)
     if sjabloon is None:
-        logger.warning("Onbekende foutcode opgevraagd: %s", code)
+        # %r en afgekapt: de code kan van een bron komen en dus regeleindes
+        # bevatten, waarmee een valse logregel te schrijven zou zijn.
+        logger.warning("Onbekende foutcode opgevraagd: %r", str(code)[:80])
         sjabloon = FOUTEN["LLM_ONBEKEND"]
 
+    backend = invulling.pop("backend", None)
+    if backend:
+        invulling.setdefault("backend_label", BACKEND_LABELS.get(backend, backend))
     bron = invulling.pop("bron", None) or sjabloon.bron
     # Lege waarden weglaten, zodat de neutrale formulering uit
     # _STANDAARD_INVULLING inspringt in plaats van een gat in de zin.
@@ -378,7 +605,14 @@ _LLM_REGELS: tuple[tuple[tuple[type, ...], str], ...] = (
 
 # Signalen in een 400-melding die op een te lange context wijzen. Het type is
 # hier hetzelfde (BadRequestError), alleen de tekst verschilt per aanbieder.
-_CONTEXT_SIGNALEN = ("context", "token", "too long", "maximum length", "te lang")
+_CONTEXT_SIGNALEN = (
+    "prompt is too long",
+    "context length",
+    "context window",
+    "maximum context",
+    "input tokens",
+    "te lang",
+)
 
 
 def classificeer_llm_fout(
@@ -390,10 +624,12 @@ def classificeer_llm_fout(
     type niet. `backend` en `timeout` dienen alleen om de melding concreet te
     maken (hoeveel seconden er is gewacht).
     """
-    seconden = f"{timeout} seconden" if timeout else ""
+    seconden = ""
+    if timeout:
+        seconden = f"{timeout} seconde" if timeout == 1 else f"{timeout} seconden"
     for typen, code in _LLM_REGELS:
         if isinstance(exc, typen):
-            return maak_fout(code, seconden=seconden)
+            return maak_fout(code, seconden=seconden, backend=backend)
 
     if isinstance(exc, anthropic.BadRequestError | openai.BadRequestError):
         tekst = str(exc).lower()
@@ -407,7 +643,7 @@ def classificeer_llm_fout(
         if status >= 500:
             return maak_fout("LLM_OVERBELAST")
         if status in (401, 403):
-            return maak_fout("LLM_SLEUTEL_ONGELDIG")
+            return maak_fout("LLM_SLEUTEL_ONGELDIG", backend=backend)
         if status == 429:
             return maak_fout("LLM_TE_DRUK")
 
@@ -420,12 +656,191 @@ def classificeer_llm_fout(
 # --- Classificatie van bronfouten -------------------------------------------
 
 
-def _veldnamen(payload: dict) -> str:
-    """Beschrijf welk gegeven ontbreekt, zonder waarden uit de payload te tonen."""
+# Foutcodes die een bron mag laten zien. De catalogus bevat ook meldingen over
+# de host zelf (sleutel ontbreekt, log eerst in); zonder deze grens zou een bron
+# die `{"error": "LLM_SLEUTEL_ONGELDIG"}` stuurt de assistent de gebruiker om
+# zijn API-sleutel laten vragen. De bron bepaalt wát er misging, niet wie er
+# schuldig is.
+_BRON_CODES = frozenset(
+    {
+        "SOURCE_UNAVAILABLE",
+        "API_FOUT",
+        "BRON_NIET_GESTART",
+        "BRON_NIET_BESCHIKBAAR",
+        "BRON_GEEN_SESSIE",
+        "NIET_GEVONDEN",
+        "INPUT_INVALID",
+        "ONTBREKEND_VELD",
+        "ONTBREKENDE_VELDEN",
+        "ONTBREKEND_INTERN_VELD",
+        "EXECUTION_ERROR",
+        "WET_NIET_TOEGESTAAN",
+        "CLI_FOUT",
+        "ONBEKENDE_TOOL",
+        "TOOL_ONVERWACHT",
+        "TOOL_NIET_IN_TRANSPORT",
+        # Schemavalidatie door de MCP-SDK: een fout van het model, hersteld door
+        # het model. Staat hier omdat `mcp_client` 'm langs dit pad meegeeft.
+        "LLM_TOOLCALL_ONGELDIG",
+        # Codes van de bash-CLI-wrappers (services/cli/)
+        "NIET_TOEGESTAAN",
+        "MISSING_DEPENDENCY",
+        "INVALID_INPUT",
+        "PARSE_FOUT",
+    }
+)
+
+# Een bron die meldt dat hij geen identiteit meekreeg zegt iets over de aanroep,
+# niet over de inlog van de gebruiker; die twee mogen niet dezelfde zin krijgen.
+_BRON_HERSCHRIJVING = {"GEEN_SESSIE": "BRON_GEEN_SESSIE"}
+
+# Bovengrens op de bron-output die we parsen. Ver boven elk echt antwoord, maar
+# het voorkomt dat een absurd geneste of gigantische payload de event-loop
+# bezighoudt in `json.loads`.
+_MAX_PAYLOAD_TEKENS = 2_000_000
+
+
+# Gegevens die de host of het model zelf aanlevert. Ontbreken die, dan kan de
+# ondernemer er niets aan doen en is "geef dit gegeven door" een zinloze
+# opdracht; dat is dan een fout in de assistent, geen ontbrekend antwoord.
+_INTERNE_VELDEN = frozenset(
+    {"kvk_nummer", "kvknummer", "law", "service", "bsn", "rsin", "regeling_id"}
+)
+
+# Parameternamen zoals de bronnen ze kennen, in woorden waar een ondernemer iets
+# aan heeft. Zonder deze vertaling leest de melding als "Er ontbreekt een gegeven
+# ...: trefwoord" en weet de gebruiker nog steeds niet wat hij moet aanleveren.
+_VELD_IN_MENSENTAAL = {
+    "trefwoord": "een zoekwoord",
+    "maatregelen": "welke energiebesparende maatregelen u hebt genomen",
+    "bwb_id": "om welke regeling het gaat",
+    "jaarlijks_elektriciteitsverbruik_kwh": "uw jaarlijks elektriciteitsverbruik in kWh",
+    "jaarlijks_gasverbruik_m3": "uw jaarlijks gasverbruik in m³",
+    "is_woonfunctie": "of het pand een woonfunctie heeft",
+}
+
+
+def _veldsleutel(veld: object) -> str:
+    """De ruwe parameternaam van een ontbrekend-veld-item."""
+    if isinstance(veld, dict):
+        return str(veld.get("naam") or veld.get("name") or "").strip().lower()
+    return str(veld).strip().lower()
+
+
+def _veldnamen(payload: dict) -> tuple[list[str], bool]:
+    """De ontbrekende gegevens in woorden die een ondernemer herkent.
+
+    Geeft `(namen, blokkeert_op_intern)` terug. Velden die de host of het model zelf
+    aanlevert (het KvK-nummer uit de sessie, de gekozen wet, het regeling-ID)
+    worden eruit gefilterd: daar kan de ondernemer niets mee, en ze om zo'n
+    gegeven vragen is een opdracht die hij niet kán uitvoeren.
+
+    De bronnen zijn onderling niet eenduidig: sommige sturen een lijst namen,
+    andere een lijst dicts (`{"naam": "JAARLIJKS_GASVERBRUIK_M3", "beschrijving":
+    "Jaarlijks gasverbruik"}`). De beschrijving wint, want een engine-constante
+    in kapitalen is geen zin voor een ondernemer. Bewust NIET terugvallen op het
+    `message`-veld van de bron: dat is technische tekst en die hoort in de log.
+    """
     velden = payload.get("ontbrekende_gegevens") or payload.get("velden")
-    if isinstance(velden, list) and velden:
-        return ", ".join(str(v) for v in velden)
-    return _STANDAARD_INVULLING["veld"]
+    if not isinstance(velden, list):
+        return [], False
+
+    namen: list[str] = []
+    intern = 0
+    for veld in velden[:5]:
+        sleutel = _veldsleutel(veld)
+        if sleutel in _INTERNE_VELDEN:
+            intern += 1
+            continue
+        if sleutel in _VELD_IN_MENSENTAAL:
+            namen.append(_VELD_IN_MENSENTAAL[sleutel])
+            continue
+        ruw = veld.get("beschrijving") or sleutel if isinstance(veld, dict) else veld
+        schoon = schoon_echo(str(ruw).rstrip(". "), maximum=40)
+        if schoon:
+            namen.append(schoon)
+    # Ontbreekt er óók een gegeven dat de assistent zelf aanlevert, dan helpt het
+    # niet of de gebruiker de rest aanlevert: de aanroep faalt opnieuw op dat
+    # interne veld. Dan liever eerlijk zeggen dat hij er niets aan kan doen dan
+    # hem laten aanleveren wat hij misschien net al gaf.
+    return namen, bool(intern)
+
+
+# Excepties die op een fout in ónze code wijzen, niet op een bron die uitvalt.
+# Alleen deze krijgen "onverwachte fout"; al het overige komt van het transport
+# (een dichtgevallen stdio-pipe, een SDK-fout, een subprocess dat wegvalt) en
+# hoort de bron-naam plus het alternatief te noemen. Bewust deze kant op: een
+# nieuwe exceptiesoort uit de MCP-SDK levert dan de bruikbare melding op in
+# plaats van de vage.
+_PROGRAMMEERFOUTEN = (TypeError, AttributeError, KeyError, IndexError, NameError)
+
+
+def _transportfout(exc: BaseException) -> str:
+    """Kies de foutcode voor een exception uit een bron-aanroep."""
+    # FileNotFoundError en PermissionError eerst: die erven van OSError maar
+    # betekenen hier iets anders (de bron kán niet starten, opnieuw proberen
+    # helpt niet) dan een verbinding die wegvalt.
+    if isinstance(exc, FileNotFoundError | PermissionError):
+        return "BRON_NIET_GESTART"
+    if isinstance(exc, _PROGRAMMEERFOUTEN):
+        return "TOOL_ONVERWACHT"
+    return "SOURCE_UNAVAILABLE"
+
+
+# Een identificatie (BWB-ID, KvK-nummer) is geen zoekterm: "probeer een
+# algemener trefwoord" is daar zinloos advies.
+_IDENTIFICATIE_RE = re.compile(r"^(BWB[RVB]\d+|\d{6,})$", re.IGNORECASE)
+
+
+def _is_identificatie(zoekterm: str) -> bool:
+    """Is dit een nummer/ID in plaats van een zoekwoord?"""
+    return bool(_IDENTIFICATIE_RE.match((zoekterm or "").strip()))
+
+
+def _is_leeg_zoekresultaat(resultaat: object) -> bool:
+    """Een geslaagde zoekopdracht die niets opleverde.
+
+    De bronnen melden dat met `aantal: 0` en een lege resultatenlijst, niet met
+    een foutcode; zonder deze check komt de al geschreven "niets gevonden"-zin
+    nooit in beeld en improviseert het model.
+    """
+    if not isinstance(resultaat, str) or not resultaat.strip().startswith("{"):
+        return False
+    if len(resultaat) > _MAX_PAYLOAD_TEKENS:
+        return False
+    try:
+        payload = json.loads(resultaat)
+    except Exception:  # noqa: BLE001
+        return False
+    if not isinstance(payload, dict):
+        return False
+    kern = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    resultaten = kern.get("resultaten")
+    return isinstance(resultaten, list) and not resultaten and kern.get("aantal") == 0
+
+
+def _foutpayload(resultaat: object) -> dict | None:
+    """Haal de foutdict uit een tool-resultaat, of `None` als er geen fout is.
+
+    Twee vormen: kaal (`{"error": ...}`) en verpakt in de provenance-envelope van
+    de MCP-standaard (`{"data": {"error": ...}, "provenance": {...}}`). RegelRecht
+    gebruikt de tweede voor álles, ook voor zijn fouten; zonder deze uitpakstap
+    glipt precies die bron langs de catalogus heen.
+    """
+    if not isinstance(resultaat, str):
+        return None
+    tekst = resultaat.strip()
+    if not tekst.startswith("{") or len(tekst) > _MAX_PAYLOAD_TEKENS:
+        return None
+    try:
+        payload = json.loads(tekst)
+    except Exception:  # noqa: BLE001 — ook RecursionError bij absurd geneste JSON
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if "error" not in payload and isinstance(payload.get("data"), dict):
+        payload = payload["data"]
+    return payload if isinstance(payload.get("error"), str) and payload["error"] else None
 
 
 def classificeer_tool_fout(
@@ -437,31 +852,54 @@ def classificeer_tool_fout(
     enkele check kan gebruiken op zowel geslaagde als mislukte aanroepen.
     """
     bron = bron_uit_tool(tool_key)
-    invulling = {"bron": bron, "zoekterm": f"'{zoekterm}'" if zoekterm else ""}
+    schone_zoekterm = schoon_echo(zoekterm) if zoekterm else ""
+    invulling = {
+        "bron": bron,
+        "zoekterm": f"'{schone_zoekterm}'" if schone_zoekterm else "",
+    }
 
     if isinstance(resultaat, BaseException):
-        # FileNotFoundError eerst: die erft van OSError, maar betekent hier iets
-        # anders (het serverscript zelf ontbreekt) dan een verbinding die wegvalt.
-        if isinstance(resultaat, FileNotFoundError):
-            return maak_fout("BRON_NIET_GESTART", **invulling)
-        if isinstance(resultaat, TimeoutError | OSError):
-            return maak_fout("SOURCE_UNAVAILABLE", **invulling)
-        return maak_fout("TOOL_ONVERWACHT", **invulling)
+        return maak_fout(_transportfout(resultaat), **invulling)
 
-    if not isinstance(resultaat, str) or not resultaat.strip().startswith("{"):
+    if _is_leeg_zoekresultaat(resultaat):
+        # Een zoekopdracht zonder treffers is geen fout in de bron, maar voor de
+        # gebruiker wél een doodloper: zonder melding improviseert het model.
+        # Bij een gebruikerstest is dit het meest waarschijnlijke vastlopen.
+        code = (
+            "IDENTIFICATIE_NIET_GEVONDEN"
+            if _is_identificatie(schone_zoekterm)
+            else "NIET_GEVONDEN"
+        )
+        return maak_fout(code, **invulling)
+
+    payload = _foutpayload(resultaat)
+    if payload is None:
         return None
 
-    try:
-        payload = json.loads(resultaat)
-    except (json.JSONDecodeError, ValueError):
-        return None
-    if not isinstance(payload, dict):
-        return None
+    ruwe_code = str(payload["error"]).strip().upper()
+    code = _BRON_HERSCHRIJVING.get(ruwe_code, ruwe_code)
+    if code not in _BRON_CODES:
+        logger.warning(
+            "Bron %r stuurde een code buiten de bron-set: %r",
+            bron or "onbekend",
+            str(payload["error"])[:80],
+        )
+        code = "TOOL_ONVERWACHT"
 
-    code = payload.get("error")
-    if not isinstance(code, str) or not code:
-        return None
-    return maak_fout(code, veld=_veldnamen(payload), **invulling)
+    if code == "NIET_GEVONDEN" and _is_identificatie(schone_zoekterm):
+        code = "IDENTIFICATIE_NIET_GEVONDEN"
+    if code in ("ONTBREKEND_VELD", "ONTBREKENDE_VELDEN"):
+        namen, blokkeert_op_intern = _veldnamen(payload)
+        if blokkeert_op_intern:
+            code = "ONTBREKEND_INTERN_VELD"
+        else:
+            code = "ONTBREKENDE_VELDEN" if len(namen) > 1 else "ONTBREKEND_VELD"
+            invulling["veld"] = ", ".join(namen)
+    if code == "LLM_TOOLCALL_ONGELDIG":
+        # Geen bron-melding: de gebruiker hoeft niets te weten van een aanroep
+        # die het model zelf corrigeert.
+        return maak_fout(code)
+    return maak_fout(code, **invulling)
 
 
 # --- Uitgaande vormen --------------------------------------------------------
@@ -485,6 +923,17 @@ def naar_event(fout: FoutMelding, type_: str = "error") -> dict:
     }
 
 
+# Velden uit een foutantwoord die het model mag zien. Alles daarbuiten (paden,
+# stack-tekst, een door de bron verzonnen `gebruikersmelding`) blijft in de log.
+# `velden` staat er bewust NIET in: de melding is er al mee opgebouwd, mét het
+# filter dat interne velden (kvk_nummer, regeling_id) wegneemt. Doorgeven zou het
+# model alsnog om een gegeven laten vragen dat de gebruiker niet kán leveren.
+# `ontbrekende_gegevens` blijft wel: de RegelRecht-flow leunt erop om de juiste
+# feitelijke vragen te stellen.
+_DOOR_TE_GEVEN_VELDEN = frozenset(
+    {"error", "ontbrekende_gegevens", "benodigde_feiten", "validatiefout"}
+)
+
 _LLM_INSTRUCTIE = (
     "Geef de gebruikersmelding letterlijk door aan de gebruiker, in uw eigen "
     "antwoordopmaak. Verzin GEEN gegevens en gebruik GEEN eigen kennis als "
@@ -499,15 +948,15 @@ def naar_llm(fout: FoutMelding) -> str:
     hier ziet doorvertellen aan de gebruiker. De technische oorzaak staat in de
     log, niet in het gesprek.
     """
-    return json.dumps(
-        {
-            "error": fout.code,
-            "bron": fout.bron,
-            "gebruikersmelding": fout.tekst,
-            "instructie": _LLM_INSTRUCTIE,
-        },
-        ensure_ascii=False,
-    )
+    payload = {"error": fout.code, "bron": fout.bron}
+    # Alleen een melding meegeven als die ook echt voor de gebruiker is. De
+    # systeemprompt draagt op om `gebruikersmelding` letterlijk door te geven;
+    # dat veld meesturen bij een fout die het model zelf moet herstellen, zou
+    # die instructie recht tegenspreken.
+    if fout.zichtbaar:
+        payload["gebruikersmelding"] = fout.tekst
+    payload["instructie"] = fout.llm_instructie or _LLM_INSTRUCTIE
+    return json.dumps(payload, ensure_ascii=False)
 
 
 def verrijk_llm(resultaat: str, fout: FoutMelding) -> str:
@@ -521,11 +970,46 @@ def verrijk_llm(resultaat: str, fout: FoutMelding) -> str:
     """
     try:
         payload = json.loads(resultaat)
-    except (json.JSONDecodeError, ValueError):
+    except Exception:  # noqa: BLE001 — ook RecursionError bij absurd geneste JSON
         return naar_llm(fout)
     if not isinstance(payload, dict):
         return naar_llm(fout)
-    payload.pop("message", None)
-    payload["gebruikersmelding"] = fout.tekst
-    payload["instructie"] = _LLM_INSTRUCTIE
-    return json.dumps(payload, ensure_ascii=False)
+    # Het technische bericht gaat eruit, op beide niveaus: de provenance-envelope
+    # van de MCP-standaard zet de foutdict onder `data`.
+    # Allowlist in plaats van `message` wegstrepen: een denylist van één veld
+    # gaat ervan uit dat we alle andere veldnamen kennen die een bron ooit
+    # meestuurt. Een bron die zijn technische tekst in `detail` zet, of zelf een
+    # `gebruikersmelding` verzint, zou er anders langs komen — en die tekst gaat
+    # met het gezag van de host naar het model.
+    behouden = {
+        sleutel: waarde
+        for sleutel, waarde in payload.items()
+        if sleutel in _DOOR_TE_GEVEN_VELDEN
+    }
+    # De genormaliseerde code, niet de rauwe waarde: die is door de bron bepaald
+    # en kan een lap tekst of een eigen instructie zijn.
+    behouden["error"] = fout.code
+    if isinstance(payload.get("data"), dict):
+        behouden["data"] = {
+            sleutel: waarde
+            for sleutel, waarde in payload["data"].items()
+            if sleutel in _DOOR_TE_GEVEN_VELDEN
+        }
+        # Ook hier de genormaliseerde code: de provenance-envelope is juist de
+        # vorm die RegelRecht voor álles gebruikt, dus zonder deze regel komt de
+        # rauwe bronwaarde er langs de allowlist heen alsnog doorheen.
+        behouden["data"]["error"] = fout.code
+    # Interne velden er ook hier uit: de melding laat `kvk_nummer` bewust weg
+    # omdat de gebruiker die niet kan aanleveren, en dan moet het model er via
+    # deze lijst niet alsnog om kunnen vragen.
+    for laag in (behouden, behouden.get("data")):
+        if isinstance(laag, dict) and isinstance(laag.get("ontbrekende_gegevens"), list):
+            laag["ontbrekende_gegevens"] = [
+                veld
+                for veld in laag["ontbrekende_gegevens"]
+                if _veldsleutel(veld) not in _INTERNE_VELDEN
+            ]
+    if fout.zichtbaar:
+        behouden["gebruikersmelding"] = fout.tekst
+    behouden["instructie"] = fout.llm_instructie or _LLM_INSTRUCTIE
+    return json.dumps(behouden, ensure_ascii=False)

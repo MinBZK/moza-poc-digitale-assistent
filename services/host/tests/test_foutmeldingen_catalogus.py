@@ -13,11 +13,15 @@ stilletjes kan sneuvelen, allebei hier afgedekt:
 """
 
 import ast
+import re
 from pathlib import Path
 
 import pytest
 
+from cli_executor import _CLI_CODES
 from errors import (
+    _BRON_CODES,
+    _BRON_HERSCHRIJVING,
     BRON_ALTERNATIEF,
     BRON_LABELS,
     FOUTEN,
@@ -35,8 +39,23 @@ BRONBESTANDEN = [
     SERVICES / "host" / "mcp_client.py",
 ]
 
+# De bash-wrappers van het CLI-transport. Sinds `_cli_fout` hun code uit
+# stderr overneemt, bepalen ze net zo goed welke melding de gebruiker ziet als
+# de MCP-servers; zonder deze scan zou een nieuwe code daar stilzwijgend op de
+# generieke CLI-melding uitkomen.
+CLI_WRAPPERS = sorted(
+    p
+    for p in [*(SERVICES / "cli").glob("*-cli"), *(SERVICES / "cli" / "lib").glob("*.sh")]
+    if p.is_file()
+)
+
 # Formuleringen die precies het probleem zijn dat dit ticket oplost: ze vertellen
 # de gebruiker niets over wat er gebeurde of wat hij eraan kan doen.
+# De wrappers schrijven hun JSON in een `echo "..."`, dus met geescapete quotes
+# (`{\"error\":\"API_FOUT\"}`). Een regex die alleen de kale vorm kent, ziet de
+# helft van de codes niet en geeft een garantie die er niet is.
+_CLI_CODE_RE = re.compile(r"""\\?['"]error\\?['"]\s*:\s*\\?['"]([A-Z][A-Z_]+)""")
+
 NIETSZEGGEND = (
     "iets ging mis",
     "er is een fout opgetreden",
@@ -95,6 +114,26 @@ def test_geen_nietszeggende_formuleringen(code):
 
 
 @pytest.mark.parametrize("code", sorted(FOUTEN))
+def test_onherstelbare_fout_vraagt_niet_om_een_kale_retry(code):
+    """De UI haalt de retry-knop weg bij `herstelbaar: false` (PDR-011).
+
+    De melding mag dan niet suggereren dat hetzelfde verzoek nog eens versturen
+    helpt: de knop is er niet, en het zou ook niet werken. "Verander eerst iets
+    en verstuur dan opnieuw" mag juist wél — dat is precies het
+    handelingsperspectief dat we willen.
+    """
+    melding = maak_fout(code)
+    if melding.herstelbaar:
+        return
+    actie = melding.actie.lower()
+    for kale_retry in ("probeer het opnieuw", "probeer het over"):
+        assert kale_retry not in actie, (
+            f"{code} is niet herstelbaar, maar de actie suggereert dat hetzelfde "
+            f"verzoek nog eens versturen helpt: {melding.actie!r}"
+        )
+
+
+@pytest.mark.parametrize("code", sorted(FOUTEN))
 def test_geen_openstaande_placeholders(code):
     """Elke melding moet ook zónder invulwaarden een lopende zin opleveren."""
     melding = maak_fout(code)
@@ -119,6 +158,60 @@ def test_elke_uitgestuurde_foutcode_staat_in_de_catalogus(pad):
         "de catalogus staan; de gebruiker krijgt daarvoor geen specifieke melding. "
         "Voeg ze toe aan FOUTEN in services/host/errors.py."
     )
+
+
+@pytest.mark.parametrize(
+    "pad",
+    [p for p in BRONBESTANDEN if p.parent.name not in ("host",)],
+    ids=lambda p: p.parent.name,
+)
+def test_elke_servercode_mag_ook_daadwerkelijk_van_een_bron_komen(pad):
+    """In `FOUTEN` staan is niet genoeg; de code moet ook door de filter komen.
+
+    `_BRON_CODES` bepaalt welke codes een bron mag kiezen. Staat een code alleen
+    in de catalogus, dan valt hij stilzwijgend terug op "onverwachte fout" — de
+    generieke melding waar dit ticket vanaf wil.
+    """
+    ontbreekt = sorted(_foutcodes_uit_broncode(pad) - _BRON_CODES - set(_BRON_HERSCHRIJVING))
+    assert not ontbreekt, (
+        f"{pad.parent.name} stuurt {ontbreekt} uit, maar die staan niet in _BRON_CODES "
+        "in services/host/errors.py en komen dus als TOOL_ONVERWACHT bij de gebruiker."
+    )
+
+
+@pytest.mark.parametrize("pad", CLI_WRAPPERS, ids=lambda p: p.name)
+def test_elke_cli_code_wordt_ook_daadwerkelijk_overgenomen(pad):
+    """Idem voor het CLI-transport, waar `_CLI_CODES` de filter is."""
+    codes = set(_CLI_CODE_RE.findall(pad.read_text(encoding="utf-8")))
+    ontbreekt = sorted(codes - _CLI_CODES)
+    assert not ontbreekt, (
+        f"{pad.name} stuurt {ontbreekt} uit, maar die staan niet in _CLI_CODES in "
+        "services/host/cli_executor.py en worden dus CLI_FOUT."
+    )
+
+
+@pytest.mark.parametrize("pad", CLI_WRAPPERS, ids=lambda p: p.name)
+def test_elke_cli_foutcode_staat_in_de_catalogus(pad):
+    """De bash-wrappers zetten hun code in een JSON-regel op stderr."""
+    codes = set(_CLI_CODE_RE.findall(pad.read_text(encoding="utf-8")))
+    ontbreekt = sorted(codes - set(FOUTEN))
+    assert not ontbreekt, (
+        f"{pad.name} stuurt foutcode(s) {ontbreekt} uit die niet in de catalogus staan; "
+        "de gebruiker krijgt daarvoor de generieke CLI-melding met een retry-advies "
+        "dat mogelijk nergens toe leidt. Voeg ze toe aan FOUTEN in services/host/errors.py."
+    )
+
+
+def test_cli_scan_vindt_de_bekende_codes():
+    """Vangnet onder de CLI-scan: een lege uitkomst is geen bewijs."""
+    codes = set()
+    for pad in CLI_WRAPPERS:
+        codes |= set(
+            _CLI_CODE_RE.findall(pad.read_text(encoding="utf-8"))
+        )
+    assert CLI_WRAPPERS, "geen CLI-wrappers gevonden om te scannen"
+    # Codes in beide schrijfwijzen, zodat een regex die er maar een kent opvalt.
+    assert {"NIET_TOEGESTAAN", "INVALID_INPUT", "API_FOUT", "ONTBREKENDE_VELDEN"} <= codes
 
 
 def test_scan_vindt_de_bekende_codes():

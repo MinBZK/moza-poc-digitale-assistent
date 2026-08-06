@@ -65,4 +65,6 @@ publieke route) en draait **zonder LLM-sleutels**: gebruikers leveren een sleute
 via de UI (`ALLOW_API_KEY_OVERRIDE=true`, de default). Enige vereiste secret:
 `ZAD_API_KEY`.
 
-**Streaming events**: de UI verwacht `status`, `tool`, `case`, `answer`, `error` en `done`. Zie de docstrings van `chat_stream` voor het exacte contract.
+**Streaming events**: de UI verwacht `status`, `tool`, `case`, `bron_fout`, `answer`, `error` en `done`. `error` is het eindpunt van een gesprek, `bron_fout` niet: daarbij viel een bron uit terwijl de assistent doorwerkt en volgt het antwoord alsnog (PDR-011). Zie de docstrings van `chat_stream` voor het exacte contract.
+
+**HTTP-foutrespons** (gewijzigd t.o.v. eerdere versies): de niet-streamende endpoints geven het foutobject op topniveau terug (`{"type": "error", "code": ..., "message": ..., "herstelbaar": ...}`), niet meer als string onder `detail`. Zie de bijlage van [PDR-011](../../docs/decisions/PDR-011-foutmeldingen-catalogus.md).

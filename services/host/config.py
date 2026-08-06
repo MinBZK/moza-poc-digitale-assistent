@@ -68,6 +68,13 @@ VLAM_PORT = int(os.getenv("VLAM_PORT", "8000"))
 VLAM_TIMEOUT = int(os.getenv("VLAM_TIMEOUT", "30"))
 CLAUDE_TIMEOUT = int(os.getenv("CLAUDE_TIMEOUT", "60"))
 
+# Time-out per bron-aanroep (seconden), voor MCP én CLI. Zonder deze grens kan
+# een bron die
+# het verzoek aanneemt maar nooit antwoordt de hele SSE-stream laten hangen: geen
+# antwoord, geen foutmelding, geen afsluiting. Het CLI-transport heeft daarbinnen
+# een eigen grens per subprocess: maximaal 30 s, en altijd 5 s korter dan deze.
+TOOL_TIMEOUT = int(os.getenv("TOOL_TIMEOUT", "45"))
+
 # Maximale lengte van één vraag. Zonder bovengrens belandt een willekeurig lang
 # bericht ongelezen in de gespreksgeschiedenis en faalt de LLM-call verderop met
 # een vage melding; hiermee weet de gebruiker meteen wat er mis is. Ruim boven
@@ -131,6 +138,7 @@ __all__ = [
     "CLAUDE_MODEL",
     "MAX_VRAAG_TEKENS",
     "MCP_SERVERS",
+    "TOOL_TIMEOUT",
     "TEST_KVK_NUMMERS",
     "kvk_uit_header",
     "VLAM_API_KEY",
