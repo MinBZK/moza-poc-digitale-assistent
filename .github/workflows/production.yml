@@ -9,8 +9,12 @@ name: Production deploy
 #     LLM-secret; alleen ZAD_API_KEY is nodig voor de deploy. Dat is een bewuste
 #     keuze (PDR-010): geen gedeelde sleutel om leeg te trekken op een host die
 #     nog geen authenticatie op /chat heeft.
-#   - de component-config hoort ALLOWED_ORIGINS op een concrete whitelist te
-#     zetten; bij "*" waarschuwt de host bij het opstarten.
+#   - ALLOWED_ORIGINS blijft in de component-config LEEG. Dat is de strikte
+#     stand: de frontend-pod bereikt de backend same-origin via de reverse
+#     proxy, dus CORS komt er niet aan te pas. Zet hier niets in "voor de
+#     zekerheid" — dat opent iets wat nu dicht is. Is er ooit wél cross-origin
+#     verkeer, dan een concrete whitelist en nooit "*"; bij "*" waarschuwt de
+#     host bij het opstarten (zie docs/deploy-zad.md).
 
 on:
   push:
