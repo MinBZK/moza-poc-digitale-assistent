@@ -463,3 +463,22 @@ async def test_afgekapt_antwoord_gaat_niet_verloren():
     assert _terminale(events) == ["answer"], "precies één eindpunt"
     antwoord = [e for e in events if e["type"] == "answer"][0]
     assert "Het antwoord begint en" in antwoord["message"], "de deeltekst blijft"
+
+
+async def test_bronfout_logt_geen_argumentwaarden(caplog):
+    """De logregel van een mislukte bron-aanroep draagt geen identiteit.
+
+    Regressie uit het samenvoegen van MVP-02 en PDR-011: `_bron_aanroep` logde de
+    volledige exception-tekst, en die kan het sessie-KvK bevatten. Dat ondergraaft
+    `_arg_keys`, dat juist alleen veldnamen logt.
+    """
+
+    async def _kapot():
+        raise ValueError(f"kvk_nummer {SESSIE} niet gevonden in het Handelsregister")
+
+    with caplog.at_level("ERROR", logger="vlam.host"):
+        await vlam_host._bron_aanroep(_kapot, "kvk__mijn_bedrijf", {})
+
+    assert SESSIE not in caplog.text, "het sessie-KvK stond in de foutregel"
+    assert "kvk__mijn_bedrijf" in caplog.text
+    assert "ValueError" in caplog.text

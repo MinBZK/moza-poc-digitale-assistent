@@ -280,7 +280,7 @@ async def _bron_aanroep(aanroep, tool_key: str, arguments: dict) -> tuple[str, o
         resultaat = await asyncio.wait_for(aanroep(), timeout=TOOL_TIMEOUT)
     except Exception as e:
         fout = classificeer_tool_fout(tool_key, e)
-        logger.error("Tool-aanroep mislukt [%s/%s]: %s", tool_key, fout.code, e)
+        _log_tool_error(tool_key, e, fout.code)
         return naar_llm(fout), fout
 
     fout = classificeer_tool_fout(tool_key, resultaat, _zoekterm(arguments))
@@ -304,7 +304,7 @@ def _extract_lopende_zaak(tool_name: str, result: str) -> dict | None:
         return None
 
 
-def _log_tool_error(tool_key: str, exc: Exception) -> None:
+def _log_tool_error(tool_key: str, exc: Exception, code: str = "") -> None:
     """Log een mislukte tool-aanroep zonder de tekst van de exception.
 
     Die tekst kan argumentwaarden bevatten — bijvoorbeeld het sessie-KvK, zoals
@@ -312,8 +312,13 @@ def _log_tool_error(tool_key: str, exc: Exception) -> None:
     ondergraven, dat juist bewust alleen veldnamen logt. Op DEBUG staat de
     volledige tekst wél; die stand kies je zelf, en dan weet je wat je logt.
     """
-    logger.error("Fout bij tool '%s': %s", tool_key, type(exc).__name__)
-    logger.debug("Fout bij tool '%s' (volledige melding): %s", tool_key, exc)
+    logger.error(
+        "Tool-aanroep mislukt [%s%s]: %s",
+        tool_key,
+        f"/{code}" if code else "",
+        type(exc).__name__,
+    )
+    logger.debug("Tool-aanroep mislukt [%s] (volledige melding): %s", tool_key, exc)
 
 
 def _log_tokens(backend: str, response) -> None:
