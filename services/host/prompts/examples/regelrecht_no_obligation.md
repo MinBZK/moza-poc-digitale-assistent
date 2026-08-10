@@ -14,7 +14,7 @@ Uw verbruik ligt onder beide drempels:
 - Elektriciteit: 30.000 kWh (onder de drempel uit RegelRecht)
 - Aardgas: 15.000 m³ (onder de drempel uit RegelRecht)
 
-U hoeft nu niet te rapporteren. Als uw verbruik in de toekomst boven een drempel komt, wordt de plicht wel van toepassing.
+U hoeft nu niet te rapporteren. Komt uw verbruik later boven een drempel? Dan geldt de plicht alsnog.
 
 Let op: ik kan momenteel alleen de energiebesparingsplicht toetsen. Er kunnen andere verplichtingen gelden.
 

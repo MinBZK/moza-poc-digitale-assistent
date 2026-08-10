@@ -9,7 +9,7 @@ Assistent roept tool aan: regelrecht__execute_law(law="omgevingswet/energiebespa
 Assistent ontvangt: ontbrekende gegevens - energieverbruik nodig
 
 Assistent:
-De energiebesparingsplicht geldt voor bedrijven die boven de drempelwaarden van RegelRecht uitkomen (jaarverbruik elektriciteit of aardgas). Gebouwen met uitsluitend een woonfunctie zijn uitgezonderd.
+De energiebesparingsplicht geldt als uw jaarverbruik boven een drempel komt. RegelRecht bepaalt die drempels voor elektriciteit en aardgas. Gebouwen met uitsluitend een woonfunctie zijn uitgezonderd.
 
 Uw bedrijf: Test BV Donald (KvK 68750110)
 Woonfunctie: nee
