@@ -296,8 +296,13 @@ async def chat_stream(body: ChatRequest, request: Request):
             session_id, body.message, mode=mode, session_kvk=session_kvk, **api_keys
         ):
             event_type = event.get("type", "status")
-            # Voeg session_id en mode toe aan answer-events
-            if event_type == "answer":
+            # Session_id en mode horen bij elk event dat een beurt afsluit, niet
+            # alleen bij `answer`. Sinds PDR-011 eindigen sommige beurten op een
+            # `error`-event ("te veel stappen", "geen antwoord"), en juist die
+            # meldingen vragen de gebruiker het opnieuw te proberen. Zonder het
+            # server-gemunte session_id start die tweede poging een nieuw gesprek
+            # en is de context weg — precies wanneer die het hardst nodig is.
+            if event_type in ("answer", "error"):
                 event["session_id"] = session_id
                 event["mode"] = mode
                 event["has_tools"] = host.has_tools
