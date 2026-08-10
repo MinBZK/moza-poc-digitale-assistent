@@ -138,3 +138,34 @@ programmeren in de host:
 (BETA-02) of de assistent buiten een gesloten testgroep gebruikt wordt. Dan is
 een server-sleutel met rate limiting per geauthenticeerde gebruiker
 waarschijnlijk de betere kant op.
+
+## Addendum (2026-08-10): tijdelijke serversleutel voor het gebruikersonderzoek
+
+Voor het gebruikersonderzoek van **25 en 27 augustus 2026** wijkt de deployment
+tijdelijk af van beslissing 1.
+
+De ondernemers die meedoen werken in hun eigen browser op hun eigen machine. Hun
+een sleutel laten invoeren betekent dat we die aan onderzoeksdeelnemers geven:
+ze zien hem, en de frontend bewaart hem in `localStorage` — dus hij blijft na de
+sessie in hun browser achter, ook nadat de schermopname gewist is. Dat is precies
+het risico dat dit PDR wilde vermijden, en het gaat bovendien in tegen de eigen
+spelregel hierboven ("nooit `localStorage`").
+
+In dat venster geldt daarom: een **aparte Anthropic-sleutel met spend limit** op
+de ZAD-component, en `ALLOW_API_KEY_OVERRIDE=false`, zodat de sleutel-headers
+genegeerd worden en niemand iets hoeft in te voeren.
+
+**Geaccepteerd restrisico.** `/chat` heeft geen authenticatie, dus wie de host
+bereikt verbruikt deze sleutel. Draagbaar omdat de backend internal-only is en
+het venster twee dagen beslaat. Het is nadrukkelijk niet de stand daarbuiten.
+
+**Intrekken.** De sleutel wordt na 27 augustus 2026 ingetrokken en
+`ALLOW_API_KEY_OVERRIDE` gaat terug naar `true`. Zolang dat niet gebeurd is,
+staat er een gedeelde sleutel op een onauthenticeerde host — dan is dit geen
+tijdelijke afwijking meer maar een stille verslechtering.
+
+**Nog te wegen restrisico, los van dit venster.** Met een eigen sleutel loopt het
+gesprek via het provideraccount van de tester: zonder verwerkersovereenkomst met
+BZK en zonder zicht op retentie of training-opt-out. Bij fictieve data
+ongevaarlijk, maar het is een reëel gevolg van de architectuurkeuze. Zie het
+"LLM-knelpunt" in `docs/preparation/kvk-gegevens.md`.
