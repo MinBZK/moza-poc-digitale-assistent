@@ -387,6 +387,51 @@ async def test_fout_tijdens_sluiten_gaat_geredigeerd_de_logs_in(host, monkeypatc
     assert log_redaction.REDACTED in uitvoer
 
 
+async def test_falende_constructor_laat_de_sleutel_niet_achter(host, monkeypatch):
+    """Gaat het opbouwen van de client mis, dan blijft er niets van hangen.
+
+    De registratie gebeurt vóór de constructie — juist zodat een fout tijdens
+    het opbouwen geredigeerd de logs in gaat — dus moet ze ook opruimen als die
+    constructie gooit.
+    """
+
+    def _kapot(**kwargs):
+        raise RuntimeError("kan de client niet opbouwen")
+
+    monkeypatch.setattr(vlam_host.anthropic, "AsyncAnthropic", _kapot)
+
+    with pytest.raises(RuntimeError):
+        await _drain(
+            host.chat_stream(
+                "s1", "hoi", mode="claude", session_kvk=KVK_A,
+                claude_api_key_override=KEY_A,
+            )
+        )
+
+    assert KEY_A in log_redaction.redact(f"fout met {KEY_A}"), (
+        "de sleutel bleef geregistreerd nadat de clientconstructie faalde"
+    )
+
+
+def test_server_sleutels_worden_blijvend_geregistreerd(monkeypatch):
+    """`VLAMHost.__init__` meldt de server-env-sleutels aan bij het vangnet.
+
+    Die twee regels waren nergens gedekt: schrappen brak niets.
+
+    Bewust een vormloze waarde: met een `sk-ant-`-voorvoegsel zou een patroon
+    hem ook zonder registratie pakken, en dan toetst de test niets.
+    """
+    server_sleutel = "serversleutel1234567890abc"
+    monkeypatch.setattr(vlam_host, "ANTHROPIC_API_KEY", server_sleutel)
+    monkeypatch.setattr(vlam_host.anthropic, "AsyncAnthropic", _FakeClaude)
+
+    vlam_host.VLAMHost()
+
+    geredigeerd = log_redaction.redact(f"upstream weigerde {server_sleutel}")
+    assert server_sleutel not in geredigeerd
+    assert log_redaction.REDACTED in geredigeerd
+
+
 async def test_opruimen_slaat_geen_client_over_bij_annulering():
     """Unit op de opruimlus: een `CancelledError` mag de rest niet overslaan.
 
