@@ -63,6 +63,16 @@ relevant als je `STATIC_DIR` hierheen wijst. Niet handmatig beheren; staat in
 `pm-5sj` via `RijksICTGilde/zad-actions`. De deployment is **internal-only** (geen
 publieke route) en draait **zonder LLM-sleutels**: gebruikers leveren een sleutel
 via de UI (`ALLOW_API_KEY_OVERRIDE=true`, de default). Enige vereiste secret:
-`ZAD_API_KEY`.
+`ZAD_API_KEY`. De afweging achter die opzet — en de restrisico's die we daarbij
+accepteren — staat in [PDR-010](../../docs/decisions/PDR-010-sleutel-van-de-gebruiker.md).
+
+**Wat de host met zo'n sleutel doet** (MVP-02): een sleutel leeft precies één
+verzoek. `_request_clients` maakt er een LLM-client mee, geeft die als argument
+door aan het dispatch-pad en sluit hem daarna — geen gedeelde state, dus de
+sleutel van de één kan nooit het verzoek van de ander bedienen. Daarvóór toetst
+`api._validate_api_key` de vorm (lengte, ASCII, geen witruimte of stuurtekens);
+een geweigerde sleutel geeft een 400 respectievelijk een `error`-event, zonder
+iets van de waarde prijs te geven. Sleutels gaan nooit mee naar een subprocess
+(`subprocess_env.py`) en worden uit logregels geredigeerd (`log_redaction.py`).
 
 **Streaming events**: de UI verwacht `status`, `tool`, `case`, `answer`, `error` en `done`. Zie de docstrings van `chat_stream` voor het exacte contract.
