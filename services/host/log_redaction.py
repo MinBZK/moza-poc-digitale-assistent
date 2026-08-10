@@ -111,6 +111,18 @@ _PATTERNS: list[tuple[re.Pattern, bool]] = [
 ]
 
 
+# Geen enkel patroon hierboven kan matchen zonder dat één van deze substrings in
+# de regel staat: `sk-` voor de twee sk-patronen, `eyj` voor JWT, en `token` /
+# `bearer` / `apikey|api-key|api_key` voor de drie label-patronen. Een kale
+# `in`-check is orden goedkoper dan zes regexen over élke logregel, en de dekking
+# blijft per constructie gelijk.
+#
+# Twee valkuilen, allebei uitgeprobeerd: een trigger-*regex* kost zelf meer dan
+# hij bespaart, en filteren op kaal "api" helpt niets — de logger heet `vlam.api`,
+# dus dan triggert elke regel alsnog.
+_PATTERN_TRIGGERS = ("sk-", "eyj", "token", "bearer", "apikey", "api-key", "api_key")
+
+
 def redact(text: str) -> str:
     """Vervang bekende sleutels en herkenbare sleutelvormen door een marker.
 
@@ -121,6 +133,9 @@ def redact(text: str) -> str:
     for secret in list(_literals_to_redact):
         if secret in text:
             text = text.replace(secret, REDACTED)
+    lowered = text.lower()
+    if not any(trigger in lowered for trigger in _PATTERN_TRIGGERS):
+        return text
     for pattern, keep_label in _PATTERNS:
         text = pattern.sub(
             (r"\1" + REDACTED) if keep_label else REDACTED, text

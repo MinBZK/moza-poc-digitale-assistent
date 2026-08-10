@@ -12,6 +12,7 @@ import time
 
 import pytest
 
+import log_redaction
 from log_redaction import (
     REDACTED,
     RedactingFormatter,
@@ -146,30 +147,90 @@ def test_registreer_geheim_is_blijvend():
 # --- Terugkrabbelen begrensd houden ------------------------------------------
 
 
-def test_redactie_blijft_lineair_op_vijandige_invoer():
+def _duur(text: str, herhalingen: int = 3) -> float:
+    start = time.perf_counter()
+    for _ in range(herhalingen):
+        redact(text)
+    return (time.perf_counter() - start) / herhalingen
+
+
+# Elk van deze vormen raakt een ándere tak. `a-` haalt de sk-/label-patronen aan
+# via woordgrenzen en de tekenklasse, maar níét het duurste patroon: dat heeft
+# een letterlijke "api" nodig vóór de `[-_]?key`. Zonder die vormen bleef de tak
+# met de langste prefix ongetoetst — en dat was precies de tak die de meeste tijd
+# kostte.
+VIJANDIG = [
+    pytest.param("a-", id="koppeltekens"),
+    pytest.param("api-", id="api-prefix"),
+    pytest.param("apikey", id="apikey"),
+    pytest.param("x-api-key:", id="api-key-label"),
+    pytest.param("token=", id="token-label"),
+    pytest.param("bearer ", id="bearer-label"),
+    pytest.param("eyJ.", id="jwt-aanzet"),
+    pytest.param("sk-", id="sk-prefix"),
+]
+
+
+@pytest.mark.parametrize("vorm", VIJANDIG)
+def test_redactie_blijft_lineair_op_vijandige_invoer(vorm):
     """Regressie op kwadratisch terugkrabbelen (py/polynomial-redos).
 
-    We meten de vórm van de groei, niet een absolute drempel: die zou op een
-    trage machine vals alarm geven. Kwadratisch is ~4x bij dubbele invoer,
+    We meten de vórm van de groei, niet alleen een absolute drempel: die zou op
+    een trage machine vals alarm geven. Kwadratisch is ~4x bij dubbele invoer,
     lineair ~2x.
     """
-    hostile = "a-"  # koppeltekens: woordgrenzen én binnen de tekenklasse
-
-    def duration(n: int) -> float:
-        text = hostile * n
-        start = time.perf_counter()
-        for _ in range(3):
-            redact(text)
-        return (time.perf_counter() - start) / 3
-
-    base = duration(4000)
-    doubled = duration(8000)
+    basis = _duur(vorm * 4000)
+    verdubbeld = _duur(vorm * 8000)
     # Ondergrens tegen deling door bijna-nul op een erg snelle machine.
-    ratio = doubled / max(base, 1e-6)
+    ratio = verdubbeld / max(basis, 1e-6)
     assert ratio < 3, (
-        f"redactie schaalt superlineair ({ratio:.1f}x bij dubbele invoer); "
-        "staat er weer een onbegrensde herhaling vóór een literal?"
+        f"redactie schaalt superlineair ({ratio:.1f}x bij dubbele invoer) op "
+        f"{vorm!r}; staat er weer een onbegrensde herhaling vóór een literal?"
     )
+
+
+@pytest.mark.parametrize("vorm", VIJANDIG)
+def test_vijandige_invoer_blijft_ruim_onder_een_seconde(vorm):
+    """Een pure ratio-assertie slaagt ook als beide metingen 30 seconden zijn.
+
+    Deze grens is bewust ruim: hij vangt een terugval naar kwadratisch gedrag
+    (64 KB kostte toen tientallen seconden), niet een trage machine.
+    """
+    tekst = (vorm * 65536)[:65536]
+    duur = _duur(tekst, herhalingen=1)
+    assert duur < 1.0, f"64 KB {vorm!r} kostte {duur:.2f}s"
+
+
+def test_voorfilter_verandert_de_dekking_niet():
+    """De goedkope `in`-check vóór de regexen mag niets laten ontsnappen.
+
+    Geen enkel patroon kan matchen zonder één van de triggers, dus de dekking is
+    per constructie gelijk — deze test houdt die constructie eerlijk als er een
+    patroon bij komt.
+    """
+
+    def zonder_voorfilter(text: str) -> str:
+        for pattern, keep_label in log_redaction._PATTERNS:
+            text = pattern.sub(
+                (r"\1" + log_redaction.REDACTED) if keep_label else log_redaction.REDACTED,
+                text,
+            )
+        return text
+
+    monsters = [
+        "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.abcdefghijklmnop",
+        "x-claude-api-key: sk-ant-abcdef1234567890",
+        "API_KEY = 'geheim1234567890abcd'",
+        "token: abcdef1234567890",
+        "TOKENS [claude] input=1200 output=340",
+        "Host gestart — 12 tools, backends: claude, vlam",
+        "POST /chat/stream — mode='vlam'",
+        "sk-proj-abcdefghijklmnopqrstuvwxyz",
+        "",
+        "geen enkel geheim hier",
+    ]
+    for monster in monsters:
+        assert redact(monster) == zonder_voorfilter(monster), monster
 
 
 def _logger_met_buffer(name: str):
