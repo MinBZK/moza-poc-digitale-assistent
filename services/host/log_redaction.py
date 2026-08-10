@@ -27,13 +27,18 @@ _literals_to_redact: Counter = Counter()
 # vormeis kan iemand gewone logtekst opgeven ("Tool-aanroep", een KvK-nummer) en
 # die tijdens zijn eigen verzoek onzichtbaar maken.
 _MIN_SECRET_LENGTH = 8
-_MIN_SECRET_LENGTH_UNTRUSTED = 20
+# Publiek, want `api._validate_api_key` hangt zijn ondergrens hieraan op: elke
+# sleutel die de voordeur binnenkomt hoort ook registreerbaar te zijn. Stonden de
+# twee drempels los van elkaar, dan liepen ze uit elkaar en viel er stil een gat
+# (sleutels van 8–19 tekens gingen wél naar de provider, maar het log-vangnet
+# kende ze niet).
+MIN_UNTRUSTED_SECRET_LENGTH = 20
 
 
-def _looks_like_a_key(value: str) -> bool:
+def looks_like_a_key(value: str) -> bool:
     """Streng genoeg dat gewone logtekst niet als geheim geregistreerd raakt."""
     return (
-        len(value) >= _MIN_SECRET_LENGTH_UNTRUSTED
+        len(value) >= MIN_UNTRUSTED_SECRET_LENGTH
         and any(c.isdigit() for c in value)
         and any(c.isalpha() for c in value)
     )
@@ -52,7 +57,7 @@ def redact_temporarily(value: str):
     Zo houdt de redactie de sleutel niet langer vast dan de LLM-client zelf
     (PDR-010). Waarden die niet op een sleutel lijken worden genegeerd.
     """
-    if not value or not _looks_like_a_key(value):
+    if not value or not looks_like_a_key(value):
         yield
         return
     _literals_to_redact[value] += 1

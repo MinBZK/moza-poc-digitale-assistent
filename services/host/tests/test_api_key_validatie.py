@@ -16,6 +16,8 @@ import api  # noqa: E402
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+import log_redaction  # noqa: E402
+
 client = TestClient(api.app)
 
 KVK = "85234567"
@@ -139,6 +141,105 @@ def test_validator_laat_een_normale_sleutel_door():
 
 def test_validator_beschouwt_leeg_als_geen_override():
     assert api._validate_api_key("", "x-claude-api-key") == ""
+
+
+# --- De grens tussen "geaccepteerd" en "door het vangnet gedekt" --------------
+
+
+def test_ondergrens_is_die_van_het_log_vangnet():
+    """De twee drempels mogen niet los van elkaar bestaan.
+
+    Deden ze dat wel, dan liepen ze uit elkaar en ontstond er opnieuw een stil
+    gat: een sleutel die de voordeur binnenkomt maar die het log-vangnet niet
+    registreert, terwijl `config.py` en PDR-010 §5 redactie beloven.
+    """
+    assert api._MIN_API_KEY_LENGTH == log_redaction.MIN_UNTRUSTED_SECRET_LENGTH
+
+
+@pytest.mark.parametrize(
+    ("lengte", "geaccepteerd"),
+    [
+        pytest.param(log_redaction.MIN_UNTRUSTED_SECRET_LENGTH - 1, False, id="19"),
+        pytest.param(log_redaction.MIN_UNTRUSTED_SECRET_LENGTH, True, id="20"),
+        pytest.param(511, True, id="511"),
+        pytest.param(512, True, id="512"),
+        pytest.param(513, False, id="513"),
+    ],
+)
+def test_lengterandes(lengte, geaccepteerd):
+    """`<=`-vergelijkingen horen op hun randen getoetst te worden."""
+    sleutel = ("sk1" + "a" * lengte)[:lengte]
+    if geaccepteerd:
+        assert api._validate_api_key(sleutel, "x-claude-api-key") == sleutel
+        assert log_redaction.looks_like_a_key(sleutel), (
+            "een geaccepteerde sleutel hoort registreerbaar te zijn"
+        )
+    else:
+        with pytest.raises(api.InvalidApiKey):
+            api._validate_api_key(sleutel, "x-claude-api-key")
+
+
+def test_elke_geaccepteerde_lengte_is_registreerbaar():
+    """Het gat van bevinding 4: geen enkele lengte valt er nog tussenin."""
+    for lengte in range(api._MIN_API_KEY_LENGTH, api._MAX_API_KEY_LENGTH + 1):
+        sleutel = ("sk1" + "a" * lengte)[:lengte]
+        assert log_redaction.looks_like_a_key(api._validate_api_key(sleutel, "h"))
+
+
+def test_sleutel_zonder_cijfer_wordt_gebruikt_maar_luid_gemeld(caplog):
+    """Een vormloze sleutel zónder cijfer werkt wel, maar valt buiten het vangnet.
+
+    Dat restje degradatie blijft bestaan — de registratie-eis houdt "sleutel
+    opgeven" tegen als manier om logtekst te laten verdwijnen — maar het mag niet
+    stil gebeuren.
+    """
+    sleutel = "a" * 30
+    with caplog.at_level("WARNING", logger="vlam.api"):
+        assert api._validate_api_key(sleutel, "x-vlam-api-key") == sleutel
+    assert "buiten het log-vangnet" in caplog.text
+    assert "x-vlam-api-key" in caplog.text
+    assert sleutel not in caplog.text  # nog steeds nooit de waarde zelf
+
+
+# --- Beide headers, niet alleen de claude-header ------------------------------
+
+
+def test_vlam_header_gaat_ook_door_het_endpoint(_sessie_en_recorder):
+    """`x-vlam-api-key` kwam nergens langs de endpoint-route."""
+    r = client.post(
+        "/chat",
+        json={"message": "hoi"},
+        headers={"X-Test-User": KVK, "x-vlam-api-key": GEHEIM},
+    )
+    assert r.status_code == 200
+    assert _sessie_en_recorder["keys"]["vlam_api_key_override"] == GEHEIM
+    assert _sessie_en_recorder["keys"]["claude_api_key_override"] == ""
+
+
+def test_beide_headers_tegelijk(_sessie_en_recorder):
+    vlam_sleutel = "vlamtoken-1234567890abcdef"
+    r = client.post(
+        "/chat",
+        json={"message": "hoi"},
+        headers={
+            "X-Test-User": KVK,
+            "x-vlam-api-key": vlam_sleutel,
+            "x-claude-api-key": GEHEIM,
+        },
+    )
+    assert r.status_code == 200
+    assert _sessie_en_recorder["keys"]["vlam_api_key_override"] == vlam_sleutel
+    assert _sessie_en_recorder["keys"]["claude_api_key_override"] == GEHEIM
+
+
+def test_ongeldige_vlam_header_wordt_ook_geweigerd(_sessie_en_recorder):
+    r = client.post(
+        "/chat",
+        json={"message": "hoi"},
+        headers={"X-Test-User": KVK, "x-vlam-api-key": "kort"},
+    )
+    assert r.status_code == 400
+    assert "keys" not in _sessie_en_recorder
 
 
 @pytest.mark.parametrize("pad", ["/chat", "/chat/stream"])

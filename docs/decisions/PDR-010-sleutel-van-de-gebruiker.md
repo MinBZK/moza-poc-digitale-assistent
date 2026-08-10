@@ -77,6 +77,16 @@ log-handler gaat, inclusief tracebacks. Bewust geen entropie-heuristiek — die
 zou tool-resultaten, KvK-nummers en sessie-ID's raken. Een sleutel in een
 onbekend formaat komt er dus doorheen; dit vervangt beslissing 2 t/m 4 niet.
 
+Daarnaast kent het vangnet de sleutels van het lopende verzoek bij naam, en
+daar geldt een vormeis: minstens 20 tekens, met zowel een cijfer als een letter.
+Zonder die eis wordt "een sleutel opgeven" een manier om gewone logtekst te
+laten verdwijnen. `api._validate_api_key` hangt zijn ondergrens daarom aan
+diezelfde constante (`MIN_UNTRUSTED_SECRET_LENGTH`): wat de voordeur accepteert,
+is registreerbaar. Stonden de twee drempels los, dan liepen ze uit elkaar en
+ontstond er stil een gat. Wat overblijft is een sleutel zónder cijfer: die werkt,
+maar valt buiten het vangnet — en dat wordt bij aanvaarding als `WARNING` gemeld
+in plaats van stil geaccepteerd.
+
 ## Alternatieven overwogen
 
 **Server-sleutel, override helemaal verwijderen.** De oorspronkelijke lezing van

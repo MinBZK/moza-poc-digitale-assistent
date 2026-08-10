@@ -24,7 +24,11 @@ from config import (
     VLAM_PORT,
     kvk_uit_header,
 )
-from log_redaction import install_redaction
+from log_redaction import (
+    MIN_UNTRUSTED_SECRET_LENGTH,
+    install_redaction,
+    looks_like_a_key,
+)
 from vlam_host import VLAMHost
 
 logging.basicConfig(
@@ -194,7 +198,10 @@ INVALID_API_KEY_MESSAGE = (
     "sleutel volledig hebt geplakt, zonder spaties of regeleinden."
 )
 
-_MIN_API_KEY_LENGTH = 8
+# Eén gedeelde ondergrens met het log-vangnet, en bewust niet los gekozen: wat de
+# voordeur accepteert, moet het vangnet ook kunnen registreren. Geen echte
+# LLM-sleutel is korter dan 20 tekens.
+_MIN_API_KEY_LENGTH = MIN_UNTRUSTED_SECRET_LENGTH
 _MAX_API_KEY_LENGTH = 512
 
 
@@ -221,6 +228,18 @@ def _validate_api_key(value: str, header: str) -> str:
     elif any(c.isspace() for c in value):
         reason = "bevat witruimte"
     else:
+        if not looks_like_a_key(value):
+            # De lengte klopt, maar het vangnet registreert alleen waarden met
+            # zowel een cijfer als een letter — anders wordt "sleutel opgeven"
+            # een manier om gewone logtekst te laten verdwijnen. Zo'n sleutel
+            # werkt wél; alleen de tweede verdedigingslinie dekt hem niet. Dat
+            # hoort niet stil te gebeuren.
+            logging.getLogger("vlam.api").warning(
+                "Sleutel-header %s valt buiten het log-vangnet (geen cijfer- én "
+                "lettercombinatie); de sleutel wordt gebruikt, maar niet uit "
+                "logregels geredigeerd.",
+                header,
+            )
         return value
     logging.getLogger("vlam.api").warning(
         "Sleutel-header %s geweigerd: %s", header, reason
