@@ -130,6 +130,12 @@ MOCK_PROFIELEN: dict[str, dict] = {
         "naam": "Kwekerij De Bloesem",
         "rechtsvorm": "Vennootschap onder firma",
         "totaalWerkzamePersonen": 7,
+        # De frontend toont het voltijdaantal op de pagina Bedrijfsgegevens;
+        # zonder dit veld antwoordt de assistent met het totaal en leest de
+        # ondernemer een verschil dat er niet is. Beide velden staan zo ook
+        # in het echte KvK Basisprofiel.
+        "voltijdWerkzamePersonen": 5,
+        "websites": ["https://www.kwekerijdebloesem.nl"],
         "handelsnamen": [{"naam": "Kwekerij De Bloesem", "volgorde": 0}],
         "sbiActiviteiten": [
             {

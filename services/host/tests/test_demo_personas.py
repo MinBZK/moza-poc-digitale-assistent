@@ -111,3 +111,90 @@ def test_eml_fallback_zonder_feiten_geeft_de_twee_vragen():
         "HEEFT_KOELINSTALLATIE",
         "HEEFT_AFZUIGINSTALLATIE",
     ]
+
+
+# --- Onderzoekspersona 25/27 augustus 2026: Robin Vogel als bloemenkweker -----
+#
+# Waarden zoals MinBZK/poc-moza ze toont voor `?persona=bloemenkweker`
+# (_data/personas.json, index 13), gecontroleerd op 2026-08-10. De frontend is
+# leidend: de respondent leest deze op de pagina Bedrijfsgegevens, en de
+# assistent hoort er niets anders over te zeggen.
+BLOEMENKWEKER_FRONTEND = {
+    "kvkNummer": "62345681",
+    "handelsnaam": "Kwekerij De Bloesem",
+    "rechtsvorm": "Vennootschap onder firma",
+    "vestigingsnummer": "000062345681",
+    "voltijdWerkzamePersonen": 5,
+    "website": "https://www.kwekerijdebloesem.nl",
+}
+
+
+def test_bloemenkweker_komt_overeen_met_de_frontend():
+    """De persona van het gebruikersonderzoek, over twee repo's heen.
+
+    Robin Vogel is in de frontend vennoot van een VOF. Voor een VOF levert het
+    KvK Basisprofiel terecht de vennootschap als eigenaar en géén natuurlijk
+    persoon — dat is dus geen bug om te "repareren".
+    """
+    kvk = _load("kvk")
+    nummer = BLOEMENKWEKER_FRONTEND["kvkNummer"]
+    profiel = kvk.MOCK_PROFIELEN[nummer]
+    eigenaar = kvk.MOCK_EIGENAREN[nummer]
+
+    assert profiel["naam"] == BLOEMENKWEKER_FRONTEND["handelsnaam"]
+    assert profiel["rechtsvorm"] == BLOEMENKWEKER_FRONTEND["rechtsvorm"]
+    assert eigenaar["rechtsvorm"] == BLOEMENKWEKER_FRONTEND["rechtsvorm"]
+    assert (
+        profiel["_embedded"]["hoofdvestiging"]["vestigingsnummer"]
+        == BLOEMENKWEKER_FRONTEND["vestigingsnummer"]
+    )
+    # Een VOF heeft geen natuurlijk persoon als eigenaar; die vorm hoort te blijven.
+    assert "rechtspersoon" in eigenaar
+    assert "natuurlijkPersoon" not in eigenaar
+
+
+def test_bloemenkweker_personeel_en_website_volgen_de_frontend():
+    """Zonder het voltijdveld antwoordt de assistent "7" op een scherm dat "5" toont.
+
+    Beide getallen zijn waar — het echte Basisprofiel kent totaal én voltijd —
+    maar de respondent ziet alleen het voltijdgetal en zou het verschil als een
+    fout lezen.
+    """
+    profiel = _load("kvk").MOCK_PROFIELEN["62345681"]
+    assert profiel["totaalWerkzamePersonen"] == 7
+    assert (
+        profiel["voltijdWerkzamePersonen"]
+        == BLOEMENKWEKER_FRONTEND["voltijdWerkzamePersonen"]
+    )
+    assert BLOEMENKWEKER_FRONTEND["website"] in profiel["websites"]
+
+
+def test_bloemenkweker_is_indieningsplichtig():
+    """De hele onderzoeksflow hangt hieraan.
+
+    Zakt dit onder de drempel, dan is er niets te rapporteren en valt het
+    testscript uit elkaar: geen maatregelen, geen indiening, geen lopende zaak.
+    """
+    totaal = _load("netbeheerder").MOCK_VERBRUIK["62345681"]["totaal"]
+    assert totaal["jaarlijks_elektriciteitsverbruik_kwh"] > 50000
+    assert totaal["jaarlijks_gasverbruik_m3"] > 25000
+
+
+def test_elke_mockpersona_is_compleet():
+    """Een persona bestaat in alle lagen, of nergens.
+
+    De blokkade die het gebruikersonderzoek van augustus 2026 bijna sloopte was
+    precies dit: de frontend bood persona's aan die de backend niet kende.
+    """
+    kvk = _load("kvk")
+    netbeheerder = _load("netbeheerder")
+
+    for nummer in kvk.MOCK_PROFIELEN:
+        assert nummer in kvk.MOCK_EIGENAREN, (
+            f"{nummer} heeft een profiel maar geen eigenaar; `kvk__eigenaar` valt "
+            f"dan terug op de echte KvK-API en faalt voor een mock-persona"
+        )
+        assert nummer in netbeheerder.MOCK_VERBRUIK, (
+            f"{nummer} heeft een profiel maar geen verbruik; de assistent kan de "
+            f"informatieplicht dan niet beoordelen en gaat het uitvragen"
+        )
