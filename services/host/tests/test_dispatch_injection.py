@@ -157,3 +157,18 @@ async def test_cli_vlam_pad_injecteert_kvk(monkeypatch):
         host._chat_vlam_cli_stream([{"role": "user", "content": "hoi"}], SESSIE, vlam)
     )
     assert recorded[0][1]["kvk_nummer"] == SESSIE
+
+
+def test_tool_fout_logt_geen_argumentwaarden(caplog):
+    """Een mislukte tool-aanroep mag het sessie-KvK niet alsnog in de log zetten.
+
+    `_arg_keys` logt bewust alleen veldnamen, maar de exception-tekst ging er
+    ongefilterd doorheen — en die kan het KvK-nummer bevatten.
+    """
+    fout = ValueError(f"kvk_nummer {SESSIE} niet gevonden in het Handelsregister")
+    with caplog.at_level("ERROR", logger="vlam.host"):
+        vlam_host._log_tool_error("kvk__mijn_bedrijf", fout)
+
+    assert SESSIE not in caplog.text, "het sessie-KvK stond in de foutregel"
+    assert "kvk__mijn_bedrijf" in caplog.text  # wél zichtbaar wélke tool faalde
+    assert "ValueError" in caplog.text  # en waarop

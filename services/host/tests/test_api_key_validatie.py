@@ -25,6 +25,14 @@ GEHEIM = "sk-ant-ZEER-GEHEIM-1234567890"
 
 
 @pytest.fixture(autouse=True)
+def _schone_throttle():
+    """De weiger-throttle is procesbrede state; die hoort niet te lekken."""
+    api._reset_key_rejection_throttle()
+    yield
+    api._reset_key_rejection_throttle()
+
+
+@pytest.fixture(autouse=True)
 def _sessie_en_recorder(monkeypatch):
     """Geldige sessie + een host die niets echt aanroept."""
     captured = {}
@@ -141,6 +149,41 @@ def test_validator_laat_een_normale_sleutel_door():
 
 def test_validator_beschouwt_leeg_als_geen_override():
     assert api._validate_api_key("", "x-claude-api-key") == ""
+
+
+# --- Log-flooding op een onauthenticeerd pad ---------------------------------
+
+
+def test_herhaalde_weigeringen_vullen_de_log_niet(caplog):
+    """`/chat` heeft geen authenticatie: iedereen kan weigeringen produceren.
+
+    Ongethrottled is dat een WARNING per verzoek, op verzoeksnelheid
+    (BIO 12.4.1/12.4.2).
+    """
+    with caplog.at_level("WARNING", logger="vlam.api"):
+        for _ in range(50):
+            with pytest.raises(api.InvalidApiKey):
+                api._validate_api_key("kort", "x-claude-api-key")
+    regels = [r for r in caplog.records if "geweigerd" in r.getMessage()]
+    assert len(regels) == 1, f"50 weigeringen leverden {len(regels)} logregels op"
+
+
+def test_onderdrukte_weigeringen_worden_alsnog_gemeld(caplog, monkeypatch):
+    """Een aanhoudende stroom moet juist opvallen, niet verdwijnen."""
+    monkeypatch.setattr(api, "_KEY_REJECTION_LOG_INTERVAL", 0.0)
+    with caplog.at_level("WARNING", logger="vlam.api"):
+        with pytest.raises(api.InvalidApiKey):
+            api._validate_api_key("kort", "x-claude-api-key")
+        # Binnen het venster: onderdrukt maar geteld.
+        monkeypatch.setattr(api, "_KEY_REJECTION_LOG_INTERVAL", 60.0)
+        for _ in range(4):
+            with pytest.raises(api.InvalidApiKey):
+                api._validate_api_key("kort", "x-claude-api-key")
+        # Venster voorbij: de volgende weigering meldt wat er tussenin zat.
+        monkeypatch.setattr(api, "_KEY_REJECTION_LOG_INTERVAL", 0.0)
+        with pytest.raises(api.InvalidApiKey):
+            api._validate_api_key("kort", "x-claude-api-key")
+    assert "4 eerdere weigeringen onderdrukt" in caplog.text
 
 
 # --- De grens tussen "geaccepteerd" en "door het vangnet gedekt" --------------

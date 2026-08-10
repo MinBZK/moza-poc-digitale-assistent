@@ -65,7 +65,13 @@ async def _run_cli(cmd: list[str], env: dict | None = None) -> str:
     stderr_str = stderr.decode().strip()
 
     if stderr_str:
-        logger.info("  stderr: %s", stderr_str)
+        # Op DEBUG, niet op INFO: de stderr van de wrappers bevat de aangeroepen
+        # URL, en daar staat het sessie-KvK-nummer in (services/cli/lib/request.sh).
+        # Dat hoort niet standaard in de logs — zie `_arg_keys` in vlam_host.py,
+        # dat om dezelfde reden alleen veldnamen logt. Op de foutroute hieronder
+        # gaat de volledige stderr wél mee: daar weegt debugbaarheid zwaarder.
+        logger.debug("  stderr: %s", stderr_str)
+        logger.info("  stderr: %d bytes (zet DEBUG voor de inhoud)", len(stderr_str))
 
     # Log response grootte
     logger.info("  response: %d bytes", len(stdout_str))

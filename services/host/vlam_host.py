@@ -169,6 +169,18 @@ def _extract_lopende_zaak(tool_name: str, result: str) -> dict | None:
         return None
 
 
+def _log_tool_error(tool_key: str, exc: Exception) -> None:
+    """Log een mislukte tool-aanroep zonder de tekst van de exception.
+
+    Die tekst kan argumentwaarden bevatten — bijvoorbeeld het sessie-KvK, zoals
+    in "kvk_nummer 85234567 niet gevonden" — en zou daarmee `_arg_keys`
+    ondergraven, dat juist bewust alleen veldnamen logt. Op DEBUG staat de
+    volledige tekst wél; die stand kies je zelf, en dan weet je wat je logt.
+    """
+    logger.error("Fout bij tool '%s': %s", tool_key, type(exc).__name__)
+    logger.debug("Fout bij tool '%s' (volledige melding): %s", tool_key, exc)
+
+
 def _log_tokens(backend: str, response) -> None:
     """Log token-gebruik uit een LLM-response (Anthropic of OpenAI)."""
     usage = getattr(response, "usage", None)
@@ -763,7 +775,7 @@ class VLAMHost:
                     result = await self.registry.call_tool(tool_key, arguments)
                 except Exception as e:
                     result = f"Fout bij tool '{tool_key}': {e}"
-                    logger.error(result)
+                    _log_tool_error(tool_key, e)
 
                 zaak = _extract_lopende_zaak(tool_key, result)
                 if zaak:
@@ -1062,7 +1074,7 @@ class VLAMHost:
                     result = await self.registry.call_tool(tool_key, arguments)
                 except Exception as e:
                     result = f"Fout bij tool '{tool_key}': {e}"
-                    logger.error(result)
+                    _log_tool_error(tool_key, e)
 
                 openai_messages.append(
                     {
@@ -1088,7 +1100,7 @@ class VLAMHost:
                 result = await self.registry.call_tool(tool_use.name, arguments)
             except Exception as e:
                 result = f"Fout bij tool '{tool_use.name}': {e}"
-                logger.error(result)
+                _log_tool_error(tool_use.name, e)
 
             tool_results.append(
                 {

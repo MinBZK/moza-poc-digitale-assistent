@@ -7,6 +7,7 @@ Ondersteunt zowel blocking (/chat) als streaming (/chat/stream) responses.
 import json
 import logging
 import os
+import time
 import uuid
 from contextlib import aclosing, asynccontextmanager
 from pathlib import Path
@@ -205,6 +206,44 @@ _MIN_API_KEY_LENGTH = MIN_UNTRUSTED_SECRET_LENGTH
 _MAX_API_KEY_LENGTH = 512
 
 
+# `/chat` heeft (nog) geen authenticatie, dus iedereen die de host bereikt kan
+# geweigerde sleutel-headers op verzoeksnelheid produceren — en daarmee de logs
+# vollopen (BIO 12.4.1/12.4.2). De weigering blijft zichtbaar, maar hooguit één
+# WARNING per venster; de onderdrukte weigeringen worden meegeteld en gemeld,
+# zodat een aanhoudende stroom juist opvalt in plaats van te verdrinken.
+_KEY_REJECTION_LOG_INTERVAL = 60.0
+_key_rejection_state = {"laatste_log": None, "onderdrukt": 0}
+
+
+def _reset_key_rejection_throttle() -> None:
+    """Zet de throttle terug op nul (voor tests en voor `startup`)."""
+    _key_rejection_state["laatste_log"] = None
+    _key_rejection_state["onderdrukt"] = 0
+
+
+def _log_key_rejection(header: str, reason: str) -> None:
+    """Meld een geweigerde sleutel-header — headernaam en reden, nooit de waarde."""
+    nu = time.monotonic()
+    laatste = _key_rejection_state["laatste_log"]
+    if laatste is not None and nu - laatste < _KEY_REJECTION_LOG_INTERVAL:
+        _key_rejection_state["onderdrukt"] += 1
+        return
+    onderdrukt = _key_rejection_state["onderdrukt"]
+    _key_rejection_state["laatste_log"] = nu
+    _key_rejection_state["onderdrukt"] = 0
+    logging.getLogger("vlam.api").warning(
+        "Sleutel-header %s geweigerd: %s%s",
+        header,
+        reason,
+        (
+            f" ({onderdrukt} eerdere weigeringen onderdrukt in de afgelopen "
+            f"{_KEY_REJECTION_LOG_INTERVAL:.0f}s)"
+            if onderdrukt
+            else ""
+        ),
+    )
+
+
 def _validate_api_key(value: str, header: str) -> str:
     """Toets de vorm van een sleutel-header; geef de sleutel terug of faal (MVP-02).
 
@@ -241,9 +280,7 @@ def _validate_api_key(value: str, header: str) -> str:
                 header,
             )
         return value
-    logging.getLogger("vlam.api").warning(
-        "Sleutel-header %s geweigerd: %s", header, reason
-    )
+    _log_key_rejection(header, reason)
     raise InvalidApiKey(INVALID_API_KEY_MESSAGE)
 
 
