@@ -647,9 +647,7 @@ def classificeer_llm_fout(
         if status == 429:
             return maak_fout("LLM_TE_DRUK")
 
-    logger.warning(
-        "Onverwacht type LLM-fout (%s) op backend %r", type(exc).__name__, backend
-    )
+    logger.warning("Onverwacht type LLM-fout (%s)", type(exc).__name__)
     return maak_fout("LLM_ONBEKEND")
 
 
