@@ -5,13 +5,17 @@ De host fungeert als tussenstap:
 """
 
 import asyncio
+import functools
 import json
 import logging
 import re
+import ssl
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from functools import partial
 
 import anthropic
+import httpx
 import openai
 
 from cli_executor import CLI_DIR, execute_cli_tool
@@ -36,9 +40,21 @@ from errors import (
     naar_llm,
     verrijk_llm,
 )
+from log_redaction import redact_always, redact_temporarily
 from mcp_client import MCPToolRegistry
 
 logger = logging.getLogger("vlam.host")
+
+
+@functools.cache
+def _shared_ssl_context() -> ssl.SSLContext:
+    """Eén geparste CA-bundel per proces, gedeeld door alle request-clients.
+
+    `httpx` 0.28 cachet dit zelf niet, dus elke clientconstructie las de bundel
+    (224 KB) opnieuw in — synchroon, in de event loop. De context is read-only in
+    gebruik en dus veilig te delen; de TLS-handshake per verzoek blijft staan.
+    """
+    return httpx.create_ssl_context()
 
 # Gebruiksvriendelijke labels voor tools (getoond in de UI tijdens verwerking)
 TOOL_LABELS = {
@@ -288,6 +304,18 @@ def _extract_lopende_zaak(tool_name: str, result: str) -> dict | None:
         return None
 
 
+def _log_tool_error(tool_key: str, exc: Exception) -> None:
+    """Log een mislukte tool-aanroep zonder de tekst van de exception.
+
+    Die tekst kan argumentwaarden bevatten — bijvoorbeeld het sessie-KvK, zoals
+    in "kvk_nummer 85234567 niet gevonden" — en zou daarmee `_arg_keys`
+    ondergraven, dat juist bewust alleen veldnamen logt. Op DEBUG staat de
+    volledige tekst wél; die stand kies je zelf, en dan weet je wat je logt.
+    """
+    logger.error("Fout bij tool '%s': %s", tool_key, type(exc).__name__)
+    logger.debug("Fout bij tool '%s' (volledige melding): %s", tool_key, exc)
+
+
 def _log_tokens(backend: str, response) -> None:
     """Log token-gebruik uit een LLM-response (Anthropic of OpenAI)."""
     usage = getattr(response, "usage", None)
@@ -423,6 +451,10 @@ class VLAMHost:
     """Orkestrator die twee LLM-backends koppelt aan MCP-servers."""
 
     def __init__(self):
+        # Server-env-sleutels leven zo lang als het proces; laat het log-vangnet
+        # ze bij naam kennen.
+        redact_always(ANTHROPIC_API_KEY)
+        redact_always(VLAM_API_KEY)
         self.claude_client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
         self.vlam_client = (
             openai.AsyncOpenAI(
@@ -604,21 +636,94 @@ class VLAMHost:
             }
         return res
 
-    def _resolve_clients(
+    @staticmethod
+    async def _close_request_clients(clients: list) -> None:
+        """Sluit de eigen clients van dit verzoek — en sla er geen over.
+
+        `CancelledError` erft van `BaseException`, dus een `except Exception`
+        ving die niet: bij een afgebroken SSE-stream stopte de lus bij de eerste
+        client en bleef een volgende openstaan, mét de sleutel erin. We onthouden
+        de annulering, ruimen alles op, en blazen haar daarna weer op zodat de
+        afbreking niet stilletjes verdwijnt.
+        """
+        cancelled: asyncio.CancelledError | None = None
+        for client in clients:
+            try:
+                await client.close()
+            except asyncio.CancelledError as e:
+                cancelled = e
+            except Exception:  # sluiten mag nooit het antwoord breken
+                # Volledige traceback: deze aanroep valt binnen de
+                # redactie-scope, dus een sleutel erin wordt geredigeerd.
+                logger.warning(
+                    "Sluiten van request-client %s mislukt",
+                    type(client).__name__,
+                    exc_info=True,
+                )
+        if cancelled is not None:
+            raise cancelled
+
+    @asynccontextmanager
+    async def _request_clients(
         self,
         vlam_api_key_override: str = "",
         claude_api_key_override: str = "",
-    ) -> tuple:
-        """Geef (claude_client, vlam_client) terug, met overrides indien opgegeven."""
+        mode: str = "",
+    ) -> AsyncGenerator[tuple, None]:
+        """Lever (claude_client, vlam_client) voor de duur van één verzoek.
+
+        Lokale clients i.p.v. `self.*` overschrijven (MVP-02). De host is één
+        gedeeld object en de endpoints zijn async: bij twee gelijktijdige
+        gesprekken kon de sleutel van A het verzoek van B bedienen, en daarna
+        procesbreed blijven staan.
+
+        Alleen de client van de gevraagde `mode` wordt gebouwd; de andere zou
+        toch geen enkele call doen. Een lege of onbekende `mode` betekent
+        "claude", net als de terugval in `chat`/`chat_stream`.
+
+        Een override-client wordt na afloop gesloten: de sleutel overleeft het
+        verzoek niet en de httpx-pool lekt niet weg. De server-env-clients zijn
+        procesbreed en worden hier nooit gesloten.
+        """
         claude = self.claude_client
         vlam = self.vlam_client
-        if claude_api_key_override:
-            claude = anthropic.AsyncAnthropic(api_key=claude_api_key_override)
-        if vlam_api_key_override and VLAM_BASE_URL:
-            vlam = openai.AsyncOpenAI(
-                api_key=vlam_api_key_override, base_url=VLAM_BASE_URL
-            )
-        return claude, vlam
+        own_clients: list = []
+        wants_vlam = mode.split(":")[-1] == "vlam"
+
+        # De redactie omsluit óók het opruimen: zowel een fout tijdens het
+        # opbouwen als een httpx-fout tijdens `close()` hoort geredigeerd de
+        # logs in. Vandaar dit `with` búiten de `try/finally` — andersom liep
+        # de registratie af vóór het sluiten.
+        with (
+            redact_temporarily(claude_api_key_override),
+            redact_temporarily(vlam_api_key_override),
+        ):
+            try:
+                if claude_api_key_override and not wants_vlam:
+                    claude = anthropic.AsyncAnthropic(
+                        api_key=claude_api_key_override,
+                        http_client=httpx.AsyncClient(verify=_shared_ssl_context()),
+                    )
+                    own_clients.append(claude)
+                if vlam_api_key_override and wants_vlam:
+                    if not VLAM_BASE_URL:
+                        # Anders verdwijnt de sleutel zonder spoor en krijgt de
+                        # gebruiker "vul uw sleutel in" — wat hij net deed.
+                        logger.warning(
+                            "VLAM-sleutel meegegeven, maar VLAM_BASE_URL is leeg: "
+                            "de sleutel wordt genegeerd en het verzoek meldt dat de "
+                            "backend niet geconfigureerd is. Zet VLAM_BASE_URL."
+                        )
+                    else:
+                        vlam = openai.AsyncOpenAI(
+                            api_key=vlam_api_key_override,
+                            base_url=VLAM_BASE_URL,
+                            http_client=httpx.AsyncClient(verify=_shared_ssl_context()),
+                        )
+                        own_clients.append(vlam)
+                yield claude, vlam
+            finally:
+                await self._close_request_clients(own_clients)
 
     async def chat(
         self,
@@ -636,10 +741,6 @@ class VLAMHost:
         session_kvk: het server-side bepaalde KvK-nummer van de sessie (PDR-009);
         de host injecteert dit bij elke bron-aanroep.
         """
-        orig_claude, orig_vlam = self.claude_client, self.vlam_client
-        self.claude_client, self.vlam_client = self._resolve_clients(
-            vlam_api_key_override, claude_api_key_override
-        )
         conv_key = self._conv_key(session_kvk, session_id, mode)
         if conv_key not in self.conversations:
             self.conversations[conv_key] = []
@@ -650,18 +751,18 @@ class VLAMHost:
         herstelpunt = len(messages)
         messages.append({"role": "user", "content": user_message})
 
-        try:
+        async with self._request_clients(
+            vlam_api_key_override, claude_api_key_override, mode
+        ) as (claude, vlam):
             if mode == "vlam":
-                if not self.vlam_client:
+                if not vlam:
                     return _geen_sleutel_fout("vlam").tekst
-                antwoord = await self._chat_vlam(messages, session_kvk)
+                antwoord = await self._chat_vlam(messages, session_kvk, vlam)
             else:
-                antwoord = await self._chat_claude(messages, session_kvk)
+                antwoord = await self._chat_claude(messages, session_kvk, claude)
             if antwoord == maak_fout("LLM_LEEG_ANTWOORD").tekst:
                 del messages[herstelpunt:]
             return antwoord
-        finally:
-            self.claude_client, self.vlam_client = orig_claude, orig_vlam
 
     # ------------------------------------------------------------------
     # Streaming — yieldt status-events voor de UI
@@ -691,63 +792,56 @@ class VLAMHost:
         gevolgd door `done`. `bron_fout` is tussentijds — een bron viel uit maar
         het gesprek loopt door (PDR-011).
         """
-        orig_claude, orig_vlam = self.claude_client, self.vlam_client
-        self.claude_client, self.vlam_client = self._resolve_clients(
-            vlam_api_key_override, claude_api_key_override
-        )
-
         use_cli = mode.startswith("cli:")
         llm = mode.split(":")[-1] if use_cli else mode
 
-        # Álles na het omzetten van de clients binnen de try, tot en met het
-        # eerste `yield`. De host is één gedeeld object: valt de client weg op
-        # een yield buiten de try, dan draait het `finally` nooit en blijft de
-        # sleutel van deze gebruiker achter voor het volgende verzoek van een
-        # ander. Dat gold eerder voor het status-event én voor de "geen
-        # sleutel"-paden, die vóór de try retourneerden.
-        # NB: dit dicht het weglopen bij een afgebroken verzoek, níét het
-        # onderliggende probleem dat de client op `self` staat — twee
-        # gelijktijdige verzoeken met verschillende sleutels raken elkaar nog
-        # steeds. Dat is pre-existing en wordt opgelost in PR #44 (MVP-02), dat
-        # de client als argument doorgeeft in plaats van via `self`.
+        # De clients leven precies zo lang als deze stream (MVP-02/PDR-010): ze
+        # komen als argument mee in plaats van via `self`, zodat twee
+        # gelijktijdige verzoeken met verschillende sleutels elkaar niet raken.
+        # De try eromheen is het vangnet van PDR-011 voor alles wat de loops zelf
+        # niet afvangen; het opruimen van de clients hangt aan de contextmanager.
         try:
-            conv_key = self._conv_key(session_kvk, session_id, mode)
-            if conv_key not in self.conversations:
-                self.conversations[conv_key] = []
-            messages = self.conversations[conv_key]
-            # Beginstand van deze beurt. Loopt de beurt stuk op een leeg
-            # modelantwoord, dan draaien we hierop terug: een assistent-bericht
-            # met lege inhoud blijft anders in de geschiedenis staan en laat
-            # élke volgende beurt in deze sessie stuklopen op de Messages API.
-            # De melding zegt "probeer het opnieuw", en dat moet dan ook kunnen.
-            herstelpunt = len(messages)
-            messages.append({"role": "user", "content": user_message})
+            async with self._request_clients(
+                vlam_api_key_override, claude_api_key_override, mode
+            ) as (claude, vlam):
+                conv_key = self._conv_key(session_kvk, session_id, mode)
+                if conv_key not in self.conversations:
+                    self.conversations[conv_key] = []
+                messages = self.conversations[conv_key]
+                # Beginstand van deze beurt. Loopt de beurt stuk op een leeg
+                # modelantwoord, dan draaien we hierop terug: een
+                # assistent-bericht met lege inhoud blijft anders in de
+                # geschiedenis staan en laat élke volgende beurt in deze sessie
+                # stuklopen op de Messages API. De melding zegt "probeer het
+                # opnieuw", en dat moet dan ook kunnen.
+                herstelpunt = len(messages)
+                messages.append({"role": "user", "content": user_message})
 
-            yield {"type": "status", "message": "Vraag analyseren…"}
+                yield {"type": "status", "message": "Vraag analyseren…"}
 
-            gen = None
-            if llm == "vlam" and not self.vlam_client:
-                yield naar_event(_geen_sleutel_fout("vlam"))
-            elif llm == "claude" and not self.claude_client.api_key:
-                yield naar_event(_geen_sleutel_fout("claude"))
-            elif llm == "vlam":
-                gen = (
-                    self._chat_vlam_cli_stream(messages, session_kvk)
-                    if use_cli
-                    else self._chat_vlam_stream(messages, session_kvk)
-                )
-            else:
-                gen = (
-                    self._chat_cli_stream(messages, session_kvk)
-                    if use_cli
-                    else self._chat_claude_stream(messages, session_kvk)
-                )
+                gen = None
+                if llm == "vlam" and not vlam:
+                    yield naar_event(_geen_sleutel_fout("vlam"))
+                elif llm == "claude" and not claude.api_key:
+                    yield naar_event(_geen_sleutel_fout("claude"))
+                elif llm == "vlam":
+                    gen = (
+                        self._chat_vlam_cli_stream(messages, session_kvk, vlam)
+                        if use_cli
+                        else self._chat_vlam_stream(messages, session_kvk, vlam)
+                    )
+                else:
+                    gen = (
+                        self._chat_cli_stream(messages, session_kvk, claude)
+                        if use_cli
+                        else self._chat_claude_stream(messages, session_kvk, claude)
+                    )
 
-            if gen is not None:
-                async for event in gen:
-                    if event.get("code") == "LLM_LEEG_ANTWOORD":
-                        del messages[herstelpunt:]
-                    yield event
+                if gen is not None:
+                    async for event in gen:
+                        if event.get("code") == "LLM_LEEG_ANTWOORD":
+                            del messages[herstelpunt:]
+                        yield event
         except Exception as e:
             # Vangnet voor alles wat de loops zelf niet afvangen (een respons in
             # een onverwachte vorm, een fout in de foutafhandeling). Zonder dit
@@ -767,8 +861,6 @@ class VLAMHost:
                 fout = maak_fout("HOST_FOUT")
             logger.error("Onverwachte fout in de chat-stream [%s]: %s", fout.code, e)
             yield naar_event(fout)
-        finally:
-            self.claude_client, self.vlam_client = orig_claude, orig_vlam
 
         yield {"type": "done"}
 
@@ -777,9 +869,14 @@ class VLAMHost:
     # ------------------------------------------------------------------
 
     async def _chat_claude_stream(
-        self, messages: list[dict], session_kvk: str = ""
+        self, messages: list[dict], session_kvk: str, claude
     ) -> AsyncGenerator[dict, None]:
-        """Claude agentic loop die status-events yieldt."""
+        """Claude agentic loop die status-events yieldt.
+
+        `claude` is de client van dít verzoek (MVP-02) en is verplicht: geen
+        stille terugval op de gedeelde server-client, zodat een vergeten
+        argument niet ongemerkt de verkeerde sleutel gebruikt.
+        """
         tools = self.registry.get_anthropic_tools()
         system_prompt = self._system_prompt("claude")
 
@@ -796,7 +893,7 @@ class VLAMHost:
 
             try:
                 response = await asyncio.wait_for(
-                    self.claude_client.messages.create(**api_kwargs),
+                    claude.messages.create(**api_kwargs),
                     timeout=CLAUDE_TIMEOUT,
                 )
                 _log_tokens("claude", response)
@@ -839,9 +936,12 @@ class VLAMHost:
         yield naar_event(maak_fout("LLM_MAX_STAPPEN"))
 
     async def _chat_vlam_stream(
-        self, messages: list[dict], session_kvk: str = ""
+        self, messages: list[dict], session_kvk: str, vlam
     ) -> AsyncGenerator[dict, None]:
-        """VLAM agentic loop (native OpenAI tool-calling) die status-events yieldt."""
+        """VLAM agentic loop (native OpenAI tool-calling) die status-events yieldt.
+
+        `vlam` is de client van dít verzoek (MVP-02), verplicht meegegeven.
+        """
         tools_openai = self.registry.get_openai_tools()
         system_prompt = self._system_prompt("vlam")
         openai_messages = self._to_openai_messages(messages, system_prompt)
@@ -858,7 +958,7 @@ class VLAMHost:
 
             try:
                 response = await asyncio.wait_for(
-                    self.vlam_client.chat.completions.create(**api_kwargs),
+                    vlam.chat.completions.create(**api_kwargs),
                     timeout=VLAM_TIMEOUT,
                 )
                 _log_tokens("vlam", response)
@@ -936,9 +1036,12 @@ class VLAMHost:
     # ------------------------------------------------------------------
 
     async def _chat_cli_stream(
-        self, messages: list[dict], session_kvk: str = ""
+        self, messages: list[dict], session_kvk: str, claude
     ) -> AsyncGenerator[dict, None]:
-        """Claude agentic loop die CLI-tools aanroept i.p.v. MCP-servers."""
+        """Claude agentic loop die CLI-tools aanroept i.p.v. MCP-servers.
+
+        `claude` is de client van dít verzoek (MVP-02), verplicht meegegeven.
+        """
         tools = CLI_TOOL_DEFINITIONS_ANTHROPIC
         system_prompt = self._system_prompt(
             "claude", has_tools=True, bronnen_offline=self.cli_bronnen_offline, cli_transport=True
@@ -957,7 +1060,7 @@ class VLAMHost:
 
             try:
                 response = await asyncio.wait_for(
-                    self.claude_client.messages.create(**api_kwargs),
+                    claude.messages.create(**api_kwargs),
                     timeout=CLAUDE_TIMEOUT,
                 )
                 _log_tokens("claude", response)
@@ -1017,9 +1120,12 @@ class VLAMHost:
     # ------------------------------------------------------------------
 
     async def _chat_vlam_cli_stream(
-        self, messages: list[dict], session_kvk: str = ""
+        self, messages: list[dict], session_kvk: str, vlam
     ) -> AsyncGenerator[dict, None]:
-        """VLAM agentic loop (native tool-calling) met CLI-tools i.p.v. MCP."""
+        """VLAM agentic loop (native tool-calling) met CLI-tools i.p.v. MCP.
+
+        `vlam` is de client van dít verzoek (MVP-02), verplicht meegegeven.
+        """
         tools_openai = CLI_TOOL_DEFINITIONS_OPENAI
         system_prompt = self._system_prompt(
             "vlam", has_tools=True, bronnen_offline=self.cli_bronnen_offline, cli_transport=True
@@ -1030,7 +1136,7 @@ class VLAMHost:
         for _ in range(max_iterations):
             try:
                 response = await asyncio.wait_for(
-                    self.vlam_client.chat.completions.create(
+                    vlam.chat.completions.create(
                         model=VLAM_MODEL_ID,
                         max_tokens=4096,
                         messages=openai_messages,
@@ -1105,8 +1211,9 @@ class VLAMHost:
     # Claude (Anthropic API) — blocking (non-streaming, backwards-compatibel)
     # ------------------------------------------------------------------
 
-    async def _chat_claude(self, messages: list[dict], session_kvk: str = "") -> str:
-        if not self.claude_client.api_key:
+    async def _chat_claude(self, messages: list[dict], session_kvk: str, claude) -> str:
+        """`claude` is de client van dít verzoek (MVP-02), verplicht meegegeven."""
+        if not claude.api_key:
             return _geen_sleutel_fout("claude").tekst
         tools = self.registry.get_anthropic_tools()
         system_prompt = self._system_prompt("claude")
@@ -1124,7 +1231,7 @@ class VLAMHost:
 
             try:
                 response = await asyncio.wait_for(
-                    self.claude_client.messages.create(**api_kwargs),
+                    claude.messages.create(**api_kwargs),
                     timeout=CLAUDE_TIMEOUT,
                 )
                 _log_tokens("claude", response)
@@ -1150,7 +1257,8 @@ class VLAMHost:
     # VLAM (OpenAI-compatibele API — UbiOps/Mistral) — agentic loop
     # ------------------------------------------------------------------
 
-    async def _chat_vlam(self, messages: list[dict], session_kvk: str = "") -> str:
+    async def _chat_vlam(self, messages: list[dict], session_kvk: str, vlam) -> str:
+        """`vlam` is de client van dít verzoek (MVP-02), verplicht meegegeven."""
         tools_openai = self.registry.get_openai_tools()
         system_prompt = self._system_prompt("vlam")
         openai_messages = self._to_openai_messages(messages, system_prompt)
@@ -1167,7 +1275,7 @@ class VLAMHost:
 
             try:
                 response = await asyncio.wait_for(
-                    self.vlam_client.chat.completions.create(**api_kwargs),
+                    vlam.chat.completions.create(**api_kwargs),
                     timeout=VLAM_TIMEOUT,
                 )
                 _log_tokens("vlam", response)

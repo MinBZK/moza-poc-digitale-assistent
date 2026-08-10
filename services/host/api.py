@@ -7,11 +7,12 @@ Ondersteunt zowel blocking (/chat) als streaming (/chat/stream) responses.
 import json
 import logging
 import os
+import time
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import aclosing, asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -28,12 +29,18 @@ from config import (
     kvk_uit_header,
 )
 from errors import FoutMelding, maak_fout, naar_event
+from log_redaction import (
+    MIN_UNTRUSTED_SECRET_LENGTH,
+    install_redaction,
+    looks_like_a_key,
+)
 from vlam_host import VLAMHost
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
 )
+install_redaction()
 
 host = VLAMHost()
 
@@ -41,6 +48,9 @@ host = VLAMHost()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start en stop de VLAM-host met de FastAPI-levenscyclus."""
+    # Nogmaals, nu uvicorn zijn eigen loggers heeft opgetuigd: bij `uvicorn.run`
+    # vanuit __main__ bestaan die bij import nog niet. De aanroep is idempotent.
+    install_redaction()
     await host.startup()
     yield
     await host.shutdown()
@@ -100,6 +110,32 @@ logging.getLogger("vlam.api").info(
     ALLOWED_ORIGINS,
     "ja" if ALLOW_API_KEY_OVERRIDE else "nee",
 )
+
+
+def check_origin_boundary() -> None:
+    """Waarschuw als de origin-grens openstaat (MVP-02).
+
+    Let op de richting: een *lege* `ALLOWED_ORIGINS` is de strikte stand, en de
+    stand voor de deployment (same-origin proxy, dus geen CORS in het spel).
+    `*` is het probleem: dan kan elke webpagina deze host aanroepen. Geen harde
+    blokkade, want `*` is legitiem tijdens lokale ontwikkeling.
+    """
+    if "*" not in ALLOWED_ORIGINS:
+        return
+    logging.getLogger("vlam.api").warning(
+        "ALLOWED_ORIGINS staat op '*': elke webpagina kan deze host aanroepen. "
+        "Alleen bedoeld voor lokale ontwikkeling — zet een concrete whitelist "
+        "voor een gedeelde of publieke omgeving.%s",
+        (
+            " De sleutel-override staat óók aan, dus zo'n pagina kan de "
+            "assistent met een eigen sleutel aansturen."
+            if ALLOW_API_KEY_OVERRIDE
+            else ""
+        ),
+    )
+
+
+check_origin_boundary()
 
 
 @app.exception_handler(RequestValidationError)
@@ -202,6 +238,45 @@ def _sse_melding(payload: dict) -> StreamingResponse:
     )
 
 
+# Vaste tekst voor een onverwachte fout midden in de stream: de respons hoort
+# niet aan de inhoud van een exception te hangen (CodeQL py/stack-trace-exposure).
+STREAM_ERROR_MESSAGE = (
+    "Er ging iets mis bij het beantwoorden van uw vraag. Probeer het opnieuw; "
+    "blijft het misgaan, meld dit dan met het tijdstip van uw vraag."
+)
+
+
+def _sse_chunks(message: str, event_type: str) -> list[str]:
+    """Serialiseer één SSE-bericht + het afsluitende `done`-event.
+
+    Eén plek, zodat elke uitgang van `/chat/stream` hetzelfde contract volgt:
+    een stream eindigt altijd op `done`, ook als er iets misging.
+    """
+    payload = json.dumps({"type": event_type, "message": message}, ensure_ascii=False)
+    return [
+        f"event: {event_type}\ndata: {payload}\n\n",
+        'event: done\ndata: {"type": "done"}\n\n',
+    ]
+
+
+def _sse_single_message(message: str, event_type: str) -> StreamingResponse:
+    """Stuur één SSE-bericht + `done`, zonder LLM- of bron-aanroep.
+
+    Gebruikt voor de twee hard-blokkeer-routes van `/chat/stream`: geen geldige
+    sessie, en een geweigerde sleutel-header.
+    """
+
+    async def generator():
+        for chunk in _sse_chunks(message, event_type):
+            yield chunk
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 def _resolve_session_kvk(request: Request) -> str | None:
     """Bepaal het KvK-nummer van de sessie uit de `X-Test-User`-header.
 
@@ -211,17 +286,119 @@ def _resolve_session_kvk(request: Request) -> str | None:
     return kvk_uit_header(request.headers.get("x-test-user", ""))
 
 
+class InvalidApiKey(Exception):
+    """De client stuurde een sleutel-header met een onbruikbare waarde."""
+
+
+# Bewust generiek: de melding mag nooit (een deel van) de waarde bevatten.
+INVALID_API_KEY_MESSAGE = (
+    "De meegegeven API-sleutel heeft een ongeldige vorm. Controleer of u de "
+    "sleutel volledig hebt geplakt, zonder spaties of regeleinden."
+)
+
+# Eén gedeelde ondergrens met het log-vangnet, en bewust niet los gekozen: wat de
+# voordeur accepteert, moet het vangnet ook kunnen registreren. Geen echte
+# LLM-sleutel is korter dan 20 tekens.
+_MIN_API_KEY_LENGTH = MIN_UNTRUSTED_SECRET_LENGTH
+_MAX_API_KEY_LENGTH = 512
+
+
+# `/chat` heeft (nog) geen authenticatie, dus iedereen die de host bereikt kan
+# geweigerde sleutel-headers op verzoeksnelheid produceren — en daarmee de logs
+# vollopen (BIO 12.4.1/12.4.2). De weigering blijft zichtbaar, maar hooguit één
+# WARNING per venster; de onderdrukte weigeringen worden meegeteld en gemeld,
+# zodat een aanhoudende stroom juist opvalt in plaats van te verdrinken.
+_KEY_REJECTION_LOG_INTERVAL = 60.0
+_key_rejection_state = {"laatste_log": None, "onderdrukt": 0}
+
+
+def _reset_key_rejection_throttle() -> None:
+    """Zet de throttle terug op nul (voor tests en voor `startup`)."""
+    _key_rejection_state["laatste_log"] = None
+    _key_rejection_state["onderdrukt"] = 0
+
+
+def _log_key_rejection(header: str, reason: str) -> None:
+    """Meld een geweigerde sleutel-header — headernaam en reden, nooit de waarde."""
+    nu = time.monotonic()
+    laatste = _key_rejection_state["laatste_log"]
+    if laatste is not None and nu - laatste < _KEY_REJECTION_LOG_INTERVAL:
+        _key_rejection_state["onderdrukt"] += 1
+        return
+    onderdrukt = _key_rejection_state["onderdrukt"]
+    _key_rejection_state["laatste_log"] = nu
+    _key_rejection_state["onderdrukt"] = 0
+    logging.getLogger("vlam.api").warning(
+        "Sleutel-header %s geweigerd: %s%s",
+        header,
+        reason,
+        (
+            f" ({onderdrukt} eerdere weigeringen onderdrukt in de afgelopen "
+            f"{_KEY_REJECTION_LOG_INTERVAL:.0f}s)"
+            if onderdrukt
+            else ""
+        ),
+    )
+
+
+def _validate_api_key(value: str, header: str) -> str:
+    """Toets de vorm van een sleutel-header; geef de sleutel terug of faal (MVP-02).
+
+    Drie redenen, aflopend in hoe reëel ze zijn:
+
+    1. Een niet-ASCII sleutel laat de LLM-call stuklopen op een
+       `UnicodeEncodeError`, buiten `except (TimeoutError, APIError)` om: een
+       onafgevangen 500 of een afgebroken SSE-stream.
+    2. Een stuurteken levert een fout op waarvan de binnenste melding de volledige
+       sleutel bevat. Over HTTP niet bereikbaar, dus defense-in-depth.
+    3. Plakfouten geven nu een bruikbare melding.
+
+    Bewust niets van de waarde gelogd of teruggegeven: alleen headernaam en reden.
+    """
+    if not value:
+        return ""
+    if not (_MIN_API_KEY_LENGTH <= len(value) <= _MAX_API_KEY_LENGTH):
+        reason = "lengte buiten bereik"
+    elif not value.isascii() or not value.isprintable():
+        reason = "niet-printbare of niet-ASCII tekens"
+    elif any(c.isspace() for c in value):
+        reason = "bevat witruimte"
+    else:
+        if not looks_like_a_key(value):
+            # De lengte klopt, maar het vangnet registreert alleen waarden met
+            # zowel een cijfer als een letter — anders wordt "sleutel opgeven"
+            # een manier om gewone logtekst te laten verdwijnen. Zo'n sleutel
+            # werkt wél; alleen de tweede verdedigingslinie dekt hem niet. Dat
+            # hoort niet stil te gebeuren.
+            logging.getLogger("vlam.api").warning(
+                "Sleutel-header %s valt buiten het log-vangnet (geen cijfer- én "
+                "lettercombinatie); de sleutel wordt gebruikt, maar niet uit "
+                "logregels geredigeerd.",
+                header,
+            )
+        return value
+    _log_key_rejection(header, reason)
+    raise InvalidApiKey(INVALID_API_KEY_MESSAGE)
+
+
 def _extract_api_keys(request: Request) -> dict:
     """Lees optionele API key overrides uit request headers.
 
     Alleen actief als ALLOW_API_KEY_OVERRIDE=true in de omgeving.
     Anders worden de headers genegeerd en gebruikt de host de server-env keys.
+
+    Werpt `InvalidApiKey` als een header een onbruikbare waarde draagt; de
+    endpoints vertalen dat naar een nette 400 respectievelijk een error-event.
     """
     if not ALLOW_API_KEY_OVERRIDE:
         return {"vlam_api_key_override": "", "claude_api_key_override": ""}
     return {
-        "vlam_api_key_override": request.headers.get("x-vlam-api-key", "").strip(),
-        "claude_api_key_override": request.headers.get("x-claude-api-key", "").strip(),
+        "vlam_api_key_override": _validate_api_key(
+            request.headers.get("x-vlam-api-key", "").strip(), "x-vlam-api-key"
+        ),
+        "claude_api_key_override": _validate_api_key(
+            request.headers.get("x-claude-api-key", "").strip(), "x-claude-api-key"
+        ),
     }
 
 
@@ -247,7 +424,14 @@ async def chat(body: ChatRequest, request: Request):
     session_id = body.session_id or str(uuid.uuid4())
     VALID_MODES = ("vlam", "claude", "cli:vlam", "cli:claude")
     mode = body.mode if body.mode in VALID_MODES else "vlam"
-    api_keys = _extract_api_keys(request)
+    try:
+        api_keys = _extract_api_keys(request)
+    except InvalidApiKey:
+        # De vaste tekst, niet `str(e)`: de respons hoort niet aan de inhoud van
+        # een exception te hangen (CodeQL py/stack-trace-exposure).
+        raise HTTPException(
+            status_code=400, detail=INVALID_API_KEY_MESSAGE
+        ) from None
     reply = await host.chat(
         session_id, body.message, mode=mode, session_kvk=session_kvk, **api_keys
     )
@@ -276,8 +460,13 @@ async def chat_stream(body: ChatRequest, request: Request):
     session_id = body.session_id or str(uuid.uuid4())
     VALID_MODES = ("vlam", "claude", "cli:vlam", "cli:claude")
     mode = body.mode if body.mode in VALID_MODES else "vlam"
-    api_keys = _extract_api_keys(request)
-    logging.getLogger("vlam.api").info("POST /chat/stream — mode=%r (raw=%r)", mode, body.mode)
+    # Alleen de gevalideerde mode; de rauwe waarde komt ongefilterd en zonder
+    # lengtegrens uit het verzoek (zie de ReDoS-noot in log_redaction.py).
+    logging.getLogger("vlam.api").info(
+        "POST /chat/stream — mode=%r%s",
+        mode,
+        "" if body.mode == mode else " (afwijkende mode gevraagd, teruggevallen)",
+    )
 
     if not session_kvk:
         # Hard blokkeren zonder geldige sessie: nette melding, geen LLM/bron.
@@ -291,23 +480,49 @@ async def chat_stream(body: ChatRequest, request: Request):
     if fout:
         return _sse_melding(naar_event(fout))
 
+    try:
+        api_keys = _extract_api_keys(request)
+    except InvalidApiKey:
+        # Error-event i.p.v. 400: de UI leest deze route als SSE.
+        return _sse_single_message(INVALID_API_KEY_MESSAGE, "error")
+
     async def event_generator():
-        async for event in host.chat_stream(
-            session_id, body.message, mode=mode, session_kvk=session_kvk, **api_keys
-        ):
-            event_type = event.get("type", "status")
-            # Session_id en mode horen bij elk event dat een beurt afsluit, niet
-            # alleen bij `answer`. Sinds PDR-011 eindigen sommige beurten op een
-            # `error`-event ("te veel stappen", "geen antwoord"), en juist die
-            # meldingen vragen de gebruiker het opnieuw te proberen. Zonder het
-            # server-gemunte session_id start die tweede poging een nieuw gesprek
-            # en is de context weg — precies wanneer die het hardst nodig is.
-            if event_type in ("answer", "error"):
-                event["session_id"] = session_id
-                event["mode"] = mode
-                event["has_tools"] = host.has_tools
-            payload = json.dumps(event, ensure_ascii=False)
-            yield f"event: {event_type}\ndata: {payload}\n\n"
+        # `aclosing`: bij een afgebroken stream wordt de binnenste generator
+        # meteen gesloten in plaats van pas bij asyncgen-finalisatie. Dat is wat
+        # `_request_clients` zijn opruiming laat draaien — en dus de sleutel uit
+        # het redactie-register haalt (PDR-010 §2).
+        async with aclosing(
+            host.chat_stream(
+                session_id, body.message, mode=mode, session_kvk=session_kvk, **api_keys
+            )
+        ) as stream:
+            try:
+                async for event in stream:
+                    event_type = event.get("type", "status")
+                    # Session_id en mode horen bij elk event dat een beurt afsluit,
+                    # niet alleen bij `answer`. Sinds PDR-011 eindigen sommige
+                    # beurten op een `error`-event ("te veel stappen", "geen
+                    # antwoord"), en juist die meldingen vragen de gebruiker het
+                    # opnieuw te proberen. Zonder het server-gemunte session_id
+                    # start die tweede poging een nieuw gesprek en is de context
+                    # weg — precies wanneer die het hardst nodig is.
+                    if event_type in ("answer", "error"):
+                        event["session_id"] = session_id
+                        event["mode"] = mode
+                        event["has_tools"] = host.has_tools
+                    payload = json.dumps(event, ensure_ascii=False)
+                    yield f"event: {event_type}\ndata: {payload}\n\n"
+            except Exception:
+                # Status 200 is hier al verstuurd, dus een fout kán niet meer als
+                # HTTP-status naar buiten. Zonder dit blok krijgt de UI een
+                # afgekapte respons zonder `error` én zonder `done`, en blijft ze
+                # in "Nadenken…" hangen. Server-side de volledige traceback
+                # (geredigeerd), client-side een vaste, generieke tekst.
+                logging.getLogger("vlam.api").exception(
+                    "Onverwachte fout tijdens /chat/stream (mode=%r)", mode
+                )
+                for chunk in _sse_chunks(STREAM_ERROR_MESSAGE, "error"):
+                    yield chunk
 
     return StreamingResponse(
         event_generator(),

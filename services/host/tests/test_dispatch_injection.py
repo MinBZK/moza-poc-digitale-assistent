@@ -107,23 +107,29 @@ async def _drain(gen):
         pass
 
 
+# De LLM-client gaat sinds MVP-02 als argument mee (nooit via gedeelde state op
+# de host), dus geven de tests de fake expliciet mee aan het dispatch-pad.
+
+
 async def test_vlam_stream_pad_injecteert_kvk():
     host = _host_with_recording_registry()
-    host.vlam_client = _fake_vlam_client([_vlam_toolcall_msg(), _vlam_final_msg()])
-    await _drain(host._chat_vlam_stream([{"role": "user", "content": "hoi"}], SESSIE))
+    vlam = _fake_vlam_client([_vlam_toolcall_msg(), _vlam_final_msg()])
+    await _drain(
+        host._chat_vlam_stream([{"role": "user", "content": "hoi"}], SESSIE, vlam)
+    )
     assert host.registry.calls[0][1]["kvk_nummer"] == SESSIE
 
 
 async def test_vlam_blocking_pad_injecteert_kvk():
     host = _host_with_recording_registry()
-    host.vlam_client = _fake_vlam_client([_vlam_toolcall_msg(), _vlam_final_msg()])
-    await host._chat_vlam([{"role": "user", "content": "hoi"}], SESSIE)
+    vlam = _fake_vlam_client([_vlam_toolcall_msg(), _vlam_final_msg()])
+    await host._chat_vlam([{"role": "user", "content": "hoi"}], SESSIE, vlam)
     assert host.registry.calls[0][1]["kvk_nummer"] == SESSIE
 
 
 async def test_cli_claude_pad_injecteert_kvk(monkeypatch):
     host = _host_with_recording_registry()
-    host.claude_client = _fake_claude_client([_claude_toolcall_resp(), _claude_final_resp()])
+    claude = _fake_claude_client([_claude_toolcall_resp(), _claude_final_resp()])
     recorded = []
 
     async def _fake_cli(tool_key, arguments):
@@ -131,13 +137,15 @@ async def test_cli_claude_pad_injecteert_kvk(monkeypatch):
         return "{}"
 
     monkeypatch.setattr(vlam_host, "execute_cli_tool", _fake_cli)
-    await _drain(host._chat_cli_stream([{"role": "user", "content": "hoi"}], SESSIE))
+    await _drain(
+        host._chat_cli_stream([{"role": "user", "content": "hoi"}], SESSIE, claude)
+    )
     assert recorded[0][1]["kvk_nummer"] == SESSIE
 
 
 async def test_cli_vlam_pad_injecteert_kvk(monkeypatch):
     host = _host_with_recording_registry()
-    host.vlam_client = _fake_vlam_client([_vlam_toolcall_msg(), _vlam_final_msg()])
+    vlam = _fake_vlam_client([_vlam_toolcall_msg(), _vlam_final_msg()])
     recorded = []
 
     async def _fake_cli(tool_key, arguments):
@@ -145,5 +153,22 @@ async def test_cli_vlam_pad_injecteert_kvk(monkeypatch):
         return "{}"
 
     monkeypatch.setattr(vlam_host, "execute_cli_tool", _fake_cli)
-    await _drain(host._chat_vlam_cli_stream([{"role": "user", "content": "hoi"}], SESSIE))
+    await _drain(
+        host._chat_vlam_cli_stream([{"role": "user", "content": "hoi"}], SESSIE, vlam)
+    )
     assert recorded[0][1]["kvk_nummer"] == SESSIE
+
+
+def test_tool_fout_logt_geen_argumentwaarden(caplog):
+    """Een mislukte tool-aanroep mag het sessie-KvK niet alsnog in de log zetten.
+
+    `_arg_keys` logt bewust alleen veldnamen, maar de exception-tekst ging er
+    ongefilterd doorheen — en die kan het KvK-nummer bevatten.
+    """
+    fout = ValueError(f"kvk_nummer {SESSIE} niet gevonden in het Handelsregister")
+    with caplog.at_level("ERROR", logger="vlam.host"):
+        vlam_host._log_tool_error("kvk__mijn_bedrijf", fout)
+
+    assert SESSIE not in caplog.text, "het sessie-KvK stond in de foutregel"
+    assert "kvk__mijn_bedrijf" in caplog.text  # wél zichtbaar wélke tool faalde
+    assert "ValueError" in caplog.text  # en waarop

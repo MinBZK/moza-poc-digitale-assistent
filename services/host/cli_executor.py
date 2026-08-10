@@ -14,6 +14,7 @@ import signal
 from pathlib import Path
 
 from config import TOOL_TIMEOUT
+from subprocess_env import CLI_ALLOWLIST, subprocess_env
 
 logger = logging.getLogger("vlam.cli")
 
@@ -113,17 +114,22 @@ def _cli_fout(stderr: str) -> dict:
 async def _run_cli(cmd: list[str], env: dict | None = None) -> str:
     """Voer een CLI-commando uit en retourneer de stdout.
 
-    `env` bevat optionele extra omgevingsvariabelen (bovenop de proces-env),
-    o.a. het sessie-KvK-nummer voor de kvk-cli (PDR-009).
+    `env` bevat optionele extra omgevingsvariabelen bovenop de allowlist, o.a.
+    het sessie-KvK-nummer voor de kvk-cli (PDR-009).
+
+    Sinds MVP-02 krijgt het subprocess niet meer de volledige `os.environ` mee,
+    maar dezelfde soort allowlist als de MCP-servers: geen LLM-sleutels in een
+    bash-proces dat ze niet nodig heeft.
     """
     logger.info("$ %s", _loggable_cmd(cmd))
 
-    subprocess_env = {**os.environ, **env} if env else None
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        env=subprocess_env,
+        # De allowlist uit MVP-02: geen LLM-sleutels in een bash-proces dat ze
+        # niet nodig heeft. Niet vervangen door een kale doorgifte van os.environ.
+        env=subprocess_env(CLI_ALLOWLIST, env),
         # Eigen procesgroep, zodat we bij een time-out niet alleen de wrapper
         # maar ook zijn kindprocessen (curl, jq, python3) kunnen doden.
         start_new_session=True,
@@ -146,7 +152,13 @@ async def _run_cli(cmd: list[str], env: dict | None = None) -> str:
     stderr_str = stderr.decode().strip()
 
     if stderr_str:
-        logger.info("  stderr: %s", stderr_str)
+        # Op DEBUG, niet op INFO: de stderr van de wrappers bevat de aangeroepen
+        # URL, en daar staat het sessie-KvK-nummer in (services/cli/lib/request.sh).
+        # Dat hoort niet standaard in de logs — zie `_arg_keys` in vlam_host.py,
+        # dat om dezelfde reden alleen veldnamen logt. Op de foutroute hieronder
+        # gaat de volledige stderr wél mee: daar weegt debugbaarheid zwaarder.
+        logger.debug("  stderr: %s", stderr_str)
+        logger.info("  stderr: %d bytes (zet DEBUG voor de inhoud)", len(stderr_str))
 
     # Log response grootte
     logger.info("  response: %d bytes", len(stdout_str))

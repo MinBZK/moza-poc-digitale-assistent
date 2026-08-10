@@ -92,9 +92,16 @@ _origins_raw = os.getenv("ALLOWED_ORIGINS", "").strip()
 ALLOWED_ORIGINS: list[str] = (
     [o.strip() for o in _origins_raw.split(",") if o.strip()] if _origins_raw else []
 )
-# ALLOW_API_KEY_OVERRIDE: als true (PoC-default), worden x-vlam-api-key en
-# x-claude-api-key headers uit de UI gerespecteerd. Zet expliciet op "false"
-# in productie om alleen server-env keys toe te staan.
+# ALLOW_API_KEY_OVERRIDE: als true (de default), worden x-vlam-api-key en
+# x-claude-api-key uit de UI gerespecteerd. Dit is geen slordige default maar de
+# dragende aanname van de deployment: die draait zonder LLM-sleutels en elke
+# tester brengt zijn eigen sleutel mee (PDR-010). Zet op "false" zodra er wél
+# server-env keys staan; de headers worden dan genegeerd.
+#
+# Wat er aan de kant van de host tegenover staat (MVP-02): een sleutel leeft
+# precies één verzoek (`vlam_host._request_clients`), wordt op vorm getoetst
+# vóór gebruik (`api._validate_api_key`), gaat nooit mee naar een subprocess
+# (`subprocess_env.py`) en wordt uit logregels geredigeerd (`log_redaction.py`).
 ALLOW_API_KEY_OVERRIDE: bool = os.getenv("ALLOW_API_KEY_OVERRIDE", "true").lower() in (
     "true",
     "1",

@@ -11,20 +11,24 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 # Leeg de env-variabelen voordat config.py geladen wordt, zodat het
 # lokale .env-bestand (met echte keys) niet wordt overgenomen.
 os.environ["ANTHROPIC_API_KEY"] = ""
 os.environ["VLAM_API_KEY"] = ""
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+# De host-modules liggen een map hoger; zonder dit draait het script alleen als
+# je toevallig in services/host staat.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import anthropic
-import openai
+import anthropic  # noqa: E402
+import openai  # noqa: E402
 
-from config import ALLOW_API_KEY_OVERRIDE
-from vlam_host import VLAMHost
+import vlam_host  # noqa: E402
+from config import ALLOW_API_KEY_OVERRIDE  # noqa: E402
+from vlam_host import VLAMHost  # noqa: E402
 
 
 def _geen_sleutel_code() -> str:
@@ -122,32 +126,36 @@ async def scenario_cli_claude_no_key():
     return events
 
 
+# Sleutels met de vorm die de host accepteert (minstens 20 tekens, cijfer én
+# letter — zie api._validate_api_key en log_redaction.looks_like_a_key).
+FAKE_CLAUDE_KEY = "sk-ant-fake000000000000000"
+FAKE_VLAM_KEY = "vlamtoken-fake0123456789"
+
+
 async def scenario_claude_upstream_error():
-    """Claude met override-key, maar upstream retourneert 401."""
+    """Claude met override-key, maar upstream retourneert 401.
+
+    We vervangen de SDK-constructor, niet een host-methode: zo loopt het
+    scenario door het échte `_request_clients`-pad, inclusief het sluiten van de
+    override-client na afloop.
+    """
     host = VLAMHost()
 
-    # Vervang de Anthropic client-methode door een mock die een status-error gooit.
-    async def fail(**kwargs):
-        raise make_fake_status_error()
+    class FakeClaudeClient:
+        def __init__(self, api_key="", **_kwargs):
+            self.api_key = api_key
+            self.messages = SimpleNamespace(create=self._create)
 
-    # chat_stream wisselt self.claude_client via _resolve_clients; daar kunnen we
-    # niet eenvoudig op mocken. In plaats daarvan mocken we _resolve_clients.
-    from unittest.mock import patch
+        async def _create(self, **kwargs):
+            raise make_fake_status_error()
 
-    class FakeClient:
-        api_key = "sk-fake"
+        async def close(self):
+            pass
 
-        class messages:
-            @staticmethod
-            async def create(**kwargs):
-                raise make_fake_status_error()
-
-    with patch.object(
-        host, "_resolve_clients", return_value=(FakeClient(), host.vlam_client)
-    ):
+    with patch.object(vlam_host.anthropic, "AsyncAnthropic", FakeClaudeClient):
         events = await collect(
             host.chat_stream(
-                "s5", "hi", mode="claude", claude_api_key_override="sk-fake"
+                "s5", "hi", mode="claude", claude_api_key_override=FAKE_CLAUDE_KEY
             )
         )
     # 401 upstream = een geweigerde sleutel, geen algemene storing.
@@ -159,30 +167,31 @@ async def scenario_vlam_upstream_error():
     """VLAM met override-key, maar upstream retourneert 500."""
     host = VLAMHost()
 
-    class FakeCompletions:
-        @staticmethod
-        async def create(**kwargs):
+    class FakeVlamClient:
+        def __init__(self, api_key="", **_kwargs):
+            self.api_key = api_key
+            self.chat = SimpleNamespace(
+                completions=SimpleNamespace(create=self._create)
+            )
+
+        async def _create(self, **kwargs):
             raise openai.APIStatusError(
                 message="Server error",
                 response=AsyncMock(status_code=500),
                 body={"error": "upstream"},
             )
 
-    class FakeChat:
-        completions = FakeCompletions()
+        async def close(self):
+            pass
 
-    class FakeVlamClient:
-        api_key = "fake"
-        chat = FakeChat()
-
-    from unittest.mock import patch
-
-    with patch.object(
-        host, "_resolve_clients", return_value=(host.claude_client, FakeVlamClient())
+    # Zonder base-url slaat `_request_clients` de vlam-override over.
+    with (
+        patch.object(vlam_host.openai, "AsyncOpenAI", FakeVlamClient),
+        patch.object(vlam_host, "VLAM_BASE_URL", "https://vlam.test/v1"),
     ):
         events = await collect(
             host.chat_stream(
-                "s6", "hi", mode="vlam", vlam_api_key_override="fake"
+                "s6", "hi", mode="vlam", vlam_api_key_override=FAKE_VLAM_KEY
             )
         )
     # 500 upstream = het model ligt er tijdelijk uit.
