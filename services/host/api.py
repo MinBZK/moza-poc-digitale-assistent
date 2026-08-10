@@ -8,7 +8,7 @@ import json
 import logging
 import os
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import aclosing, asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -136,6 +136,27 @@ GEEN_SESSIE_MELDING = (
 )
 
 
+# Vaste tekst voor een onverwachte fout midden in de stream: de respons hoort
+# niet aan de inhoud van een exception te hangen (CodeQL py/stack-trace-exposure).
+STREAM_ERROR_MESSAGE = (
+    "Er ging iets mis bij het beantwoorden van uw vraag. Probeer het opnieuw; "
+    "blijft het misgaan, meld dit dan met het tijdstip van uw vraag."
+)
+
+
+def _sse_chunks(message: str, event_type: str) -> list[str]:
+    """Serialiseer één SSE-bericht + het afsluitende `done`-event.
+
+    Eén plek, zodat elke uitgang van `/chat/stream` hetzelfde contract volgt:
+    een stream eindigt altijd op `done`, ook als er iets misging.
+    """
+    payload = json.dumps({"type": event_type, "message": message}, ensure_ascii=False)
+    return [
+        f"event: {event_type}\ndata: {payload}\n\n",
+        'event: done\ndata: {"type": "done"}\n\n',
+    ]
+
+
 def _sse_single_message(message: str, event_type: str) -> StreamingResponse:
     """Stuur één SSE-bericht + `done`, zonder LLM- of bron-aanroep.
 
@@ -144,11 +165,8 @@ def _sse_single_message(message: str, event_type: str) -> StreamingResponse:
     """
 
     async def generator():
-        payload = json.dumps(
-            {"type": event_type, "message": message}, ensure_ascii=False
-        )
-        yield f"event: {event_type}\ndata: {payload}\n\n"
-        yield 'event: done\ndata: {"type": "done"}\n\n'
+        for chunk in _sse_chunks(message, event_type):
+            yield chunk
 
     return StreamingResponse(
         generator(),
@@ -290,17 +308,36 @@ async def chat_stream(body: ChatRequest, request: Request):
         return _sse_single_message(INVALID_API_KEY_MESSAGE, "error")
 
     async def event_generator():
-        async for event in host.chat_stream(
-            session_id, body.message, mode=mode, session_kvk=session_kvk, **api_keys
-        ):
-            event_type = event.get("type", "status")
-            # Voeg session_id en mode toe aan answer-events
-            if event_type == "answer":
-                event["session_id"] = session_id
-                event["mode"] = mode
-                event["has_tools"] = host.has_tools
-            payload = json.dumps(event, ensure_ascii=False)
-            yield f"event: {event_type}\ndata: {payload}\n\n"
+        # `aclosing`: bij een afgebroken stream wordt de binnenste generator
+        # meteen gesloten in plaats van pas bij asyncgen-finalisatie. Dat is wat
+        # `_request_clients` zijn opruiming laat draaien — en dus de sleutel uit
+        # het redactie-register haalt (PDR-010 §2).
+        async with aclosing(
+            host.chat_stream(
+                session_id, body.message, mode=mode, session_kvk=session_kvk, **api_keys
+            )
+        ) as stream:
+            try:
+                async for event in stream:
+                    event_type = event.get("type", "status")
+                    # Voeg session_id en mode toe aan answer-events
+                    if event_type == "answer":
+                        event["session_id"] = session_id
+                        event["mode"] = mode
+                        event["has_tools"] = host.has_tools
+                    payload = json.dumps(event, ensure_ascii=False)
+                    yield f"event: {event_type}\ndata: {payload}\n\n"
+            except Exception:
+                # Status 200 is hier al verstuurd, dus een fout kán niet meer
+                # als HTTP-status naar buiten. Zonder dit blok krijgt de UI een
+                # afgekapte respons zonder `error` én zonder `done`, en blijft
+                # ze in "Nadenken…" hangen. Server-side de volledige traceback
+                # (geredigeerd), client-side een vaste, generieke tekst.
+                logging.getLogger("vlam.api").exception(
+                    "Onverwachte fout tijdens /chat/stream (mode=%r)", mode
+                )
+                for chunk in _sse_chunks(STREAM_ERROR_MESSAGE, "error"):
+                    yield chunk
 
     return StreamingResponse(
         event_generator(),

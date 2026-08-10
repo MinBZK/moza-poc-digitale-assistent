@@ -5,13 +5,16 @@ De host fungeert als tussenstap:
 """
 
 import asyncio
+import functools
 import json
 import logging
 import re
+import ssl
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import anthropic
+import httpx
 import openai
 
 from cli_executor import CLI_DIR, execute_cli_tool
@@ -30,6 +33,17 @@ from log_redaction import redact_always, redact_temporarily
 from mcp_client import MCPToolRegistry
 
 logger = logging.getLogger("vlam.host")
+
+
+@functools.cache
+def _shared_ssl_context() -> ssl.SSLContext:
+    """Eén geparste CA-bundel per proces, gedeeld door alle request-clients.
+
+    `httpx` 0.28 cachet dit zelf niet, dus elke clientconstructie las de bundel
+    (224 KB) opnieuw in — synchroon, in de event loop. De context is read-only in
+    gebruik en dus veilig te delen; de TLS-handshake per verzoek blijft staan.
+    """
+    return httpx.create_ssl_context()
 
 # Gebruiksvriendelijke labels voor tools (getoond in de UI tijdens verwerking)
 TOOL_LABELS = {
@@ -417,11 +431,39 @@ class VLAMHost:
             }
         return res
 
+    @staticmethod
+    async def _close_request_clients(clients: list) -> None:
+        """Sluit de eigen clients van dit verzoek — en sla er geen over.
+
+        `CancelledError` erft van `BaseException`, dus een `except Exception`
+        ving die niet: bij een afgebroken SSE-stream stopte de lus bij de eerste
+        client en bleef een volgende openstaan, mét de sleutel erin. We onthouden
+        de annulering, ruimen alles op, en blazen haar daarna weer op zodat de
+        afbreking niet stilletjes verdwijnt.
+        """
+        cancelled: asyncio.CancelledError | None = None
+        for client in clients:
+            try:
+                await client.close()
+            except asyncio.CancelledError as e:
+                cancelled = e
+            except Exception:  # sluiten mag nooit het antwoord breken
+                # Volledige traceback: deze aanroep valt binnen de
+                # redactie-scope, dus een sleutel erin wordt geredigeerd.
+                logger.warning(
+                    "Sluiten van request-client %s mislukt",
+                    type(client).__name__,
+                    exc_info=True,
+                )
+        if cancelled is not None:
+            raise cancelled
+
     @asynccontextmanager
     async def _request_clients(
         self,
         vlam_api_key_override: str = "",
         claude_api_key_override: str = "",
+        mode: str = "",
     ) -> AsyncGenerator[tuple, None]:
         """Lever (claude_client, vlam_client) voor de duur van één verzoek.
 
@@ -430,37 +472,53 @@ class VLAMHost:
         gesprekken kon de sleutel van A het verzoek van B bedienen, en daarna
         procesbreed blijven staan.
 
+        Alleen de client van de gevraagde `mode` wordt gebouwd; de andere zou
+        toch geen enkele call doen. Een lege of onbekende `mode` betekent
+        "claude", net als de terugval in `chat`/`chat_stream`.
+
         Een override-client wordt na afloop gesloten: de sleutel overleeft het
         verzoek niet en de httpx-pool lekt niet weg. De server-env-clients zijn
         procesbreed en worden hier nooit gesloten.
         """
         claude = self.claude_client
         vlam = self.vlam_client
-        own_clients = []
-        try:
-            # Registreren vóór het aanmaken: ook een fout tijdens het opbouwen
-            # van de client moet geredigeerd de logs in.
-            with (
-                redact_temporarily(claude_api_key_override),
-                redact_temporarily(vlam_api_key_override),
-            ):
-                # Binnen de try: faalt de tweede constructor, dan moet de
-                # eerste alsnog gesloten worden.
-                if claude_api_key_override:
-                    claude = anthropic.AsyncAnthropic(api_key=claude_api_key_override)
-                    own_clients.append(claude)
-                if vlam_api_key_override and VLAM_BASE_URL:
-                    vlam = openai.AsyncOpenAI(
-                        api_key=vlam_api_key_override, base_url=VLAM_BASE_URL
+        own_clients: list = []
+        wants_vlam = mode.split(":")[-1] == "vlam"
+
+        # De redactie omsluit óók het opruimen: zowel een fout tijdens het
+        # opbouwen als een httpx-fout tijdens `close()` hoort geredigeerd de
+        # logs in. Vandaar dit `with` búiten de `try/finally` — andersom liep
+        # de registratie af vóór het sluiten.
+        with (
+            redact_temporarily(claude_api_key_override),
+            redact_temporarily(vlam_api_key_override),
+        ):
+            try:
+                if claude_api_key_override and not wants_vlam:
+                    claude = anthropic.AsyncAnthropic(
+                        api_key=claude_api_key_override,
+                        http_client=httpx.AsyncClient(verify=_shared_ssl_context()),
                     )
-                    own_clients.append(vlam)
+                    own_clients.append(claude)
+                if vlam_api_key_override and wants_vlam:
+                    if not VLAM_BASE_URL:
+                        # Anders verdwijnt de sleutel zonder spoor en krijgt de
+                        # gebruiker "vul uw sleutel in" — wat hij net deed.
+                        logger.warning(
+                            "VLAM-sleutel meegegeven, maar VLAM_BASE_URL is leeg: "
+                            "de sleutel wordt genegeerd en het verzoek meldt dat de "
+                            "backend niet geconfigureerd is. Zet VLAM_BASE_URL."
+                        )
+                    else:
+                        vlam = openai.AsyncOpenAI(
+                            api_key=vlam_api_key_override,
+                            base_url=VLAM_BASE_URL,
+                            http_client=httpx.AsyncClient(verify=_shared_ssl_context()),
+                        )
+                        own_clients.append(vlam)
                 yield claude, vlam
-        finally:
-            for client in own_clients:
-                try:
-                    await client.close()
-                except Exception as e:  # sluiten mag nooit het antwoord breken
-                    logger.warning("Sluiten van request-client mislukt: %s", type(e).__name__)
+            finally:
+                await self._close_request_clients(own_clients)
 
     async def chat(
         self,
@@ -485,7 +543,7 @@ class VLAMHost:
         messages.append({"role": "user", "content": user_message})
 
         async with self._request_clients(
-            vlam_api_key_override, claude_api_key_override
+            vlam_api_key_override, claude_api_key_override, mode
         ) as (claude, vlam):
             if mode == "vlam":
                 if not vlam:
@@ -528,7 +586,7 @@ class VLAMHost:
 
         # De clients leven precies zo lang als deze stream (MVP-02).
         async with self._request_clients(
-            vlam_api_key_override, claude_api_key_override
+            vlam_api_key_override, claude_api_key_override, mode
         ) as (claude, vlam):
             if llm == "vlam":
                 if not vlam:

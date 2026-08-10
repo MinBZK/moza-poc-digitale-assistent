@@ -7,6 +7,8 @@ implementatie. Verder: een override-client wordt gesloten, server-clients niet.
 """
 
 import asyncio
+import io
+import logging
 import types
 
 import pytest
@@ -236,6 +238,229 @@ async def test_override_client_wordt_gesloten_na_blocking_chat(host):
     )
     assert _FakeClaude.gemaakt
     assert all(c.gesloten for c in _FakeClaude.gemaakt)
+
+
+async def test_vlam_override_client_wordt_gesloten_na_de_stream(host):
+    """Spiegel van de claude-variant: ook de vlam-override moet dicht.
+
+    Zonder deze test wordt `_FakeVlam.gesloten` nergens getoetst.
+    """
+    await _drain(
+        host.chat_stream(
+            "s1", "hoi", mode="vlam", session_kvk=KVK_A,
+            vlam_api_key_override=KEY_A,
+        )
+    )
+    assert _FakeVlam.gemaakt, "er is geen vlam-override-client aangemaakt"
+    assert all(c.gesloten for c in _FakeVlam.gemaakt)
+
+
+async def test_alleen_de_client_van_de_gevraagde_mode_wordt_gebouwd(host):
+    """Beide headers, één mode: de ongebruikte client wordt niet gebouwd.
+
+    Een clientconstructie kost een geparste CA-bundel in de event loop, en de
+    tweede client doet in dit verzoek geen enkele call.
+    """
+    await _drain(
+        host.chat_stream(
+            "s1", "hoi", mode="claude", session_kvk=KVK_A,
+            claude_api_key_override=KEY_A,
+            vlam_api_key_override=KEY_B,
+        )
+    )
+    assert len(_FakeClaude.gemaakt) == 1
+    assert _FakeVlam.gemaakt == [], (
+        "de vlam-client is gebouwd terwijl mode=claude; die doet geen enkele call"
+    )
+    # En andersom, zodat dit geen eenzijdige assertie is.
+    await _drain(
+        host.chat_stream(
+            "s2", "hoi", mode="vlam", session_kvk=KVK_A,
+            claude_api_key_override=KEY_A,
+            vlam_api_key_override=KEY_B,
+        )
+    )
+    assert len(_FakeVlam.gemaakt) == 1
+    assert len(_FakeClaude.gemaakt) == 1, "er is een tweede claude-client gebouwd"
+
+
+async def test_afgebroken_stream_sluit_de_client_en_vergeet_de_sleutel(host, monkeypatch):
+    """Het meest voorkomende faalpad: de gebruiker sluit het tabblad.
+
+    De stream wordt dan halverwege ge-`aclose()`d. Draait de opruiming niet, dan
+    blijft de sleutel procesbreed in het redactie-register staan — precies de
+    kernclaim van PDR-010 §2 — en blijft de client met sleutel open.
+
+    De agentic loop yieldt pas ná de LLM-call; om áfgebroken te worden terwijl
+    de client-scope openstaat, vervangen we die loop door een generator met een
+    yield ervóór.
+    """
+
+    async def nep_stream(messages, session_kvk, claude):
+        yield {"type": "status", "message": "bezig"}
+        yield {"type": "answer", "message": "klaar"}
+
+    monkeypatch.setattr(host, "_chat_claude_stream", nep_stream)
+
+    gen = host.chat_stream(
+        "s1", "hoi", mode="claude", session_kvk=KVK_A, claude_api_key_override=KEY_A
+    )
+    await gen.__anext__()  # "Vraag analyseren…" — nog vóór de client-scope
+    await gen.__anext__()  # "bezig" — nu staat de scope open
+    await gen.aclose()
+
+    assert _FakeClaude.gemaakt, "er is geen override-client aangemaakt"
+    assert all(c.gesloten for c in _FakeClaude.gemaakt), (
+        "een afgebroken stream liet de override-client open staan"
+    )
+    assert KEY_A in log_redaction.redact(f"fout met {KEY_A}"), (
+        "na een afgebroken stream staat de sleutel nog in het redactie-register"
+    )
+
+
+async def test_afbreken_midden_in_de_llm_call_ruimt_op(host, monkeypatch):
+    """Zelfde opruiming, maar afgebroken terwijl de LLM-call loopt.
+
+    Hier komt de annulering binnen als `CancelledError` — die erft van
+    `BaseException` en werd door de opruimlus niet als zodanig behandeld.
+    """
+    in_de_call = asyncio.Event()
+
+    async def blokkeer(**kwargs):
+        in_de_call.set()
+        await asyncio.Event().wait()  # nooit klaar
+
+    monkeypatch.setattr(_FakeClaude, "_create", lambda self, **kw: blokkeer(**kw))
+
+    taak = asyncio.create_task(
+        _drain(
+            host.chat_stream(
+                "s1", "hoi", mode="claude", session_kvk=KVK_A,
+                claude_api_key_override=KEY_A,
+            )
+        )
+    )
+    await in_de_call.wait()
+    taak.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await taak
+
+    assert all(c.gesloten for c in _FakeClaude.gemaakt), (
+        "de override-client bleef open na annulering midden in de LLM-call"
+    )
+    assert KEY_A in log_redaction.redact(f"fout met {KEY_A}")
+
+
+async def test_fout_tijdens_sluiten_gaat_geredigeerd_de_logs_in(host, monkeypatch):
+    """De redactie moet het sluiten omvatten, niet alleen het opbouwen.
+
+    Stond het `finally` búiten de `redact_temporarily`-scope, dan was de
+    registratie al afgelopen op het moment dat een httpx-fout uit `close()` de
+    logs bereikte — en stond de sleutel er alsnog in.
+    """
+    stroom = io.StringIO()
+    handler = logging.StreamHandler(stroom)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    log = logging.getLogger("vlam.host")
+    log.addHandler(handler)
+    log_redaction.install_redaction()
+
+    async def kapotte_close(self):
+        raise ValueError(f"upstream weigerde sleutel {self.api_key}")
+
+    monkeypatch.setattr(_FakeClaude, "close", kapotte_close)
+    try:
+        await _drain(
+            host.chat_stream(
+                "s1", "hoi", mode="claude", session_kvk=KVK_A,
+                claude_api_key_override=KEY_A,
+            )
+        )
+    finally:
+        log.removeHandler(handler)
+
+    uitvoer = stroom.getvalue()
+    assert "Sluiten van request-client" in uitvoer, "de fout is niet gelogd"
+    assert KEY_A not in uitvoer, (
+        "de sleutel stond ongeredigeerd in de logregel over het mislukte sluiten"
+    )
+    assert log_redaction.REDACTED in uitvoer
+
+
+async def test_opruimen_slaat_geen_client_over_bij_annulering():
+    """Unit op de opruimlus: een `CancelledError` mag de rest niet overslaan.
+
+    De annulering hoort daarna alsnog door te komen, anders verdwijnt een
+    afbreking stilletjes.
+    """
+
+    class _Weigert:
+        gesloten = False
+
+        async def close(self):
+            raise asyncio.CancelledError
+
+    class _Werkt:
+        def __init__(self):
+            self.gesloten = False
+
+        async def close(self):
+            self.gesloten = True
+
+    tweede = _Werkt()
+    with pytest.raises(asyncio.CancelledError):
+        await vlam_host.VLAMHost._close_request_clients([_Weigert(), tweede])
+    assert tweede.gesloten, "de tweede client werd overgeslagen na een CancelledError"
+
+
+async def test_gelijktijdige_gesprekken_overlappen_echt_binnen_de_llm_call(host):
+    """A zit ín zijn LLM-call wanneer B binnenkomt.
+
+    De andere interleaving-tests pauzeren op het eerste status-event, dus vóór
+    het `async with _request_clients`; de twee scopes overlappen daar nog niet.
+    Hier blokkeert de fake `create` op een event, zodat de scope van A
+    aantoonbaar openstaat terwijl B er een opent.
+    """
+    a_zit_in_de_call = asyncio.Event()
+    laat_a_door = asyncio.Event()
+    origineel = _FakeClaude._create
+
+    async def _create(self, **kwargs):
+        vraag = next(
+            (m["content"] for m in kwargs["messages"] if m.get("role") == "user"), "?"
+        )
+        if vraag == "vraag-A":
+            a_zit_in_de_call.set()
+            await laat_a_door.wait()
+        return await origineel(self, **kwargs)
+
+    _FakeClaude._create = _create
+    try:
+        taak_a = asyncio.create_task(
+            _drain(
+                host.chat_stream(
+                    "sessie-a", "vraag-A", mode="claude", session_kvk=KVK_A,
+                    claude_api_key_override=KEY_A,
+                )
+            )
+        )
+        await a_zit_in_de_call.wait()
+        # B doet zijn volledige verzoek terwijl A binnen zijn scope hangt.
+        await _drain(
+            host.chat_stream(
+                "sessie-b", "vraag-B", mode="claude", session_kvk=KVK_B,
+                claude_api_key_override=KEY_B,
+            )
+        )
+        laat_a_door.set()
+        await taak_a
+    finally:
+        _FakeClaude._create = origineel
+
+    assert ("vraag-A", KEY_A) in AANROEPEN
+    assert ("vraag-B", KEY_B) in AANROEPEN
+    assert ("vraag-A", KEY_B) not in AANROEPEN
+    assert ("vraag-B", KEY_A) not in AANROEPEN
 
 
 async def test_server_clients_blijven_onaangeraakt(host):
