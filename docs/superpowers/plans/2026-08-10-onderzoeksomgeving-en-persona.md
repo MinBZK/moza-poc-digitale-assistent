@@ -32,94 +32,145 @@ documentatiewijzigingen. Geen productiecode in de host zelf.
 | `docs/deploy-zad.md` | Beschreven deploymentstand | Wijzigen |
 | `services/host/.env.example` | Voorbeeldconfiguratie | Wijzigen |
 
-## Ontwerpkeuze die tijdens het plannen naar boven kwam
+## Ontwerpkeuze: de VOF blijft, en dat corrigeert de spec
 
 De spec zei "`MOCK_EIGENAREN["62345681"]` krijgt Robin Vogel als natuurlijk
-persoon". Bij het lezen bleek De Bloesem bewust een **VOF** te zijn, mét comment:
-"geen rechtspersoonlijkheid, de vennootschap zelf is de eigenaar". Dat is voor een
-VOF de correcte vorm van het KvK Basisprofiel, dus dat comment klopt.
+persoon". Dat is bij nader inzien fout, en de correctie is belangrijker dan de
+wijziging zelf.
 
-Een natuurlijk persoon toevoegen aan een VOF zou de API-vorm breken (PDR-007).
-Daarom verandert dit plan de **rechtsvorm** naar Eenmanszaak, in profiel én
-eigenaar tegelijk. Een kweker met zeven medewerkers als eenmanszaak is realistisch —
-de rechtsvorm zegt niets over het personeelsaantal — en het past bij de
-frontend-framing "Robin Vogel van …", waarin de respondent de eigenaar speelt.
+De Bloesem is bewust een **VOF**, mét comment: "geen rechtspersoonlijkheid, de
+vennootschap zelf is de eigenaar". Dat is voor een VOF de correcte vorm van het KvK
+Basisprofiel. Belangrijker: de **frontend modelleert Robin Vogel al als vennoot** —
+`_data/personas.json[13]` zegt `rechtsvorm: "Vennootschap onder firma"` en
+`functies: "Vennoot, Kweker"`. Beide lagen zijn het dus al eens.
 
-**Let op voor de frontend (jouw kant):** `_data/personas.json[13]` moet dezelfde
-rechtsvorm noemen, anders spreekt de pagina Bedrijfsgegevens de assistent tegen.
+Een natuurlijk persoon in het eigenaar-antwoord duwen zou de API-vorm breken
+(PDR-007) én de frontend tegenspreken. **De mockdata blijft ongewijzigd.** Wat
+overblijft is een verificatie in W4: het antwoord van de assistent mag niet
+suggereren dat Robin géén band met het bedrijf heeft. "De onderneming is een VOF"
+is correct; "de eigenaar is onbekend" zou verwarrend zijn voor iemand die net als
+Robin Vogel is ingelogd.
+
+**Leidend principe (vastgesteld 2026-08-10): de frontend is leidend.** De
+respondent leest de bedrijfsgegevens op het scherm; wat de assistent zegt moet
+daarop aansluiten, niet andersom. Waar de twee verschillen én het KvK Basisprofiel
+een passend veld heeft, volgt de backend. Waar de frontend gegevens toont die niet
+uit het Handelsregister komen (btw-nummer, IBAN, loonheffingennummer), blijft de
+backend erbuiten — dat is Belastingdienst-data, geen KvK-data.
+
+Twee velden vallen daaronder:
+
+- **Voltijd personeel.** De frontend toont `werkzamePersonenFulltime: 5`; de
+  backend kent alleen `totaalWerkzamePersonen: 7`. Die twee spreken elkaar niet
+  tegen — het echte Basisprofiel heeft beide velden — maar zonder het voltijdveld
+  antwoordt de assistent "7" op een scherm dat "5" toont. Het veld komt erbij; het
+  totaal blijft 7.
+- **Website.** De frontend toont `https://www.kwekerijdebloesem.nl`; het
+  Basisprofiel heeft daar een `websites`-lijst voor.
 
 ---
 
-### Task 1: De Bloesem krijgt Robin Vogel als eigenaar
+### Task 1: Laat de backend de frontend volgen voor de onderzoekspersona
 
 **Files:**
-- Modify: `services/mcp/kvk/server.py` (`MOCK_PROFIELEN["62345681"]`, `MOCK_EIGENAREN["62345681"]`)
+- Modify: `services/mcp/kvk/server.py` (`MOCK_PROFIELEN["62345681"]`)
 - Test: `services/host/tests/test_demo_personas.py`
 
 **Interfaces:**
 - Consumes: het bestaande `_load(naam)`-helpertje boven in `test_demo_personas.py`,
   dat een MCP-server per bestandspad laadt (`services/mcp/<naam>/server.py`).
-- Produces: `MOCK_EIGENAREN["62345681"]["natuurlijkPersoon"]["volledigeNaam"] == "Robin Vogel"`
+- Produces: geen code, alleen bewaking
 
-- [ ] **Step 1: Schrijf de falende tests**
+De VOF blijft; die kwam al overeen. Twee velden die de frontend toont en de backend
+niet kent komen erbij, en een test legt de hele koppeling vast zodat een latere
+"verbetering" de twee lagen niet stilletjes uit elkaar trekt. De frontend staat in
+een andere repo, dus de test noteert de waarden die daar gelden mét de bron erbij.
+
+- [ ] **Step 1: Schrijf de falende test**
 
 Voeg onderaan `services/host/tests/test_demo_personas.py` toe:
 
 ```python
-def test_bloesem_eigenaar_is_robin_vogel():
-    """De respondent speelt Robin Vogel; `kvk__eigenaar` hoort dat te bevestigen."""
-    kvk = _load("kvk")
-    eigenaar = kvk.MOCK_EIGENAREN["62345681"]
-    assert eigenaar["natuurlijkPersoon"]["volledigeNaam"] == "Robin Vogel"
+# Waarden zoals MinBZK/poc-moza ze toont voor `?persona=bloemenkweker`
+# (_data/personas.json, index 13), gecontroleerd op 2026-08-10. De frontend is
+# leidend: de respondent leest deze op de pagina Bedrijfsgegevens, en de assistent
+# hoort er niets anders over te zeggen.
+BLOEMENKWEKER_FRONTEND = {
+    "kvkNummer": "62345681",
+    "handelsnaam": "Kwekerij De Bloesem",
+    "rechtsvorm": "Vennootschap onder firma",
+    "vestigingsnummer": "000062345681",
+    "voltijdWerkzamePersonen": 5,
+    "website": "https://www.kwekerijdebloesem.nl",
+}
 
 
-def test_bloesem_rechtsvorm_is_gelijk_in_profiel_en_eigenaar():
-    """Twee plekken, één waarheid: anders spreekt het profiel de eigenaar tegen."""
+def test_bloemenkweker_komt_overeen_met_de_frontend():
+    """De persona van het gebruikersonderzoek, over twee repo's heen.
+
+    Robin Vogel is in de frontend vennoot van een VOF. Voor een VOF levert het KvK
+    Basisprofiel terecht de vennootschap als eigenaar en géén natuurlijk persoon —
+    dat is dus geen bug om te "repareren".
+    """
     kvk = _load("kvk")
+    profiel = kvk.MOCK_PROFIELEN[BLOEMENKWEKER_FRONTEND["kvkNummer"]]
+    eigenaar = kvk.MOCK_EIGENAREN[BLOEMENKWEKER_FRONTEND["kvkNummer"]]
+
+    assert profiel["naam"] == BLOEMENKWEKER_FRONTEND["handelsnaam"]
+    assert profiel["rechtsvorm"] == BLOEMENKWEKER_FRONTEND["rechtsvorm"]
+    assert eigenaar["rechtsvorm"] == BLOEMENKWEKER_FRONTEND["rechtsvorm"]
     assert (
-        kvk.MOCK_PROFIELEN["62345681"]["rechtsvorm"]
-        == kvk.MOCK_EIGENAREN["62345681"]["rechtsvorm"]
+        profiel["_embedded"]["hoofdvestiging"]["vestigingsnummer"]
+        == BLOEMENKWEKER_FRONTEND["vestigingsnummer"]
     )
+    # Een VOF heeft geen natuurlijk persoon als eigenaar; die vorm hoort te blijven.
+    assert "rechtspersoon" in eigenaar
+    assert "natuurlijkPersoon" not in eigenaar
 
 
-def test_eenmanszaak_heeft_geen_rechtspersoon():
-    """Vormcheck op het KvK Basisprofiel (PDR-007): een eenmanszaak heeft er geen."""
-    kvk = _load("kvk")
-    for nummer, eigenaar in kvk.MOCK_EIGENAREN.items():
-        if eigenaar["rechtsvorm"] == "Eenmanszaak":
-            assert "rechtspersoon" not in eigenaar, nummer
-            assert "natuurlijkPersoon" in eigenaar, nummer
+def test_bloemenkweker_personeel_en_website_volgen_de_frontend():
+    """Zonder het voltijdveld antwoordt de assistent "7" op een scherm dat "5" toont.
+
+    Beide getallen zijn waar — het echte Basisprofiel kent totaal én voltijd — maar
+    de respondent ziet alleen het voltijdgetal en zou het verschil als een fout
+    lezen.
+    """
+    profiel = _load("kvk").MOCK_PROFIELEN["62345681"]
+    assert profiel["totaalWerkzamePersonen"] == 7
+    assert (
+        profiel["voltijdWerkzamePersonen"]
+        == BLOEMENKWEKER_FRONTEND["voltijdWerkzamePersonen"]
+    )
+    assert BLOEMENKWEKER_FRONTEND["website"] in profiel["websites"]
+
+
+def test_bloemenkweker_is_indieningsplichtig():
+    """De hele onderzoeksflow hangt hieraan: zakt dit onder de drempel, dan is er
+    niets te rapporteren en valt het script uit elkaar."""
+    netbeheerder = _load("netbeheerder")
+    totaal = netbeheerder.MOCK_VERBRUIK["62345681"]["totaal"]
+    assert totaal["jaarlijks_elektriciteitsverbruik_kwh"] > 50000
+    assert totaal["jaarlijks_gasverbruik_m3"] > 25000
 ```
 
-- [ ] **Step 2: Draai de tests en zie ze falen**
+- [ ] **Step 2: Draai de tests en zie de tweede falen**
 
 Run: `uv run pytest services/host/tests/test_demo_personas.py -q`
-Expected: FAIL — `KeyError: 'natuurlijkPersoon'` en een ongelijke rechtsvorm
-("Vennootschap onder firma" versus wat de eigenaar noemt).
+Expected: `test_bloemenkweker_komt_overeen_met_de_frontend` PASS (die legt de
+bestaande, correcte stand vast); `test_bloemenkweker_personeel_en_website_volgen_de_frontend`
+FAIL met `KeyError: 'voltijdWerkzamePersonen'`.
 
-- [ ] **Step 3: Pas de mockdata aan**
+- [ ] **Step 3: Voeg de twee velden toe**
 
-In `services/mcp/kvk/server.py`, in `MOCK_PROFIELEN["62345681"]`:
-
-```python
-    "rechtsvorm": "Eenmanszaak",
-```
-
-En vervang het hele blok `MOCK_EIGENAREN["62345681"]` door:
+In `services/mcp/kvk/server.py`, in `MOCK_PROFIELEN["62345681"]`, direct onder
+`"totaalWerkzamePersonen": 7,`:
 
 ```python
-    # Eenmanszaak: de KvK levert dan een natuurlijk persoon, geen rechtspersoon.
-    # Robin Vogel is de persona die de respondent speelt tijdens het
-    # gebruikersonderzoek van 25/27 augustus 2026.
-    "62345681": {
-        "kvkNummer": "62345681",
-        "rechtsvorm": "Eenmanszaak",
-        "natuurlijkPersoon": {
-            "geslachtsnaam": "Vogel",
-            "voornamen": "Robin",
-            "volledigeNaam": "Robin Vogel",
-        },
-    },
+    # De frontend toont het voltijdaantal op de pagina Bedrijfsgegevens; zonder
+    # dit veld antwoordt de assistent met het totaal en leest de ondernemer een
+    # verschil dat er niet is. Beide velden staan zo ook in het echte Basisprofiel.
+    "voltijdWerkzamePersonen": 5,
+    "websites": ["https://www.kwekerijdebloesem.nl"],
 ```
 
 - [ ] **Step 4: Draai de tests en zie ze slagen**
@@ -127,27 +178,37 @@ En vervang het hele blok `MOCK_EIGENAREN["62345681"]` door:
 Run: `uv run pytest services/host/tests/test_demo_personas.py -q`
 Expected: PASS
 
-- [ ] **Step 5: Draai de volledige suite en de linter**
+- [ ] **Step 5: Bewijs dat de eerste test tanden heeft**
+
+Verander in `services/mcp/kvk/server.py` tijdelijk `MOCK_PROFIELEN["62345681"]["rechtsvorm"]`
+naar `"Eenmanszaak"`, draai de test, zie hem falen, en zet het terug.
+
+Run: `uv run pytest services/host/tests/test_demo_personas.py::test_bloemenkweker_komt_overeen_met_de_frontend -q`
+Expected: FAIL, daarna na terugzetten weer PASS.
+
+- [ ] **Step 6: Draai de volledige suite en de linter**
 
 Run: `uv run pytest -q && uv run ruff check .`
-Expected: alles groen. Als een bestaande test op "Vennootschap onder firma" toetste,
-hoort die mee te veranderen — die test legde de oude keuze vast, niet een regel.
+Expected: alles groen.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add services/mcp/kvk/server.py services/host/tests/test_demo_personas.py
-git commit -m "fix(kvk): Robin Vogel is de eigenaar van Kwekerij De Bloesem
+git commit -m "fix(kvk): laat het profiel van De Bloesem de frontend volgen
 
-De respondent speelt tijdens het gebruikersonderzoek van 25/27 augustus Robin
-Vogel als bloemenkweker. De Bloesem stond als VOF in de mock, en dan levert het
-KvK Basisprofiel terecht de vennootschap als eigenaar in plaats van een persoon.
-Rechtsvorm nu Eenmanszaak in profiel en eigenaar tegelijk; een kweker met zeven
-medewerkers als eenmanszaak is realistisch, want de rechtsvorm zegt niets over
-het personeelsaantal.
+Voor het gebruikersonderzoek van 25/27 augustus is de frontend leidend: de
+respondent leest de bedrijfsgegevens op het scherm, en de assistent hoort daarop
+aan te sluiten. Twee velden ontbraken. De pagina toont vijf voltijdmedewerkers
+terwijl de mock alleen een totaal van zeven kende, dus de assistent noemde een
+ander getal dan het scherm; beide velden bestaan in het echte Basisprofiel en
+staan er nu allebei in. De website stond alleen in de frontend.
 
-De frontend (personas.json) moet dezelfde rechtsvorm noemen, anders spreekt de
-pagina Bedrijfsgegevens de assistent tegen."
+De rechtsvorm blijft VOF: de frontend modelleert Robin Vogel als vennoot, en voor
+een VOF levert het Basisprofiel terecht de vennootschap als eigenaar in plaats van
+een natuurlijk persoon. Een test houdt die koppeling nu vast, inclusief de
+drempels — zakt het verbruik daaronder, dan is er niets te rapporteren en valt het
+testscript uit elkaar."
 ```
 
 ---
