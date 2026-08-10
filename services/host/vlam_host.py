@@ -644,14 +644,22 @@ class VLAMHost:
         if conv_key not in self.conversations:
             self.conversations[conv_key] = []
         messages = self.conversations[conv_key]
+        # Zie chat_stream: bij een leeg modelantwoord draaien we de hele beurt
+        # terug, anders blokkeert een assistent-bericht met lege inhoud elke
+        # volgende beurt in deze sessie.
+        herstelpunt = len(messages)
         messages.append({"role": "user", "content": user_message})
 
         try:
             if mode == "vlam":
                 if not self.vlam_client:
                     return _geen_sleutel_fout("vlam").tekst
-                return await self._chat_vlam(messages, session_kvk)
-            return await self._chat_claude(messages, session_kvk)
+                antwoord = await self._chat_vlam(messages, session_kvk)
+            else:
+                antwoord = await self._chat_claude(messages, session_kvk)
+            if antwoord == maak_fout("LLM_LEEG_ANTWOORD").tekst:
+                del messages[herstelpunt:]
+            return antwoord
         finally:
             self.claude_client, self.vlam_client = orig_claude, orig_vlam
 
@@ -707,6 +715,12 @@ class VLAMHost:
             if conv_key not in self.conversations:
                 self.conversations[conv_key] = []
             messages = self.conversations[conv_key]
+            # Beginstand van deze beurt. Loopt de beurt stuk op een leeg
+            # modelantwoord, dan draaien we hierop terug: een assistent-bericht
+            # met lege inhoud blijft anders in de geschiedenis staan en laat
+            # élke volgende beurt in deze sessie stuklopen op de Messages API.
+            # De melding zegt "probeer het opnieuw", en dat moet dan ook kunnen.
+            herstelpunt = len(messages)
             messages.append({"role": "user", "content": user_message})
 
             yield {"type": "status", "message": "Vraag analyseren…"}
@@ -731,6 +745,8 @@ class VLAMHost:
 
             if gen is not None:
                 async for event in gen:
+                    if event.get("code") == "LLM_LEEG_ANTWOORD":
+                        del messages[herstelpunt:]
                     yield event
         except Exception as e:
             # Vangnet voor alles wat de loops zelf niet afvangen (een respons in

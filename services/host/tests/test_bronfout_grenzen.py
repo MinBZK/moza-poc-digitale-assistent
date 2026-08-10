@@ -15,6 +15,7 @@ import json
 
 import pytest
 
+import vlam_host
 from errors import (
     MAX_ECHO_TEKENS,
     classificeer_tool_fout,
@@ -644,3 +645,53 @@ def test_leeg_resultaat_in_de_provenance_envelope_telt_ook():
     leeg = _envelope({"resultaten": [], "aantal": 0})
     melding = classificeer_tool_fout("regelrecht__execute_law", leeg, zoekterm="iets")
     assert melding is not None and melding.code == "NIET_GEVONDEN"
+
+
+# --- Een leeg modelantwoord mag de sessie niet permanent breken ---------------
+#
+# Reviewbevinding: het assistent-bericht werd aan de geschiedenis toegevoegd
+# vóórdat het antwoord op leegte werd gecontroleerd. Bleef dat lege bericht
+# staan, dan werd élke volgende beurt in die sessie door de Messages API
+# geweigerd — terwijl de melding zegt "probeer het opnieuw".
+
+
+class _LeegAntwoordClaude:
+    """Anthropic-achtige client die een respons zonder inhoud teruggeeft."""
+
+    api_key = "sk-ant-test0000000000000000"
+
+    def __init__(self):
+        import types
+
+        self.messages = types.SimpleNamespace(create=self._create)
+
+    async def _create(self, **kwargs):
+        import types
+
+        return types.SimpleNamespace(content=[], usage=None, stop_reason="end_turn")
+
+
+async def test_leeg_antwoord_laat_geen_spoor_in_de_geschiedenis(monkeypatch):
+    host = vlam_host.VLAMHost()
+    monkeypatch.setattr(host, "claude_client", _LeegAntwoordClaude())
+
+    events = [
+        e
+        async for e in host.chat_stream(
+            "s1", "hoi", mode="claude", session_kvk="85234567"
+        )
+    ]
+
+    codes = [e.get("code") for e in events]
+    assert "LLM_LEEG_ANTWOORD" in codes, f"geen leeg-antwoord-melding: {codes}"
+
+    conv_key = host._conv_key("85234567", "s1", "claude")
+    historie = host.conversations.get(conv_key, [])
+    assert not any(
+        bericht.get("role") == "assistant" and not bericht.get("content")
+        for bericht in historie
+    ), "een assistent-bericht met lege inhoud blijft in de geschiedenis staan"
+    assert historie == [], (
+        "de mislukte beurt hoort helemaal teruggedraaid te zijn, zodat een "
+        "nieuwe poging op een schone geschiedenis begint"
+    )
