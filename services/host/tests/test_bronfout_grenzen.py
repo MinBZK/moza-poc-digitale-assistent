@@ -218,11 +218,17 @@ def test_meervoud_en_enkelvoud_volgen_het_aantal_velden():
     assert twee.bericht.startswith("Er ontbreken gegevens")
 
 
-@pytest.mark.parametrize("veld", ["kvk_nummer", "law", "regeling_id"])
+@pytest.mark.parametrize("veld", ["kvk_nummer", "law"])
 def test_gegeven_dat_de_assistent_zelf_levert_vraagt_niet_om_de_gebruiker(veld):
-    """Deze velden komen uit de sessie of van het model, niet van de gebruiker.
+    """Deze velden komen uit de sessie, niet van de gebruiker.
 
     "Geef dit gegeven door" is dan een opdracht die hij niet kán uitvoeren.
+
+    `regeling_id` stond hier eerder bij, maar dat is een ander geval: het model
+    haalt het uit `rvo__zoek_regeling` en kan het dus zelf herstellen. Als
+    interne blokkade behandelen liet het indieningspad doodlopen zodra er
+    daarnaast een gegeven ontbrak dat de gebruiker wél kon aanleveren. Zie
+    test_foutmeldingen_catalogus.py voor de drie gevallen die daaruit volgen.
     """
     melding = classificeer_tool_fout(
         "netbeheerder__verbruik",

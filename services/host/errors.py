@@ -701,9 +701,16 @@ _MAX_PAYLOAD_TEKENS = 2_000_000
 # Gegevens die de host of het model zelf aanlevert. Ontbreken die, dan kan de
 # ondernemer er niets aan doen en is "geef dit gegeven door" een zinloze
 # opdracht; dat is dan een fout in de assistent, geen ontbrekend antwoord.
-_INTERNE_VELDEN = frozenset(
-    {"kvk_nummer", "kvknummer", "law", "service", "bsn", "rsin", "regeling_id"}
-)
+_INTERNE_VELDEN = frozenset({"kvk_nummer", "kvknummer", "law", "service", "bsn", "rsin"})
+
+# Velden die noch de host noch de gebruiker aanlevert: het model haalt ze uit een
+# eerdere tool-aanroep. `regeling_id` komt uit `rvo__zoek_regeling`. Ze stonden
+# eerder bij _INTERNE_VELDEN, maar dat leidde tot een doodloper: ontbrak naast
+# `regeling_id` ook een gegeven dat de gebruiker wel kan geven, dan kreeg hij
+# "hier kunt u zelf niets aan doen, meld het bij de beheerder" in plaats van de
+# vraag naar dat gegeven. Voor een ontbrekend modelveld hoeft de gebruiker niets
+# te weten - het model zoekt de regeling alsnog op.
+_MODEL_VELDEN = frozenset({"regeling_id"})
 
 # Parameternamen zoals de bronnen ze kennen, in woorden waar een ondernemer iets
 # aan heeft. Zonder deze vertaling leest de melding als "Er ontbreekt een gegeven
@@ -723,6 +730,19 @@ def _veldsleutel(veld: object) -> str:
     if isinstance(veld, dict):
         return str(veld.get("naam") or veld.get("name") or "").strip().lower()
     return str(veld).strip().lower()
+
+
+def _alleen_modelvelden(payload: dict) -> bool:
+    """Noemde de bron uitsluitend velden die het model zelf aanlevert?
+
+    Onderscheidt "de bron zei welk veld ontbrak en dat is een zaak van het
+    model" van "de bron zei niet welk veld ontbrak". In het tweede geval hoort
+    de gebruiker de neutrale melding te krijgen.
+    """
+    velden = payload.get("ontbrekende_gegevens") or payload.get("velden")
+    if not isinstance(velden, list) or not velden:
+        return False
+    return all(_veldsleutel(veld) in _MODEL_VELDEN for veld in velden[:5])
 
 
 def _veldnamen(payload: dict) -> tuple[list[str], bool]:
@@ -749,6 +769,9 @@ def _veldnamen(payload: dict) -> tuple[list[str], bool]:
         sleutel = _veldsleutel(veld)
         if sleutel in _INTERNE_VELDEN:
             intern += 1
+            continue
+        if sleutel in _MODEL_VELDEN:
+            # Niet meetellen als blokkade: het model kan dit zelf ophalen.
             continue
         if sleutel in _VELD_IN_MENSENTAAL:
             namen.append(_VELD_IN_MENSENTAAL[sleutel])
@@ -890,6 +913,12 @@ def classificeer_tool_fout(
         namen, blokkeert_op_intern = _veldnamen(payload)
         if blokkeert_op_intern:
             code = "ONTBREKEND_INTERN_VELD"
+        elif not namen and _alleen_modelvelden(payload):
+            # De bron noemde alleen velden die het model zelf ophaalt. Er valt
+            # de gebruiker dus niets te vragen; het model corrigeert zijn eigen
+            # aanroep. Noemde de bron helemaal geen velden, dan blijft de
+            # neutrale melding staan - die is bruikbaarder dan stilte.
+            code = "LLM_TOOLCALL_ONGELDIG"
         else:
             code = "ONTBREKENDE_VELDEN" if len(namen) > 1 else "ONTBREKEND_VELD"
             invulling["veld"] = ", ".join(namen)

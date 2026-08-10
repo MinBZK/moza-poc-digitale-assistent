@@ -13,11 +13,13 @@ stilletjes kan sneuvelen, allebei hier afgedekt:
 """
 
 import ast
+import json
 import re
 from pathlib import Path
 
 import pytest
 
+import errors
 from cli_executor import _CLI_CODES
 from errors import (
     _BRON_CODES,
@@ -252,3 +254,40 @@ def test_onbekende_code_klapt_niet():
     melding = maak_fout("BESTAAT_NIET")
     assert melding.code == "LLM_ONBEKEND"
     assert melding.actie.strip()
+
+
+# --- regeling_id is een modelveld, geen intern veld ---------------------------
+#
+# Reviewbevinding: `regeling_id` stond bij de velden die de host zelf aanlevert.
+# Ontbrak het samen met een gegeven dat de gebruiker wél kan geven, dan kreeg
+# hij "hier kunt u zelf niets aan doen" in plaats van de vraag naar dat gegeven —
+# en dat is precies het indieningspad van de informatieplicht.
+
+
+def test_ontbrekende_maatregelen_vragen_de_gebruiker_ook_zonder_regeling_id():
+    fout = errors.classificeer_tool_fout(
+        "rvo__indienen",
+        json.dumps({"error": "ONTBREKENDE_VELDEN", "velden": ["regeling_id", "maatregelen"]}),
+    )
+    assert fout.code != "ONTBREKEND_INTERN_VELD", (
+        "de gebruiker kreeg een doodloper terwijl hij de maatregelen kan aanleveren"
+    )
+    assert "maatregel" in fout.tekst.lower()
+
+
+def test_alleen_regeling_id_is_een_zaak_van_het_model():
+    """Niets om aan de gebruiker te vragen: het model zoekt de regeling zelf op."""
+    fout = errors.classificeer_tool_fout(
+        "rvo__indienen",
+        json.dumps({"error": "ONTBREKENDE_VELDEN", "velden": ["regeling_id"]}),
+    )
+    assert fout.code == "LLM_TOOLCALL_ONGELDIG"
+
+
+def test_echt_intern_veld_blijft_een_doodloper():
+    """De oorspronkelijke redenering blijft staan voor velden die de host injecteert."""
+    fout = errors.classificeer_tool_fout(
+        "rvo__indienen",
+        json.dumps({"error": "ONTBREKENDE_VELDEN", "velden": ["kvk_nummer", "maatregelen"]}),
+    )
+    assert fout.code == "ONTBREKEND_INTERN_VELD"
