@@ -147,11 +147,40 @@ def test_registreer_geheim_is_blijvend():
 # --- Terugkrabbelen begrensd houden ------------------------------------------
 
 
-def _duur(text: str, herhalingen: int = 3) -> float:
-    start = time.perf_counter()
+# Ondergrens waarboven een meting iets zegt. Daaronder domineren de
+# klokresolutie en de scheduler, en is een verhouding tussen twee metingen ruis.
+_MEETBAAR_SECONDEN = 2e-3
+
+
+def _duur(text: str, herhalingen: int = 5) -> float:
+    """De snelste van een aantal runs.
+
+    Bewust het minimum en niet het gemiddelde: een gemiddelde meet ook alles wat
+    het besturingssysteem er tussendoor deed. Het minimum benadert de echte
+    kosten en is daardoor veel stabieler op een gedeelde CI-machine.
+    """
+    metingen = []
     for _ in range(herhalingen):
+        start = time.perf_counter()
         redact(text)
-    return (time.perf_counter() - start) / herhalingen
+        metingen.append(time.perf_counter() - start)
+    return min(metingen)
+
+
+def _meetbare_basis(vorm: str, start_n: int = 4000) -> int:
+    """Vergroot de invoer tot de meting boven de ruisgrens uitkomt.
+
+    Nodig sinds de voorfilter: een vorm die geen enkele trigger bevat wordt
+    meteen afgewezen, en dan meet je op 16 KB alleen nog de `in`-checks. De
+    verhouding tussen twee zulke metingen zei niets en liet deze test op CI
+    willekeurig omvallen.
+    """
+    n = start_n
+    for _ in range(6):
+        if _duur(vorm * n) >= _MEETBAAR_SECONDEN:
+            return n
+        n *= 2
+    return n
 
 
 # Elk van deze vormen raakt een ándere tak. `a-` haalt de sk-/label-patronen aan
@@ -179,10 +208,14 @@ def test_redactie_blijft_lineair_op_vijandige_invoer(vorm):
     een trage machine vals alarm geven. Kwadratisch is ~4x bij dubbele invoer,
     lineair ~2x.
     """
-    basis = _duur(vorm * 4000)
-    verdubbeld = _duur(vorm * 8000)
-    # Ondergrens tegen deling door bijna-nul op een erg snelle machine.
-    ratio = verdubbeld / max(basis, 1e-6)
+    n = _meetbare_basis(vorm)
+    basis = _duur(vorm * n)
+    verdubbeld = _duur(vorm * n * 2)
+    if basis < _MEETBAAR_SECONDEN:
+        # Zelfs opgeschaald blijft dit onmeetbaar snel. Dat is geen falen maar
+        # het tegendeel; de absolute bovengrens hieronder bewaakt deze vorm dan.
+        pytest.skip(f"{vorm!r} is te snel om een verhouding op te meten")
+    ratio = verdubbeld / basis
     assert ratio < 3, (
         f"redactie schaalt superlineair ({ratio:.1f}x bij dubbele invoer) op "
         f"{vorm!r}; staat er weer een onbegrensde herhaling vóór een literal?"
