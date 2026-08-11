@@ -9,8 +9,10 @@ De MCP-servers staan buiten de pythonpath (services/host); we laden ze
 per bestandspad. De servers starten geen verbindingen bij import.
 """
 
+import asyncio
 import importlib.util
 import json
+from functools import cache
 from pathlib import Path
 
 MCP_DIR = Path(__file__).resolve().parent.parent.parent / "mcp"
@@ -18,8 +20,13 @@ MCP_DIR = Path(__file__).resolve().parent.parent.parent / "mcp"
 NOON_KVK = "85234567"
 
 
+@cache
 def _load(naam: str):
-    """Laad een MCP-servermodule op bestandspad."""
+    """Laad een MCP-servermodule op bestandspad.
+
+    Gecachet: de tests lezen alleen module-constanten, en `exec_module` draait
+    anders per test de hele server opnieuw.
+    """
     pad = MCP_DIR / naam / "server.py"
     spec = importlib.util.spec_from_file_location(f"mcp_{naam}_server", pad)
     module = importlib.util.module_from_spec(spec)
@@ -42,7 +49,8 @@ def test_noon_bestaat_in_kvk_mock():
 
 def test_noon_adres_heeft_bag_fallback_zonder_woonfunctie():
     kvk = _load("kvk")
-    adres = kvk.MOCK_PROFIELEN[NOON_KVK]["_embedded"]["hoofdvestiging"]["adressen"][0]
+    # Via _extract_address, want dat is het adres dat de verrijking ook pakt.
+    adres = kvk._extract_address(kvk.MOCK_PROFIELEN[NOON_KVK])
     key = f"{adres['postcode']}-{adres['huisnummer']}"
     bag = kvk._BAG_DEMO_FALLBACK[key]
     # De woonfunctie-uitzondering mag NIET gelden, anders vervalt de plicht
@@ -113,94 +121,12 @@ def test_eml_fallback_zonder_feiten_geeft_de_twee_vragen():
     ]
 
 
-# --- Onderzoekspersona 25/27 augustus 2026: Robin Vogel als bloemenkweker -----
+# --- Onderzoekspersona's -----------------------------------------------------
 #
-# Waarden zoals MinBZK/poc-moza ze toont voor `?persona=bloemenkweker`
-# (_data/personas.json), overgenomen uit commit 205fffc2. De frontend is
-# leidend: de respondent leest deze op de pagina's Bedrijfsgegevens en
-# Adresgegevens, en de assistent hoort er niets anders over te zeggen.
-#
-# Alleen velden die het KvK Basisprofiel kent staan hier. De frontend toont
-# daarnaast btw-, omzetbelasting- en loonheffingennummer en een IBAN; die komen
-# van de Belastingdienst en de bank, en horen dus niet uit een KvK-mock te
-# rollen.
-BLOEMENKWEKER_FRONTEND = {
-    "kvkNummer": "62345681",
-    "handelsnaam": "Kwekerij De Bloesem",
-    "rechtsvorm": "Vennootschap onder firma",
-    "rsin": "62345681",
-    "vestigingsnummer": "000062345681",
-    "voltijdWerkzamePersonen": 5,
-    "deeltijdWerkzamePersonen": 2,
-    "website": "https://www.kwekerijdebloesem.nl",
-    "postcode": "2665KG",
-    "huisnummer": 210,
-    "plaats": "Bleiswijk",
-}
-
-
-def test_bloemenkweker_komt_overeen_met_de_frontend():
-    """De persona van het gebruikersonderzoek, over twee repo's heen.
-
-    Robin Vogel is in de frontend vennoot van een VOF. Voor een VOF levert het
-    KvK Basisprofiel terecht de vennootschap als eigenaar en géén natuurlijk
-    persoon — dat is dus geen bug om te "repareren".
-    """
-    kvk = _load("kvk")
-    nummer = BLOEMENKWEKER_FRONTEND["kvkNummer"]
-    profiel = kvk.MOCK_PROFIELEN[nummer]
-    eigenaar = kvk.MOCK_EIGENAREN[nummer]
-
-    assert profiel["naam"] == BLOEMENKWEKER_FRONTEND["handelsnaam"]
-    assert profiel["rechtsvorm"] == BLOEMENKWEKER_FRONTEND["rechtsvorm"]
-    assert eigenaar["rechtsvorm"] == BLOEMENKWEKER_FRONTEND["rechtsvorm"]
-    # De pagina Bedrijfsgegevens toont het RSIN; zonder dit veld in het profiel
-    # kent de assistent alleen de eigenaar-route ernaartoe.
-    assert profiel["rsin"] == BLOEMENKWEKER_FRONTEND["rsin"]
-    assert eigenaar["rechtspersoon"]["rsin"] == BLOEMENKWEKER_FRONTEND["rsin"]
-    assert (
-        profiel["_embedded"]["hoofdvestiging"]["vestigingsnummer"]
-        == BLOEMENKWEKER_FRONTEND["vestigingsnummer"]
-    )
-    # Een VOF heeft geen natuurlijk persoon als eigenaar; die vorm hoort te blijven.
-    assert "rechtspersoon" in eigenaar
-    assert "natuurlijkPersoon" not in eigenaar
-
-
-def test_bloemenkweker_personeel_en_website_volgen_de_frontend():
-    """Zonder het voltijdveld antwoordt de assistent "7" op een scherm dat "5" toont.
-
-    Beide getallen zijn waar — het echte Basisprofiel kent totaal én voltijd —
-    maar de respondent ziet alleen het voltijdgetal en zou het verschil als een
-    fout lezen.
-    """
-    profiel = _load("kvk").MOCK_PROFIELEN["62345681"]
-    voltijd = BLOEMENKWEKER_FRONTEND["voltijdWerkzamePersonen"]
-    deeltijd = BLOEMENKWEKER_FRONTEND["deeltijdWerkzamePersonen"]
-    assert profiel["voltijdWerkzamePersonen"] == voltijd
-    assert profiel["deeltijdWerkzamePersonen"] == deeltijd
-    # Het totaal is geen los feit maar de som; loopt dat uiteen, dan spreekt de
-    # assistent zichzelf tegen tussen twee antwoorden.
-    assert profiel["totaalWerkzamePersonen"] == voltijd + deeltijd
-    assert BLOEMENKWEKER_FRONTEND["website"] in profiel["websites"]
-
-    # De hoofdvestiging draagt dezelfde aantallen; de assistent kan beide routes
-    # nemen en hoort er hetzelfde getal uit te halen.
-    hoofdvestiging = profiel["_embedded"]["hoofdvestiging"]
-    assert hoofdvestiging["voltijdWerkzamePersonen"] == voltijd
-    assert hoofdvestiging["deeltijdWerkzamePersonen"] == deeltijd
-
-
-def test_bloemenkweker_heeft_vestigings_en_postadres():
-    """De pagina Adresgegevens toont beide; één adres maakt het andere onbekend."""
-    profiel = _load("kvk").MOCK_PROFIELEN["62345681"]
-    adressen = profiel["_embedded"]["hoofdvestiging"]["adressen"]
-    per_type = {adres["type"]: adres for adres in adressen}
-    assert set(per_type) == {"bezoekadres", "correspondentieadres"}
-    for adres in per_type.values():
-        assert adres["postcode"] == BLOEMENKWEKER_FRONTEND["postcode"]
-        assert adres["huisnummer"] == BLOEMENKWEKER_FRONTEND["huisnummer"]
-        assert adres["plaats"] == BLOEMENKWEKER_FRONTEND["plaats"]
+# Of de mock-data gelijk is aan wat de frontend op het scherm toont, staat in
+# `test_personas_frontend_pariteit.py`: die leest `_data/personas.json` van
+# MinBZK/moza-poc echt uit. Hier staan de invarianten die de backend op eigen
+# kracht moet halen, zonder die repo.
 
 
 def test_bloemenkweker_is_indieningsplichtig():
@@ -217,18 +143,120 @@ def test_bloemenkweker_is_indieningsplichtig():
 def test_elke_mockpersona_is_compleet():
     """Een persona bestaat in alle lagen, of nergens.
 
-    De blokkade die het gebruikersonderzoek van augustus 2026 bijna sloopte was
-    precies dit: de frontend bood persona's aan die de backend niet kende.
+    Ontbreekt er één laag, dan valt die tool terug op de echte KvK-API met een
+    nummer dat daar niet bestaat: de bron faalt middenin een sessie. De BAG-laag
+    faalt stiller — dan mist de woonfunctie-toets zijn invoer en wordt het
+    oordeel over de informatieplicht geveld zonder dat de uitzondering is
+    bekeken.
     """
     kvk = _load("kvk")
     netbeheerder = _load("netbeheerder")
 
-    for nummer in kvk.MOCK_PROFIELEN:
+    for nummer, profiel in kvk.MOCK_PROFIELEN.items():
         assert nummer in kvk.MOCK_EIGENAREN, (
             f"{nummer} heeft een profiel maar geen eigenaar; `kvk__eigenaar` valt "
             f"dan terug op de echte KvK-API en faalt voor een mock-persona"
+        )
+        assert nummer in kvk.MOCK_VESTIGINGEN, (
+            f"{nummer} heeft een profiel maar geen vestigingen; `kvk__vestigingen` "
+            f"valt dan terug op de echte KvK-API en faalt voor een mock-persona"
         )
         assert nummer in netbeheerder.MOCK_VERBRUIK, (
             f"{nummer} heeft een profiel maar geen verbruik; de assistent kan de "
             f"informatieplicht dan niet beoordelen en gaat het uitvragen"
         )
+
+        vestigingsnummer = profiel["_embedded"]["hoofdvestiging"]["vestigingsnummer"]
+        assert vestigingsnummer in kvk.MOCK_VESTIGINGSPROFIELEN, (
+            f"{nummer} heeft geen vestigingsprofiel; de assistent noemt dan het "
+            f"totaal aantal medewerkers waar het scherm voltijd en deeltijd toont"
+        )
+
+        adres = kvk._extract_address(profiel)
+        assert adres is not None, f"{nummer} heeft geen bruikbaar adres"
+        sleutel = f"{adres['postcode'].replace(' ', '')}-{adres['huisnummer']}"
+        assert sleutel in kvk._BAG_DEMO_FALLBACK, (
+            f"{nummer} heeft geen BAG-fallback op {sleutel}; de woonfunctie-toets "
+            f"verliest dan stil zijn invoer"
+        )
+
+
+def test_extract_address_kiest_het_bezoekadres_niet_het_eerste():
+    """Het correspondentieadres staat in de API-volgorde vóór het bezoekadres.
+
+    Kiest de extractie op positie in plaats van op type, dan gaat de
+    BAG-verrijking naar een postbus: geen pand, geen gebruiksdoel, en de
+    woonfunctie-uitzondering wordt beoordeeld op het verkeerde adres.
+    """
+    kvk = _load("kvk")
+    profiel = {
+        "_embedded": {
+            "hoofdvestiging": {
+                "adressen": [
+                    {"type": "correspondentieadres", "postcode": "3009AC"},
+                    {"type": "bezoekadres", "postcode": "3089JJ"},
+                ]
+            }
+        }
+    }
+    assert kvk._extract_address(profiel)["postcode"] == "3089JJ"
+
+
+def test_extract_address_valt_terug_als_er_geen_bezoekadres_is():
+    kvk = _load("kvk")
+    profiel = {
+        "_embedded": {
+            "hoofdvestiging": {
+                "adressen": [{"type": "correspondentieadres", "postcode": "3009AC"}]
+            }
+        }
+    }
+    assert kvk._extract_address(profiel)["postcode"] == "3009AC"
+    assert kvk._extract_address({"_embedded": {"hoofdvestiging": {}}}) is None
+
+
+def test_bouwmanagement_gebruikt_het_bezoekadres_voor_de_bag():
+    """De enige persona met een postbus als postadres — het discriminerende geval."""
+    kvk = _load("kvk")
+    adres = kvk._extract_address(kvk.MOCK_PROFIELEN["61234570"])
+    assert adres["type"] == "bezoekadres"
+    assert adres["postcode"] == "3089JJ"
+    assert "3009AC-8120" not in kvk._BAG_DEMO_FALLBACK
+
+
+def test_mijn_bedrijf_levert_de_personeelsuitsplitsing_uit():
+    """De data in de dict zegt niets als de tool hem niet doorgeeft.
+
+    Het basisprofiel kent alleen het totaal; voltijd en deeltijd komen uit het
+    vestigingsprofiel. Blijft die verrijking achterwege, dan antwoordt de
+    assistent "7" op een scherm dat "5 voltijd, 2 deeltijd" toont.
+    """
+    kvk = _load("kvk")
+    profiel = asyncio.run(
+        kvk._enrich_with_vestigingsprofiel(kvk.MOCK_PROFIELEN["62345681"])
+    )
+    hoofdvestiging = profiel["_embedded"]["hoofdvestiging"]
+    assert hoofdvestiging["voltijdWerkzamePersonen"] == 5
+    assert hoofdvestiging["deeltijdWerkzamePersonen"] == 2
+    assert hoofdvestiging["totaalWerkzamePersonen"] == 7
+
+    # De verrijking mag de cache niet muteren: die deelt het dict tussen sessies.
+    assert "voltijdWerkzamePersonen" not in (
+        kvk.MOCK_PROFIELEN["62345681"]["_embedded"]["hoofdvestiging"]
+    )
+
+
+def test_mijn_bedrijf_overleeft_een_falend_vestigingsprofiel(monkeypatch):
+    """Een profiel zonder uitsplitsing is beter dan een foutmelding."""
+    kvk = _load("kvk")
+    profiel = {
+        "kvkNummer": "99999999",
+        "_embedded": {"hoofdvestiging": {"vestigingsnummer": "000099999999"}},
+    }
+
+    def _weigeren(_pad):
+        raise kvk.URLError("geen netwerk")
+
+    monkeypatch.setattr(kvk, "_kvk_fetch", _weigeren)
+    resultaat = asyncio.run(kvk._enrich_with_vestigingsprofiel(profiel))
+    assert resultaat == profiel
