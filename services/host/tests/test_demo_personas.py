@@ -116,16 +116,26 @@ def test_eml_fallback_zonder_feiten_geeft_de_twee_vragen():
 # --- Onderzoekspersona 25/27 augustus 2026: Robin Vogel als bloemenkweker -----
 #
 # Waarden zoals MinBZK/poc-moza ze toont voor `?persona=bloemenkweker`
-# (_data/personas.json, index 13), gecontroleerd op 2026-08-10. De frontend is
-# leidend: de respondent leest deze op de pagina Bedrijfsgegevens, en de
-# assistent hoort er niets anders over te zeggen.
+# (_data/personas.json), overgenomen uit commit 205fffc2. De frontend is
+# leidend: de respondent leest deze op de pagina's Bedrijfsgegevens en
+# Adresgegevens, en de assistent hoort er niets anders over te zeggen.
+#
+# Alleen velden die het KvK Basisprofiel kent staan hier. De frontend toont
+# daarnaast btw-, omzetbelasting- en loonheffingennummer en een IBAN; die komen
+# van de Belastingdienst en de bank, en horen dus niet uit een KvK-mock te
+# rollen.
 BLOEMENKWEKER_FRONTEND = {
     "kvkNummer": "62345681",
     "handelsnaam": "Kwekerij De Bloesem",
     "rechtsvorm": "Vennootschap onder firma",
+    "rsin": "62345681",
     "vestigingsnummer": "000062345681",
     "voltijdWerkzamePersonen": 5,
+    "deeltijdWerkzamePersonen": 2,
     "website": "https://www.kwekerijdebloesem.nl",
+    "postcode": "2665KG",
+    "huisnummer": 210,
+    "plaats": "Bleiswijk",
 }
 
 
@@ -144,6 +154,10 @@ def test_bloemenkweker_komt_overeen_met_de_frontend():
     assert profiel["naam"] == BLOEMENKWEKER_FRONTEND["handelsnaam"]
     assert profiel["rechtsvorm"] == BLOEMENKWEKER_FRONTEND["rechtsvorm"]
     assert eigenaar["rechtsvorm"] == BLOEMENKWEKER_FRONTEND["rechtsvorm"]
+    # De pagina Bedrijfsgegevens toont het RSIN; zonder dit veld in het profiel
+    # kent de assistent alleen de eigenaar-route ernaartoe.
+    assert profiel["rsin"] == BLOEMENKWEKER_FRONTEND["rsin"]
+    assert eigenaar["rechtspersoon"]["rsin"] == BLOEMENKWEKER_FRONTEND["rsin"]
     assert (
         profiel["_embedded"]["hoofdvestiging"]["vestigingsnummer"]
         == BLOEMENKWEKER_FRONTEND["vestigingsnummer"]
@@ -161,12 +175,32 @@ def test_bloemenkweker_personeel_en_website_volgen_de_frontend():
     fout lezen.
     """
     profiel = _load("kvk").MOCK_PROFIELEN["62345681"]
-    assert profiel["totaalWerkzamePersonen"] == 7
-    assert (
-        profiel["voltijdWerkzamePersonen"]
-        == BLOEMENKWEKER_FRONTEND["voltijdWerkzamePersonen"]
-    )
+    voltijd = BLOEMENKWEKER_FRONTEND["voltijdWerkzamePersonen"]
+    deeltijd = BLOEMENKWEKER_FRONTEND["deeltijdWerkzamePersonen"]
+    assert profiel["voltijdWerkzamePersonen"] == voltijd
+    assert profiel["deeltijdWerkzamePersonen"] == deeltijd
+    # Het totaal is geen los feit maar de som; loopt dat uiteen, dan spreekt de
+    # assistent zichzelf tegen tussen twee antwoorden.
+    assert profiel["totaalWerkzamePersonen"] == voltijd + deeltijd
     assert BLOEMENKWEKER_FRONTEND["website"] in profiel["websites"]
+
+    # De hoofdvestiging draagt dezelfde aantallen; de assistent kan beide routes
+    # nemen en hoort er hetzelfde getal uit te halen.
+    hoofdvestiging = profiel["_embedded"]["hoofdvestiging"]
+    assert hoofdvestiging["voltijdWerkzamePersonen"] == voltijd
+    assert hoofdvestiging["deeltijdWerkzamePersonen"] == deeltijd
+
+
+def test_bloemenkweker_heeft_vestigings_en_postadres():
+    """De pagina Adresgegevens toont beide; één adres maakt het andere onbekend."""
+    profiel = _load("kvk").MOCK_PROFIELEN["62345681"]
+    adressen = profiel["_embedded"]["hoofdvestiging"]["adressen"]
+    per_type = {adres["type"]: adres for adres in adressen}
+    assert set(per_type) == {"bezoekadres", "correspondentieadres"}
+    for adres in per_type.values():
+        assert adres["postcode"] == BLOEMENKWEKER_FRONTEND["postcode"]
+        assert adres["huisnummer"] == BLOEMENKWEKER_FRONTEND["huisnummer"]
+        assert adres["plaats"] == BLOEMENKWEKER_FRONTEND["plaats"]
 
 
 def test_bloemenkweker_is_indieningsplichtig():

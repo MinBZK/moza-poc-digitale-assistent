@@ -129,12 +129,14 @@ MOCK_PROFIELEN: dict[str, dict] = {
         "kvkNummer": "62345681",
         "naam": "Kwekerij De Bloesem",
         "rechtsvorm": "Vennootschap onder firma",
+        "rsin": "62345681",
         "totaalWerkzamePersonen": 7,
-        # De frontend toont het voltijdaantal op de pagina Bedrijfsgegevens;
-        # zonder dit veld antwoordt de assistent met het totaal en leest de
-        # ondernemer een verschil dat er niet is. Beide velden staan zo ook
-        # in het echte KvK Basisprofiel.
+        # De frontend toont voltijd en deeltijd apart op de pagina
+        # Bedrijfsgegevens; zonder deze velden antwoordt de assistent met het
+        # totaal en leest de ondernemer een verschil dat er niet is. Alle drie
+        # staan zo ook in het echte KvK Basisprofiel.
         "voltijdWerkzamePersonen": 5,
+        "deeltijdWerkzamePersonen": 2,
         "websites": ["https://www.kwekerijdebloesem.nl"],
         "handelsnamen": [{"naam": "Kwekerij De Bloesem", "volgorde": 0}],
         "sbiActiviteiten": [
@@ -159,6 +161,8 @@ MOCK_PROFIELEN: dict[str, dict] = {
                 "eersteHandelsnaam": "Kwekerij De Bloesem",
                 "indHoofdvestiging": "Ja",
                 "totaalWerkzamePersonen": 7,
+                "voltijdWerkzamePersonen": 5,
+                "deeltijdWerkzamePersonen": 2,
                 "adressen": [
                     {
                         "type": "bezoekadres",
@@ -167,7 +171,18 @@ MOCK_PROFIELEN: dict[str, dict] = {
                         "huisnummer": 210,
                         "postcode": "2665KG",
                         "plaats": "Bleiswijk",
-                    }
+                    },
+                    # De pagina Adresgegevens toont vestigings- én postadres.
+                    # Ontbreekt het postadres, dan zegt de assistent dat het
+                    # onbekend is terwijl het scherm het toont.
+                    {
+                        "type": "correspondentieadres",
+                        "volledigAdres": "Hoefweg 210, 2665KG Bleiswijk",
+                        "straatnaam": "Hoefweg",
+                        "huisnummer": 210,
+                        "postcode": "2665KG",
+                        "plaats": "Bleiswijk",
+                    },
                 ],
                 "sbiActiviteiten": [
                     {
