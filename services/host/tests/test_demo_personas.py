@@ -15,6 +15,8 @@ import json
 from functools import cache
 from pathlib import Path
 
+import pytest
+
 MCP_DIR = Path(__file__).resolve().parent.parent.parent / "mcp"
 
 NOON_KVK = "85234567"
@@ -246,6 +248,43 @@ def test_mijn_bedrijf_levert_de_personeelsuitsplitsing_uit():
     )
 
 
+def test_leeg_vestigingsprofielveld_overschrijft_het_basisprofiel_niet(monkeypatch):
+    """De KvK-API geeft een geregistreerd-maar-leeg veld terug als null of [].
+
+    Toets je op aanwezigheid van de sleutel in plaats van op de waarde, dan
+    vervangt zo'n leeg veld een gevulde waarde uit het basisprofiel en vertelt
+    de assistent de ondernemer dat zijn bedrijf geen website heeft.
+    """
+    kvk = _load("kvk")
+    profiel = {
+        "kvkNummer": "99999999",
+        "_embedded": {
+            "hoofdvestiging": {
+                "vestigingsnummer": "000099999999",
+                "websites": ["https://www.example.nl"],
+                "totaalWerkzamePersonen": 3,
+            }
+        },
+    }
+
+    async def _leeg(_nummer):
+        return {
+            "websites": [],
+            "voltijdWerkzamePersonen": None,
+            "deeltijdWerkzamePersonen": 0,
+        }
+
+    monkeypatch.setattr(kvk, "_get_vestigingsprofiel", _leeg)
+    hoofdvestiging = asyncio.run(kvk._enrich_with_vestigingsprofiel(profiel))[
+        "_embedded"
+    ]["hoofdvestiging"]
+
+    assert hoofdvestiging["websites"] == ["https://www.example.nl"]
+    assert "voltijdWerkzamePersonen" not in hoofdvestiging
+    # Nul is een geldig antwoord en geen ontbrekende waarde: die hoort wél mee.
+    assert hoofdvestiging["deeltijdWerkzamePersonen"] == 0
+
+
 def test_mijn_bedrijf_overleeft_een_falend_vestigingsprofiel(monkeypatch):
     """Een profiel zonder uitsplitsing is beter dan een foutmelding."""
     kvk = _load("kvk")
@@ -260,3 +299,31 @@ def test_mijn_bedrijf_overleeft_een_falend_vestigingsprofiel(monkeypatch):
     monkeypatch.setattr(kvk, "_kvk_fetch", _weigeren)
     resultaat = asyncio.run(kvk._enrich_with_vestigingsprofiel(profiel))
     assert resultaat == profiel
+
+
+@pytest.mark.parametrize(
+    "fout",
+    [
+        TimeoutError("read timeout"),
+        json.JSONDecodeError("geen JSON", "<html>", 0),
+        ValueError("onverwacht"),
+    ],
+)
+def test_vestigingsprofiel_laat_geen_enkele_fout_ontsnappen(monkeypatch, fout):
+    """`_kvk_fetch` doet `json.loads` binnen het `urlopen`-blok.
+
+    Een read-timeout, een HTML-foutpagina en een afgebroken verbinding zijn
+    daardoor geen van drie een `HTTPError` of `URLError`. Ontsnappen ze, dan
+    komt hun tekst via `call_tool` bij het LLM terecht — wat PDR-011 verbiedt.
+    """
+    kvk = _load("kvk")
+    profiel = {
+        "kvkNummer": "99999999",
+        "_embedded": {"hoofdvestiging": {"vestigingsnummer": "000099999999"}},
+    }
+
+    def _weigeren(_pad):
+        raise fout
+
+    monkeypatch.setattr(kvk, "_kvk_fetch", _weigeren)
+    assert asyncio.run(kvk._enrich_with_vestigingsprofiel(profiel)) == profiel

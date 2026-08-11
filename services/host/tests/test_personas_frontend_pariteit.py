@@ -28,13 +28,24 @@ SERVICES = Path(__file__).resolve().parent.parent.parent
 MCP_KVK = SERVICES / "mcp" / "kvk" / "server.py"
 MCP_NETBEHEERDER = SERVICES / "mcp" / "netbeheerder" / "server.py"
 
-# Naast de repo (de gebruikelijke werkkopie), of expliciet via de omgeving.
-_STANDAARD_PAD = SERVICES.parent.parent / "poc-moza" / "_data" / "personas.json"
+# Naast de repo (de gebruikelijke werkkopie), of expliciet via de omgeving. De
+# upstream heet `moza-poc`, maar bestaande werkkopieën heten `poc-moza`; wie
+# maar één van beide kent, laat de halve wereld stilletjes overslaan.
+_ZUSTERMAPPEN = ("moza-poc", "poc-moza")
+_KANDIDATEN = [
+    SERVICES.parent.parent / naam / "_data" / "personas.json"
+    for naam in _ZUSTERMAPPEN
+]
 
 
 def _personas_pad() -> Path:
     uit_omgeving = os.getenv("MOZA_POC_PERSONAS", "").strip()
-    return Path(uit_omgeving) if uit_omgeving else _STANDAARD_PAD
+    if uit_omgeving:
+        return Path(uit_omgeving)
+    for kandidaat in _KANDIDATEN:
+        if kandidaat.is_file():
+            return kandidaat
+    return _KANDIDATEN[0]
 
 
 def _laad_module(pad: Path, naam: str):
@@ -48,10 +59,13 @@ def _laad_module(pad: Path, naam: str):
 def personas() -> list[dict]:
     pad = _personas_pad()
     if not pad.is_file():
+        gezocht = " of ".join(str(k) for k in _KANDIDATEN)
         pytest.skip(
-            f"frontend-persona's niet gevonden op {pad}; zet MOZA_POC_PERSONAS "
-            f"naar _data/personas.json van MinBZK/moza-poc. Zonder dat bestand "
-            f"is de pariteit met het scherm ONGETOETST."
+            f"frontend-persona's niet gevonden ({gezocht}); zet "
+            f"MOZA_POC_PERSONAS naar _data/personas.json van MinBZK/moza-poc. "
+            f"Zonder dat bestand is de pariteit met het scherm ONGETOETST. "
+            f"In CI hoort dit niet voor te komen: .github/workflows/test.yml "
+            f"checkt de frontend uit en zet die variabele."
         )
     return json.loads(pad.read_text(encoding="utf-8"))
 
@@ -95,16 +109,52 @@ def test_elke_actieve_frontend_persona_heeft_backend_data(
         )
 
 
-def test_actieve_persona_staat_in_de_env_example(personas):
-    """`TEST_KVK_NUMMERS` is de allowlist; ontbreekt het nummer, dan volgt 401."""
+def _allowlist_uit_env_example() -> set[str]:
+    """De nummers uit de TEST_KVK_NUMMERS-regel zelf, niet uit het commentaar.
+
+    Zoeken op "staat het nummer ergens in het bestand" slaagt al zodra iemand
+    de persona in de commentaartabel documenteert — terwijl juist de waarde
+    achter het `=`-teken bepaalt of de host de sessie toelaat.
+    """
     tekst = (SERVICES / "host" / ".env.example").read_text(encoding="utf-8")
+    for regel in tekst.splitlines():
+        schoon = regel.lstrip("# ").strip()
+        if schoon.startswith("TEST_KVK_NUMMERS="):
+            waarde = schoon.split("=", 1)[1]
+            return {n.strip() for n in waarde.split(",") if n.strip()}
+    raise AssertionError("geen TEST_KVK_NUMMERS-regel in .env.example")
+
+
+def test_actieve_persona_staat_in_de_allowlist(personas):
+    """`TEST_KVK_NUMMERS` is de allowlist; ontbreekt het nummer, dan volgt 401."""
+    allowlist = _allowlist_uit_env_example()
     for persona in personas:
         if not persona.get("actief"):
             continue
         nummer = persona["bedrijf"]["kvkNummer"]
-        assert nummer in tekst, (
+        assert nummer in allowlist, (
             f"{persona['id']} ({nummer}) is actief in de frontend maar staat "
-            f"niet in .env.example; de host blokkeert die sessie"
+            f"niet in TEST_KVK_NUMMERS van .env.example; de host blokkeert "
+            f"die sessie met 'log eerst in'"
+        )
+
+
+def test_allowlist_conftest_en_env_example_lopen_gelijk():
+    """Drie lijsten, geen mechanisme dat ze koppelt.
+
+    `.env.example` documenteert, `conftest.py` bepaalt wat de tests zien en de
+    ZAD-component-config bepaalt wat productie ziet. Loopt de eerste op de
+    tweede voor, dan valt elke test die als die persona rijdt om op "log eerst
+    in" terwijl de mockdata compleet is. De derde staat in `docs/deploy-zad.md`
+    en kan hiervandaan niet getoetst worden.
+    """
+    conftest = (SERVICES / "host" / "tests" / "conftest.py").read_text(
+        encoding="utf-8"
+    )
+    for nummer in _allowlist_uit_env_example():
+        assert nummer in conftest, (
+            f"{nummer} staat in .env.example maar niet in conftest.py; onder "
+            f"pytest weigert config.kvk_uit_header dat nummer"
         )
 
 
@@ -147,6 +197,14 @@ def test_kerngegevens_volgen_het_scherm(personas, kvk, kvk_nummer):
     assert hoofdvestiging["totaalWerkzamePersonen"] == (
         profiel["totaalWerkzamePersonen"]
     )
+    # Het RSIN dat de assistent kán citeren komt uit kvk__eigenaar; dat is de
+    # waarde die met het scherm moet kloppen. Het vestigingsprofiel draagt hem
+    # ook, maar `_VESTIGINGSPROFIEL_VELDEN` mengt hem niet mee, dus alleen dáár
+    # toetsen zou een spiegel bewaken die niemand leest.
+    eigenaar = kvk.MOCK_EIGENAREN[kvk_nummer]
+    assert eigenaar["rsin"] == bedrijf["rsinNummer"]
+    if "rechtspersoon" in eigenaar:
+        assert eigenaar["rechtspersoon"]["rsin"] == bedrijf["rsinNummer"]
     assert vestigingsprofiel["rsin"] == bedrijf["rsinNummer"]
 
 

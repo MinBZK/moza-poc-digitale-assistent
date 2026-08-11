@@ -19,7 +19,7 @@ Assistent (pas NA toestemming: na kvk__mijn_bedrijf, netbeheerder__verbruik [Bus
 "Dank u. Ik heb het voorwerk voor u gedaan. Dit heb ik met uw toestemming geraadpleegd:
 
 **Geraadpleegde bronnen**
-- KvK Handelsregister: Koffiezaak Noon, KvK 85234567, café (SBI 56102), Witte de Withstraat 27, Rotterdam - geen woonfunctie (via BAG).
+- KvK Handelsregister: Koffiezaak Noon, KvK 85234567, café (SBI 56102), Meent 88, Rotterdam - geen woonfunctie (via BAG).
 - Uw Business Wallet: energieverbruik-attestatie - 61.250 kWh elektriciteit en 9.800 m³ gas (peiljaar 2025), afgegeven door uw netbeheerder en met uw toestemming gedeeld.
 - RegelRecht (art. 5.15d Besluit activiteiten leefomgeving): uw elektriciteitsverbruik ligt boven de drempel uit RegelRecht - **de informatieplicht geldt voor uw bedrijf**.
 

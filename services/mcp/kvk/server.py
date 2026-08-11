@@ -77,6 +77,9 @@ def _resolve_kvk(arguments: dict | None) -> str | None:
 # Cache per KvK-nummer (de server bedient meerdere bedrijven binnen zijn lifetime)
 _profiel_cache: dict[str, dict] = {}
 
+# Idem per vestigingsnummer, voor het vestigingsprofiel.
+_vestigingsprofiel_cache: dict[str, dict] = {}
+
 # ---------------------------------------------------------------------------
 # Mock-persona's — KvK-nummers die niet in de KvK Test API bestaan en
 # volledig lokaal worden geserveerd. Vorm volgt de KvK Basisprofiel API
@@ -490,19 +493,23 @@ MOCK_EIGENAREN: dict[str, dict] = {
 }
 
 
-# Het KvK-nummer zit in het API-pad (/v1/basisprofielen/<kvk>/...). Dat nummer
-# is de identiteit van de sessie en hoort niet in de logs — consistent met
-# _audit_log hieronder en met de host, die alleen argument-namen logt (PDR-009).
-_KVK_IN_PAD = re.compile(r"/\d{8}(?=/|$)")
+# Het bedrijf zit in het API-pad: als KvK-nummer (8 cijfers,
+# /v1/basisprofielen/<kvk>/...) of als vestigingsnummer (12 cijfers,
+# /v1/vestigingsprofielen/<nr>). Allebei wijzen ze één bedrijf aan, dus allebei
+# horen ze niet in de logs — consistent met _audit_log hieronder en met de host,
+# die alleen argument-namen logt (PDR-009). Eén patroon voor beide lengtes: een
+# regel die alleen op acht cijfers let, laat het vestigingsnummer ongemoeid
+# passeren, en in de mock-tabel is dat letterlijk "0000" + het KvK-nummer.
+_BEDRIJF_IN_PAD = re.compile(r"/(?:\d{8}|\d{12})(?=/|$)")
 
 
 def _pad_zonder_kvk(path: str) -> str:
-    """Geef het API-pad terug met het KvK-nummer vervangen, voor logging.
+    """Geef het API-pad terug met de bedrijfs-identificatie vervangen, voor logging.
 
     Welk endpoint is aangeroepen blijft zichtbaar (nuttig bij debuggen); welk
     bedrijf het betrof niet.
     """
-    return _KVK_IN_PAD.sub("/<kvk>", path)
+    return _BEDRIJF_IN_PAD.sub("/<kvk>", path)
 
 
 def _kvk_fetch(path: str) -> dict:
@@ -530,13 +537,22 @@ async def _get_basisprofiel(kvk: str) -> dict:
 
 
 async def _get_vestigingsprofiel(vestigingsnummer: str) -> dict:
-    """Haal het vestigingsprofiel op (voltijd/deeltijd, RSIN, websites)."""
+    """Haal het vestigingsprofiel op (voltijd/deeltijd, RSIN, websites).
+
+    Gecachet net als het basisprofiel: het LLM roept `mijn_bedrijf` meerdere
+    keren per gesprek aan, en zonder cache kost elke aanroep een verse
+    round-trip van maximaal tien seconden bovenop de BAG-call.
+    """
+    if vestigingsnummer in _vestigingsprofiel_cache:
+        return _vestigingsprofiel_cache[vestigingsnummer]
     if vestigingsnummer in MOCK_VESTIGINGSPROFIELEN:
         return MOCK_VESTIGINGSPROFIELEN[vestigingsnummer]
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
+    vestigingsprofiel = await loop.run_in_executor(
         None, _kvk_fetch, f"/v1/vestigingsprofielen/{vestigingsnummer}"
     )
+    _vestigingsprofiel_cache[vestigingsnummer] = vestigingsprofiel
+    return vestigingsprofiel
 
 
 # Wat het basisprofiel niet draagt maar het vestigingsprofiel wel. Alleen deze
@@ -557,6 +573,13 @@ async def _enrich_with_vestigingsprofiel(profiel: dict) -> dict:
     het scherm. Een falend vestigingsprofiel mag het basisprofiel niet meeslepen
     — de gebruiker heeft meer aan een profiel zonder uitsplitsing dan aan een
     foutmelding — dus dat blijft bij een logregel.
+
+    Vandaar `except Exception`, net als bij `_bag_fetch`. Smaller vangen dekt
+    dit pad niet: `_kvk_fetch` doet `json.loads` binnen het `urlopen`-blok, dus
+    een read-timeout (`TimeoutError`), een HTML-foutpagina (`JSONDecodeError`)
+    en een afgebroken verbinding (`IncompleteRead`) zijn geen van drie een
+    `HTTPError` of `URLError`. Die zouden dan uit `call_tool` ontsnappen en hun
+    tekst aan het LLM voeren — precies wat PDR-011 verbiedt.
     """
     hoofdvestiging = profiel.get("_embedded", {}).get("hoofdvestiging", {})
     vestigingsnummer = hoofdvestiging.get("vestigingsnummer")
@@ -565,14 +588,18 @@ async def _enrich_with_vestigingsprofiel(profiel: dict) -> dict:
 
     try:
         vestigingsprofiel = await _get_vestigingsprofiel(vestigingsnummer)
-    except (HTTPError, URLError) as exc:
+    except Exception as exc:
         logger.warning("vestigingsprofiel niet opgehaald: %s", type(exc).__name__)
         return profiel
 
+    # Op wáárde toetsen, niet op aanwezigheid van de sleutel. De KvK-API geeft
+    # een geregistreerd-maar-leeg veld terug als null of [], en dat zou hier een
+    # gevulde waarde uit het basisprofiel overschrijven: de assistent vertelt de
+    # ondernemer dan dat zijn bedrijf geen website heeft.
     aanvulling = {
         veld: vestigingsprofiel[veld]
         for veld in _VESTIGINGSPROFIEL_VELDEN
-        if veld in vestigingsprofiel
+        if vestigingsprofiel.get(veld) not in (None, "", [], {})
     }
     if not aanvulling:
         return profiel
