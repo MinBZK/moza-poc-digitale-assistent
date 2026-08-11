@@ -12,6 +12,7 @@ import re
 import ssl
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from functools import partial
 
 import anthropic
 import httpx
@@ -19,15 +20,25 @@ import openai
 
 from cli_executor import CLI_DIR, execute_cli_tool
 from config import (
+    ALLOW_API_KEY_OVERRIDE,
     ANTHROPIC_API_KEY,
     CLAUDE_MODEL,
     CLAUDE_TIMEOUT,
     MCP_SERVERS,
+    TOOL_TIMEOUT,
     VLAM_API_KEY,
     VLAM_BASE_URL,
     VLAM_MODEL_ID,
     VLAM_TIMEOUT,
     get_system_prompt,
+)
+from errors import (
+    classificeer_llm_fout,
+    classificeer_tool_fout,
+    maak_fout,
+    naar_event,
+    naar_llm,
+    verrijk_llm,
 )
 from log_redaction import redact_always, redact_temporarily
 from mcp_client import MCPToolRegistry
@@ -138,7 +149,12 @@ def _inject_session_kvk(tool_key: str, arguments: dict, kvk: str) -> dict:
     informatieplicht-regel heeft het nodig — de maatregelen-regel gebruikt
     `parameters` als feiten en blijft ongemoeid.
     """
-    args = dict(arguments or {})
+    # Eerst deny-by-default op topniveau: welke tool het ook is, een
+    # identity-sleutel die het model meegaf gaat eruit. Zonder deze regel hing
+    # de grens uit PDR-009 aan de vraag of een tool in `_KVK_SESSIE_TOOLS` staat,
+    # en zou een tool die daar (nog) niet in zit een KvK-nummer uit de
+    # conversatie kunnen doorgeven aan een bron.
+    args = _strip_identity_keys(dict(arguments or {}))
     if tool_key in _KVK_SESSIE_TOOLS:
         args["kvk_nummer"] = kvk
     elif tool_key == "regelrecht__execute_law":
@@ -157,6 +173,125 @@ def _inject_session_kvk(tool_key: str, arguments: dict, kvk: str) -> dict:
     return args
 
 
+def _geen_sleutel_fout(backend: str = ""):
+    """De melding als er geen bruikbare sleutel is voor het gekozen AI-model.
+
+    Staat `ALLOW_API_KEY_OVERRIDE` uit, dan negeert de host een sleutel uit de
+    UI stilzwijgend; "vul uw sleutel in bij Instellingen" is dan een doodlopend
+    advies waar de gebruiker eindeloos in blijft hangen. Staat de override aan,
+    dan noemt de melding wélke sleutel: er zijn er twee.
+    """
+    if ALLOW_API_KEY_OVERRIDE:
+        return maak_fout("LLM_GEEN_SLEUTEL", backend=backend)
+    return maak_fout("LLM_NIET_INGESTELD")
+
+
+def _antwoord_events(tekst: str, afgekapt: bool = False) -> list[dict]:
+    """De events die bij dit antwoord horen.
+
+    Een lege antwoordbel is voor de gebruiker niet te onderscheiden van een
+    vastgelopen assistent (een OpenAI-compatibele proxy die content-filtert
+    levert `content=None`); dan alleen een melding.
+
+    Breekt het antwoord af op `max_tokens`, dan gaat de deeltekst wél mee: die
+    is meestal grotendeels bruikbaar en weggooien is een grotere achteruitgang
+    dan de afbreking zelf. De melding gaat eraan vooraf als niet-terminaal
+    event, zodat de gebruiker weet dat er meer was.
+    """
+    if not (tekst or "").strip():
+        logger.error("Het model gaf een leeg antwoord terug")
+        return [naar_event(maak_fout("LLM_LEEG_ANTWOORD"))]
+    if afgekapt:
+        logger.warning("Het antwoord van het model is afgekapt op max_tokens")
+        return [
+            naar_event(maak_fout("LLM_ANTWOORD_AFGEKAPT"), "bron_fout"),
+            {"type": "answer", "message": tekst},
+        ]
+    return [{"type": "answer", "message": tekst}]
+
+
+def _antwoord_tekst(tekst: str, afgekapt: bool = False) -> str:
+    """Hetzelfde als `_antwoord_events`, maar voor de niet-streamende paden.
+
+    Daar is er maar één veld (`reply`), dus de melding gaat vóór de deeltekst
+    in plaats van als apart event. Zonder dit zag een `/chat`-client een leeg
+    antwoord of een halve zin zonder enige aanwijzing.
+    """
+    if not (tekst or "").strip():
+        logger.error("Het model gaf een leeg antwoord terug")
+        return maak_fout("LLM_LEEG_ANTWOORD").tekst
+    if afgekapt:
+        logger.warning("Het antwoord van het model is afgekapt op max_tokens")
+        return f"{maak_fout('LLM_ANTWOORD_AFGEKAPT').tekst}\n\n{tekst}"
+    return tekst
+
+
+def _is_afgekapt(respons_of_choice) -> bool:
+    """Liep het model tegen zijn max_tokens aan?
+
+    Anthropic zet `stop_reason="max_tokens"` op de respons, OpenAI
+    `finish_reason="length"` op de choice.
+    """
+    return (
+        getattr(respons_of_choice, "stop_reason", None) == "max_tokens"
+        or getattr(respons_of_choice, "finish_reason", None) == "length"
+    )
+
+
+def _lees_tool_argumenten(ruwe_json: str | None) -> dict | None:
+    """Parse de argumenten van een tool-call; `None` als het geen geldige JSON is.
+
+    Stond eerder buiten de try/except, waardoor een malformed tool-call van het
+    model de hele SSE-stream afbrak in plaats van een nette melding te geven.
+    """
+    try:
+        argumenten = json.loads(ruwe_json or "{}")
+    except (json.JSONDecodeError, TypeError):
+        logger.error("Tool-call met onleesbare argumenten ontvangen")
+        return None
+    return argumenten if isinstance(argumenten, dict) else None
+
+
+def _zoekterm(arguments: dict) -> str:
+    """De zoekopdracht uit de argumenten, voor een concrete 'niets gevonden'-melding.
+
+    Alleen velden die de gebruiker zelf noemt (trefwoord, BWB-ID); nooit een
+    identiteit-dragend veld, dat hoort niet in een melding of log. De waarde komt
+    van het LLM en gaat de melding in die het weer moet uitspreken, dus 'm eerst
+    laten schoonmaken en afkappen (`schoon_echo` in `errors.py`).
+    """
+    args = arguments or {}
+    return str(args.get("trefwoord") or args.get("bwb_id") or "")
+
+
+async def _bron_aanroep(aanroep, tool_key: str, arguments: dict) -> tuple[str, object]:
+    """Voer een bron-aanroep uit en vertaal een fout naar een nette melding.
+
+    Geeft `(tool_resultaat, fout_of_None)` terug. Het tool-resultaat gaat naar
+    het LLM; de fout (als die er is) naar de UI. Exception-teksten, paden en
+    URL's blijven in de log: het LLM kan alles doorvertellen wat het ziet.
+    """
+    try:
+        # Met een time-out: een bron die het verzoek aanneemt maar nooit
+        # antwoordt (hangende upstream-call, deadlock in een handler) liet de
+        # hele stream staan op dit `await`. Geen exception, dus ook het vangnet
+        # in `chat_stream` hielp niet: de gebruiker zag een spinner die nooit
+        # stopte. De TimeoutError landt in de SOURCE_UNAVAILABLE-melding.
+        resultaat = await asyncio.wait_for(aanroep(), timeout=TOOL_TIMEOUT)
+    except Exception as e:
+        fout = classificeer_tool_fout(tool_key, e)
+        _log_tool_error(tool_key, e, fout.code)
+        return naar_llm(fout), fout
+
+    fout = classificeer_tool_fout(tool_key, resultaat, _zoekterm(arguments))
+    if fout is None:
+        return resultaat, None
+    logger.warning("Bron meldt een fout [%s/%s]", tool_key, fout.code)
+    # Niet elke fout is er een voor de gebruiker: een tool-aanroep die het model
+    # zelf corrigeert hoort niet als storing in de UI.
+    return verrijk_llm(resultaat, fout), (fout if fout.zichtbaar else None)
+
+
 def _extract_lopende_zaak(tool_name: str, result: str) -> dict | None:
     """Extraheer lopende_zaak uit een rvo__indienen resultaat."""
     if tool_name != "rvo__indienen":
@@ -169,7 +304,7 @@ def _extract_lopende_zaak(tool_name: str, result: str) -> dict | None:
         return None
 
 
-def _log_tool_error(tool_key: str, exc: Exception) -> None:
+def _log_tool_error(tool_key: str, exc: Exception, code: str = "") -> None:
     """Log een mislukte tool-aanroep zonder de tekst van de exception.
 
     Die tekst kan argumentwaarden bevatten — bijvoorbeeld het sessie-KvK, zoals
@@ -177,8 +312,13 @@ def _log_tool_error(tool_key: str, exc: Exception) -> None:
     ondergraven, dat juist bewust alleen veldnamen logt. Op DEBUG staat de
     volledige tekst wél; die stand kies je zelf, en dan weet je wat je logt.
     """
-    logger.error("Fout bij tool '%s': %s", tool_key, type(exc).__name__)
-    logger.debug("Fout bij tool '%s' (volledige melding): %s", tool_key, exc)
+    logger.error(
+        "Tool-aanroep mislukt [%s%s]: %s",
+        tool_key,
+        f"/{code}" if code else "",
+        type(exc).__name__,
+    )
+    logger.debug("Tool-aanroep mislukt [%s] (volledige melding): %s", tool_key, exc)
 
 
 def _log_tokens(backend: str, response) -> None:
@@ -362,6 +502,64 @@ class VLAMHost:
     @property
     def has_tools(self) -> bool:
         return len(self.registry.tool_map) > 0
+
+    @property
+    def bronnen_offline(self) -> list[str]:
+        """MCP-bronnen die bij het starten niet beschikbaar kwamen."""
+        return sorted(
+            naam for naam, status in self.server_status.items() if status != "verbonden"
+        )
+
+    @property
+    def cli_bronnen_offline(self) -> list[str]:
+        """Bronnen die het CLI-transport niet kan bedienen.
+
+        De netbeheerder heeft überhaupt geen wrapper (PDR-005/PDR-008: het
+        CLI-transport loopt bewust achter), en een wrapper kan ontbreken in de
+        installatie. Zonder deze lijst volgt het model in `cli:*`-modus de
+        routeringstabel naar een tool die niet bestaat, en krijgt de gebruiker
+        het advies zijn vraag opnieuw te stellen — wat per definitie niet helpt.
+        """
+        wrappers = {
+            "kvk": "kvk-cli",
+            "koop": "koop-cli",
+            "regelrecht": "regelrecht-cli",
+            "rvo": "rvo-cli",
+        }
+        ontbreekt = [
+            bron for bron, script in wrappers.items() if not (CLI_DIR / script).is_file()
+        ]
+        # Alleen bronnen die er écht niet zijn. RegelRecht hoort er bewust NIET
+        # bij: `regelrecht__check` werkt in dit transport prima. Dat de gedeelde
+        # routeringstabel de MCP-naam `execute_law` voorschrijft is een
+        # naamprobleem, geen beschikbaarheidsprobleem; dat wordt opgelost met
+        # het CLI-blok in de systeemprompt (`cli_transport.md`). De hele bron
+        # offline melden zou de assistent een onware storing laten uitspreken op
+        # precies de vlaggenschipvraag van de PoC.
+        return sorted({*ontbreekt, "netbeheerder"})
+
+    def _system_prompt(
+        self,
+        mode: str,
+        has_tools: bool | None = None,
+        bronnen_offline: list[str] | None = None,
+        cli_transport: bool = False,
+    ) -> str:
+        """Stel de systeemprompt samen, inclusief welke bronnen nu offline zijn.
+
+        Zonder dat laatste weet het LLM niet dat een bron ontbreekt en praat het
+        eroverheen. De CLI-paden geven hun eigen lijst mee (`cli_bronnen_offline`):
+        de MCP-status zegt daar niets, maar het CLI-transport heeft zijn eigen
+        gaten — er is bijvoorbeeld geen netbeheerder-wrapper.
+        """
+        return get_system_prompt(
+            mode,
+            self.has_tools if has_tools is None else has_tools,
+            bronnen_offline=(
+                self.bronnen_offline if bronnen_offline is None else bronnen_offline
+            ),
+            cli_transport=cli_transport,
+        )
 
     def get_status(self) -> dict:
         """Geeft de status van backends en MCP-servers."""
@@ -552,6 +750,10 @@ class VLAMHost:
         if conv_key not in self.conversations:
             self.conversations[conv_key] = []
         messages = self.conversations[conv_key]
+        # Zie chat_stream: bij een leeg modelantwoord draaien we de hele beurt
+        # terug, anders blokkeert een assistent-bericht met lege inhoud elke
+        # volgende beurt in deze sessie.
+        herstelpunt = len(messages)
         messages.append({"role": "user", "content": user_message})
 
         async with self._request_clients(
@@ -559,9 +761,13 @@ class VLAMHost:
         ) as (claude, vlam):
             if mode == "vlam":
                 if not vlam:
-                    return "VLAM-backend is niet geconfigureerd. Stel VLAM_API_KEY en VLAM_BASE_URL in."
-                return await self._chat_vlam(messages, session_kvk, vlam)
-            return await self._chat_claude(messages, session_kvk, claude)
+                    return _geen_sleutel_fout("vlam").tekst
+                antwoord = await self._chat_vlam(messages, session_kvk, vlam)
+            else:
+                antwoord = await self._chat_claude(messages, session_kvk, claude)
+            if antwoord == maak_fout("LLM_LEEG_ANTWOORD").tekst:
+                del messages[herstelpunt:]
+            return antwoord
 
     # ------------------------------------------------------------------
     # Streaming — yieldt status-events voor de UI
@@ -579,56 +785,87 @@ class VLAMHost:
         """Verwerk een bericht en yield status-events als dicts.
 
         Event-types:
-          {"type": "status", "message": "Nadenken..."}
-          {"type": "tool",   "message": "Bedrijfsgegevens ophalen", "tool": "kvk__mijn_bedrijf"}
-          {"type": "answer", "message": "Het antwoord...", "session_id": "..."}
+          {"type": "status",    "message": "Nadenken..."}
+          {"type": "tool",      "message": "Bedrijfsgegevens ophalen", "tool": "kvk__mijn_bedrijf"}
+          {"type": "case",      "data": {...}}
+          {"type": "bron_fout", "code": "SOURCE_UNAVAILABLE", ...}
+          {"type": "answer",    "message": "Het antwoord...", "session_id": "..."}
+          {"type": "error",     "code": "LLM_TIMEOUT", ...}
           {"type": "done"}
+
+        `answer` en `error` zijn de eindpunten: er komt er altijd precies één,
+        gevolgd door `done`. `bron_fout` is tussentijds — een bron viel uit maar
+        het gesprek loopt door (PDR-011).
         """
-        conv_key = self._conv_key(session_kvk, session_id, mode)
-        if conv_key not in self.conversations:
-            self.conversations[conv_key] = []
-        messages = self.conversations[conv_key]
-        messages.append({"role": "user", "content": user_message})
-
-        yield {"type": "status", "message": "Vraag analyseren…"}
-
-        # Bepaal LLM en transport
         use_cli = mode.startswith("cli:")
         llm = mode.split(":")[-1] if use_cli else mode
 
-        # De clients leven precies zo lang als deze stream (MVP-02).
-        async with self._request_clients(
-            vlam_api_key_override, claude_api_key_override, mode
-        ) as (claude, vlam):
-            if llm == "vlam":
-                if not vlam:
-                    yield {
-                        "type": "error",
-                        "message": "De VLAM-backend is niet geconfigureerd. Vul uw VLAM API-sleutel in via het instellingenpaneel.",
-                    }
-                    yield {"type": "done"}
-                    return
-                if use_cli:
-                    gen = self._chat_vlam_cli_stream(messages, session_kvk, vlam)
-                else:
-                    gen = self._chat_vlam_stream(messages, session_kvk, vlam)
-            elif llm == "claude":
-                if not claude.api_key:
-                    yield {
-                        "type": "error",
-                        "message": "De Claude-backend is niet geconfigureerd. Vul uw Claude API-sleutel in via het instellingenpaneel.",
-                    }
-                    yield {"type": "done"}
-                    return
-                if use_cli:
-                    gen = self._chat_cli_stream(messages, session_kvk, claude)
-                else:
-                    gen = self._chat_claude_stream(messages, session_kvk, claude)
-            else:
-                gen = self._chat_claude_stream(messages, session_kvk, claude)
+        # De clients leven precies zo lang als deze stream (MVP-02/PDR-010): ze
+        # komen als argument mee in plaats van via `self`, zodat twee
+        # gelijktijdige verzoeken met verschillende sleutels elkaar niet raken.
+        # De try eromheen is het vangnet van PDR-011 voor alles wat de loops zelf
+        # niet afvangen; het opruimen van de clients hangt aan de contextmanager.
+        try:
+            async with self._request_clients(
+                vlam_api_key_override, claude_api_key_override, mode
+            ) as (claude, vlam):
+                conv_key = self._conv_key(session_kvk, session_id, mode)
+                if conv_key not in self.conversations:
+                    self.conversations[conv_key] = []
+                messages = self.conversations[conv_key]
+                # Beginstand van deze beurt. Loopt de beurt stuk op een leeg
+                # modelantwoord, dan draaien we hierop terug: een
+                # assistent-bericht met lege inhoud blijft anders in de
+                # geschiedenis staan en laat élke volgende beurt in deze sessie
+                # stuklopen op de Messages API. De melding zegt "probeer het
+                # opnieuw", en dat moet dan ook kunnen.
+                herstelpunt = len(messages)
+                messages.append({"role": "user", "content": user_message})
 
-            async for event in gen:
-                yield event
+                yield {"type": "status", "message": "Vraag analyseren…"}
+
+                gen = None
+                if llm == "vlam" and not vlam:
+                    yield naar_event(_geen_sleutel_fout("vlam"))
+                elif llm == "claude" and not claude.api_key:
+                    yield naar_event(_geen_sleutel_fout("claude"))
+                elif llm == "vlam":
+                    gen = (
+                        self._chat_vlam_cli_stream(messages, session_kvk, vlam)
+                        if use_cli
+                        else self._chat_vlam_stream(messages, session_kvk, vlam)
+                    )
+                else:
+                    gen = (
+                        self._chat_cli_stream(messages, session_kvk, claude)
+                        if use_cli
+                        else self._chat_claude_stream(messages, session_kvk, claude)
+                    )
+
+                if gen is not None:
+                    async for event in gen:
+                        if event.get("code") == "LLM_LEEG_ANTWOORD":
+                            del messages[herstelpunt:]
+                        yield event
+        except Exception as e:
+            # Vangnet voor alles wat de loops zelf niet afvangen (een respons in
+            # een onverwachte vorm, een fout in de foutafhandeling). Zonder dit
+            # ontsnapt de exception uit de generator, is de HTTP-status allang
+            # 200 verstuurd, en houdt de client een afgekapte stream over: geen
+            # antwoord, geen melding, geen `done` — een eeuwig draaiende spinner.
+            # `except Exception` laat CancelledError/GeneratorExit door, zodat
+            # een client die wegvalt de stream nog steeds gewoon afbreekt.
+            # Alleen een échte SDK-fout toeschrijven aan het AI-model; al het
+            # overige komt uit de assistent zelf en verdient een eigen code,
+            # anders zoekt iedereen die dit onderzoekt in de verkeerde hoek.
+            if isinstance(e, anthropic.APIError | openai.APIError | TimeoutError):
+                fout = classificeer_llm_fout(
+                    e, llm, VLAM_TIMEOUT if llm == "vlam" else CLAUDE_TIMEOUT
+                )
+            else:
+                fout = maak_fout("HOST_FOUT")
+            logger.error("Onverwachte fout in de chat-stream [%s]: %s", fout.code, e)
+            yield naar_event(fout)
 
         yield {"type": "done"}
 
@@ -646,7 +883,7 @@ class VLAMHost:
         argument niet ongemerkt de verkeerde sleutel gebruikt.
         """
         tools = self.registry.get_anthropic_tools()
-        system_prompt = get_system_prompt("claude", self.has_tools)
+        system_prompt = self._system_prompt("claude")
 
         max_iterations = 10
         for _ in range(max_iterations):
@@ -665,15 +902,10 @@ class VLAMHost:
                     timeout=CLAUDE_TIMEOUT,
                 )
                 _log_tokens("claude", response)
-            except (TimeoutError, anthropic.APIError) as e:
-                logger.error("Claude-call mislukt: %s", e)
-                yield {
-                    "type": "error",
-                    "message": (
-                        "De assistent is op dit moment niet bereikbaar. "
-                        "Controleer uw API-sleutel of probeer het later opnieuw."
-                    ),
-                }
+            except Exception as e:
+                fout = classificeer_llm_fout(e, "claude", CLAUDE_TIMEOUT)
+                logger.error("Claude-call mislukt [%s]: %s", fout.code, e)
+                yield naar_event(fout)
                 return
 
             assistant_content = response.content
@@ -684,7 +916,8 @@ class VLAMHost:
                 text = "\n".join(
                     b.text for b in assistant_content if hasattr(b, "text")
                 )
-                yield {"type": "answer", "message": text}
+                for event in _antwoord_events(text, _is_afgekapt(response)):
+                    yield event
                 return
 
             for tu in tool_uses:
@@ -694,7 +927,9 @@ class VLAMHost:
                     "tool": tu.name,
                 }
 
-            tool_results = await self._execute_tools(tool_uses, session_kvk)
+            tool_results, bronfouten = await self._execute_tools(tool_uses, session_kvk)
+            for fout in bronfouten:
+                yield naar_event(fout, "bron_fout")
             # Emit lopende zaak als case-event bij succesvolle indiening
             for tu, tr in zip(tool_uses, tool_results, strict=True):
                 zaak = _extract_lopende_zaak(tu.name, tr.get("content", ""))
@@ -703,10 +938,7 @@ class VLAMHost:
             messages.append({"role": "user", "content": tool_results})
             yield {"type": "status", "message": "Antwoord opstellen..."}
 
-        yield {
-            "type": "answer",
-            "message": "Het antwoord kon niet worden voltooid (te veel stappen).",
-        }
+        yield naar_event(maak_fout("LLM_MAX_STAPPEN"))
 
     async def _chat_vlam_stream(
         self, messages: list[dict], session_kvk: str, vlam
@@ -716,7 +948,7 @@ class VLAMHost:
         `vlam` is de client van dít verzoek (MVP-02), verplicht meegegeven.
         """
         tools_openai = self.registry.get_openai_tools()
-        system_prompt = get_system_prompt("vlam", self.has_tools)
+        system_prompt = self._system_prompt("vlam")
         openai_messages = self._to_openai_messages(messages, system_prompt)
 
         max_iterations = 10
@@ -735,15 +967,19 @@ class VLAMHost:
                     timeout=VLAM_TIMEOUT,
                 )
                 _log_tokens("vlam", response)
-            except (TimeoutError, openai.APIError) as e:
-                logger.error("VLAM-call mislukt: %s", e)
-                yield {
-                    "type": "error",
-                    "message": (
-                        "De assistent is op dit moment niet bereikbaar. "
-                        "Controleer uw API-sleutel of probeer het later opnieuw."
-                    ),
-                }
+            except Exception as e:
+                fout = classificeer_llm_fout(e, "vlam", VLAM_TIMEOUT)
+                logger.error("VLAM-call mislukt [%s]: %s", fout.code, e)
+                yield naar_event(fout)
+                return
+
+            # Een OpenAI-compatibele proxy kan een respons zonder choices geven
+            # (bv. bij een content-filter). Zonder deze guard klapt `choices[0]`
+            # met een IndexError buiten de except hierboven, en breekt de stream
+            # af zonder antwoord, zonder foutmelding en zonder `done`.
+            if not response.choices:
+                logger.error("VLAM gaf een respons zonder choices")
+                yield naar_event(maak_fout("LLM_ONBEKEND"))
                 return
 
             choice = response.choices[0]
@@ -756,7 +992,8 @@ class VLAMHost:
 
             tool_calls = assistant_msg.tool_calls
             if not tool_calls:
-                yield {"type": "answer", "message": assistant_msg.content or ""}
+                for event in _antwoord_events(assistant_msg.content or "", _is_afgekapt(choice)):
+                    yield event
                 return
 
             for tc in tool_calls:
@@ -767,15 +1004,25 @@ class VLAMHost:
                     "tool": tool_key,
                 }
 
-                arguments = _inject_session_kvk(
-                    tool_key, json.loads(tc.function.arguments), session_kvk
-                )
+                arguments = _lees_tool_argumenten(tc.function.arguments)
+                if arguments is None:
+                    # Geen event: het model corrigeert dit zelf in de volgende
+                    # ronde en het gesprek sluit gewoon af met een `answer`. Een
+                    # melding zou een storing aankondigen die er niet is.
+                    fout = maak_fout("LLM_TOOLCALL_ONLEESBAAR")
+                    openai_messages.append(
+                        {"role": "tool", "tool_call_id": tc.id, "content": naar_llm(fout)}
+                    )
+                    continue
+                arguments = _inject_session_kvk(tool_key, arguments, session_kvk)
                 logger.info("Tool-aanroep [vlam]: %s (velden: %s)", tool_key, _arg_keys(arguments))
-                try:
-                    result = await self.registry.call_tool(tool_key, arguments)
-                except Exception as e:
-                    result = f"Fout bij tool '{tool_key}': {e}"
-                    _log_tool_error(tool_key, e)
+                result, fout = await _bron_aanroep(
+                    partial(self.registry.call_tool, tool_key, arguments),
+                    tool_key,
+                    arguments,
+                )
+                if fout:
+                    yield naar_event(fout, "bron_fout")
 
                 zaak = _extract_lopende_zaak(tool_key, result)
                 if zaak:
@@ -787,10 +1034,7 @@ class VLAMHost:
 
             yield {"type": "status", "message": "Antwoord opstellen..."}
 
-        yield {
-            "type": "answer",
-            "message": "Het antwoord kon niet worden voltooid (te veel stappen).",
-        }
+        yield naar_event(maak_fout("LLM_MAX_STAPPEN"))
 
     # ------------------------------------------------------------------
     # CLI-modus — zelfde LLM (Claude), maar tools via CLI i.p.v. MCP
@@ -804,7 +1048,9 @@ class VLAMHost:
         `claude` is de client van dít verzoek (MVP-02), verplicht meegegeven.
         """
         tools = CLI_TOOL_DEFINITIONS_ANTHROPIC
-        system_prompt = get_system_prompt("claude", True)
+        system_prompt = self._system_prompt(
+            "claude", has_tools=True, bronnen_offline=self.cli_bronnen_offline, cli_transport=True
+        )
 
         max_iterations = 10
         for _ in range(max_iterations):
@@ -823,15 +1069,10 @@ class VLAMHost:
                     timeout=CLAUDE_TIMEOUT,
                 )
                 _log_tokens("claude", response)
-            except (TimeoutError, anthropic.APIError) as e:
-                logger.error("Claude-call (CLI-modus) mislukt: %s", e)
-                yield {
-                    "type": "error",
-                    "message": (
-                        "De assistent is op dit moment niet bereikbaar. "
-                        "Controleer uw API-sleutel of probeer het later opnieuw."
-                    ),
-                }
+            except Exception as e:
+                fout = classificeer_llm_fout(e, "claude", CLAUDE_TIMEOUT)
+                logger.error("Claude-call (CLI-modus) mislukt [%s]: %s", fout.code, e)
+                yield naar_event(fout)
                 return
 
             assistant_content = response.content
@@ -842,7 +1083,8 @@ class VLAMHost:
                 text = "\n".join(
                     b.text for b in assistant_content if hasattr(b, "text")
                 )
-                yield {"type": "answer", "message": text}
+                for event in _antwoord_events(text, _is_afgekapt(response)):
+                    yield event
                 return
 
             tool_results = []
@@ -855,11 +1097,11 @@ class VLAMHost:
 
                 cli_args = _inject_session_kvk(tu.name, tu.input, session_kvk)
                 logger.info("CLI tool-aanroep: %s (velden: %s)", tu.name, _arg_keys(cli_args))
-                try:
-                    result = await execute_cli_tool(tu.name, cli_args)
-                except Exception as e:
-                    result = f"Fout bij CLI tool '{tu.name}': {e}"
-                    logger.error(result)
+                result, fout = await _bron_aanroep(
+                    partial(execute_cli_tool, tu.name, cli_args), tu.name, cli_args
+                )
+                if fout:
+                    yield naar_event(fout, "bron_fout")
 
                 zaak = _extract_lopende_zaak(tu.name, result)
                 if zaak:
@@ -876,10 +1118,7 @@ class VLAMHost:
             messages.append({"role": "user", "content": tool_results})
             yield {"type": "status", "message": "Antwoord opstellen..."}
 
-        yield {
-            "type": "answer",
-            "message": "Het antwoord kon niet worden voltooid (te veel stappen).",
-        }
+        yield naar_event(maak_fout("LLM_MAX_STAPPEN"))
 
     # ------------------------------------------------------------------
     # VLAM + CLI — native tool-calling met CLI-tools i.p.v. MCP
@@ -893,7 +1132,9 @@ class VLAMHost:
         `vlam` is de client van dít verzoek (MVP-02), verplicht meegegeven.
         """
         tools_openai = CLI_TOOL_DEFINITIONS_OPENAI
-        system_prompt = get_system_prompt("vlam", True)
+        system_prompt = self._system_prompt(
+            "vlam", has_tools=True, bronnen_offline=self.cli_bronnen_offline, cli_transport=True
+        )
         openai_messages = self._to_openai_messages(messages, system_prompt)
 
         max_iterations = 10
@@ -909,18 +1150,19 @@ class VLAMHost:
                     timeout=VLAM_TIMEOUT,
                 )
                 _log_tokens("vlam", response)
-            except (TimeoutError, openai.APIError) as e:
-                logger.error("VLAM CLI-call mislukt: %s", e)
-                yield {
-                    "type": "error",
-                    "message": (
-                        "De assistent is op dit moment niet bereikbaar. "
-                        "Controleer uw API-sleutel of probeer het later opnieuw."
-                    ),
-                }
+            except Exception as e:
+                fout = classificeer_llm_fout(e, "vlam", VLAM_TIMEOUT)
+                logger.error("VLAM CLI-call mislukt [%s]: %s", fout.code, e)
+                yield naar_event(fout)
                 return
 
-            assistant_msg = response.choices[0].message
+            if not response.choices:
+                logger.error("VLAM gaf een respons zonder choices (CLI-modus)")
+                yield naar_event(maak_fout("LLM_ONBEKEND"))
+                return
+
+            choice = response.choices[0]
+            assistant_msg = choice.message
             openai_messages.append(assistant_msg.model_dump(exclude_none=True))
             messages.append(
                 {"role": "assistant", "content": assistant_msg.content or ""}
@@ -928,7 +1170,8 @@ class VLAMHost:
 
             tool_calls = assistant_msg.tool_calls
             if not tool_calls:
-                yield {"type": "answer", "message": assistant_msg.content or ""}
+                for event in _antwoord_events(assistant_msg.content or "", _is_afgekapt(choice)):
+                    yield event
                 return
 
             for tc in tool_calls:
@@ -939,15 +1182,23 @@ class VLAMHost:
                     "tool": tool_key,
                 }
 
-                arguments = _inject_session_kvk(
-                    tool_key, json.loads(tc.function.arguments or "{}"), session_kvk
-                )
+                arguments = _lees_tool_argumenten(tc.function.arguments)
+                if arguments is None:
+                    # Geen event: het model corrigeert dit zelf in de volgende
+                    # ronde en het gesprek sluit gewoon af met een `answer`. Een
+                    # melding zou een storing aankondigen die er niet is.
+                    fout = maak_fout("LLM_TOOLCALL_ONLEESBAAR")
+                    openai_messages.append(
+                        {"role": "tool", "tool_call_id": tc.id, "content": naar_llm(fout)}
+                    )
+                    continue
+                arguments = _inject_session_kvk(tool_key, arguments, session_kvk)
                 logger.info("CLI tool-aanroep [vlam]: %s (velden: %s)", tool_key, _arg_keys(arguments))
-                try:
-                    result = await execute_cli_tool(tool_key, arguments)
-                except Exception as e:
-                    result = f"Fout bij CLI tool '{tool_key}': {e}"
-                    logger.error(result)
+                result, fout = await _bron_aanroep(
+                    partial(execute_cli_tool, tool_key, arguments), tool_key, arguments
+                )
+                if fout:
+                    yield naar_event(fout, "bron_fout")
 
                 zaak = _extract_lopende_zaak(tool_key, result)
                 if zaak:
@@ -959,10 +1210,7 @@ class VLAMHost:
 
             yield {"type": "status", "message": "Antwoord opstellen..."}
 
-        yield {
-            "type": "answer",
-            "message": "Het antwoord kon niet worden voltooid (te veel stappen).",
-        }
+        yield naar_event(maak_fout("LLM_MAX_STAPPEN"))
 
     # ------------------------------------------------------------------
     # Claude (Anthropic API) — blocking (non-streaming, backwards-compatibel)
@@ -971,12 +1219,9 @@ class VLAMHost:
     async def _chat_claude(self, messages: list[dict], session_kvk: str, claude) -> str:
         """`claude` is de client van dít verzoek (MVP-02), verplicht meegegeven."""
         if not claude.api_key:
-            return (
-                "De Claude-backend is niet geconfigureerd. "
-                "Vul uw Claude API-sleutel in via het instellingenpaneel."
-            )
+            return _geen_sleutel_fout("claude").tekst
         tools = self.registry.get_anthropic_tools()
-        system_prompt = get_system_prompt("claude", self.has_tools)
+        system_prompt = self._system_prompt("claude")
 
         max_iterations = 10
         for _ in range(max_iterations):
@@ -995,26 +1240,23 @@ class VLAMHost:
                     timeout=CLAUDE_TIMEOUT,
                 )
                 _log_tokens("claude", response)
-            except (TimeoutError, anthropic.APIError) as e:
-                logger.error("Claude-call mislukt: %s", e)
-                return (
-                    "De assistent is op dit moment niet bereikbaar. "
-                    "Probeer het later opnieuw."
-                )
+            except Exception as e:
+                fout = classificeer_llm_fout(e, "claude", CLAUDE_TIMEOUT)
+                logger.error("Claude-call mislukt [%s]: %s", fout.code, e)
+                return fout.tekst
 
             assistant_content = response.content
             messages.append({"role": "assistant", "content": assistant_content})
 
             tool_uses = [b for b in assistant_content if b.type == "tool_use"]
             if not tool_uses:
-                return "\n".join(
-                    b.text for b in assistant_content if hasattr(b, "text")
-                )
+                text = "\n".join(b.text for b in assistant_content if hasattr(b, "text"))
+                return _antwoord_tekst(text, _is_afgekapt(response))
 
-            tool_results = await self._execute_tools(tool_uses, session_kvk)
+            tool_results, _ = await self._execute_tools(tool_uses, session_kvk)
             messages.append({"role": "user", "content": tool_results})
 
-        return "Het antwoord kon niet worden voltooid (te veel stappen)."
+        return maak_fout("LLM_MAX_STAPPEN").tekst
 
     # ------------------------------------------------------------------
     # VLAM (OpenAI-compatibele API — UbiOps/Mistral) — agentic loop
@@ -1023,7 +1265,7 @@ class VLAMHost:
     async def _chat_vlam(self, messages: list[dict], session_kvk: str, vlam) -> str:
         """`vlam` is de client van dít verzoek (MVP-02), verplicht meegegeven."""
         tools_openai = self.registry.get_openai_tools()
-        system_prompt = get_system_prompt("vlam", self.has_tools)
+        system_prompt = self._system_prompt("vlam")
         openai_messages = self._to_openai_messages(messages, system_prompt)
 
         max_iterations = 10
@@ -1042,12 +1284,14 @@ class VLAMHost:
                     timeout=VLAM_TIMEOUT,
                 )
                 _log_tokens("vlam", response)
-            except (TimeoutError, openai.APIError) as e:
-                logger.error("VLAM-call mislukt: %s", e)
-                return (
-                    "De assistent is op dit moment niet bereikbaar. "
-                    "Probeer het later opnieuw."
-                )
+            except Exception as e:
+                fout = classificeer_llm_fout(e, "vlam", VLAM_TIMEOUT)
+                logger.error("VLAM-call mislukt [%s]: %s", fout.code, e)
+                return fout.tekst
+
+            if not response.choices:
+                logger.error("VLAM gaf een respons zonder choices")
+                return maak_fout("LLM_ONBEKEND").tekst
 
             choice = response.choices[0]
             assistant_msg = choice.message
@@ -1062,19 +1306,23 @@ class VLAMHost:
 
             tool_calls = assistant_msg.tool_calls
             if not tool_calls:
-                return assistant_msg.content or ""
+                return _antwoord_tekst(assistant_msg.content or "", _is_afgekapt(choice))
 
             for tc in tool_calls:
                 tool_key = tc.function.name
-                arguments = _inject_session_kvk(
-                    tool_key, json.loads(tc.function.arguments), session_kvk
-                )
-                logger.info("Tool-aanroep [vlam]: %s (velden: %s)", tool_key, _arg_keys(arguments))
-                try:
-                    result = await self.registry.call_tool(tool_key, arguments)
-                except Exception as e:
-                    result = f"Fout bij tool '{tool_key}': {e}"
-                    _log_tool_error(tool_key, e)
+                arguments = _lees_tool_argumenten(tc.function.arguments)
+                if arguments is None:
+                    result = naar_llm(maak_fout("LLM_TOOLCALL_ONLEESBAAR"))
+                else:
+                    arguments = _inject_session_kvk(tool_key, arguments, session_kvk)
+                    logger.info(
+                        "Tool-aanroep [vlam]: %s (velden: %s)", tool_key, _arg_keys(arguments)
+                    )
+                    result, _ = await _bron_aanroep(
+                        partial(self.registry.call_tool, tool_key, arguments),
+                        tool_key,
+                        arguments,
+                    )
 
                 openai_messages.append(
                     {
@@ -1084,23 +1332,31 @@ class VLAMHost:
                     }
                 )
 
-        return "Het antwoord kon niet worden voltooid (te veel stappen)."
+        return maak_fout("LLM_MAX_STAPPEN").tekst
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
-    async def _execute_tools(self, tool_uses, session_kvk: str) -> list[dict]:
-        """Voer Anthropic tool_use-blokken uit via MCP-servers."""
+    async def _execute_tools(self, tool_uses, session_kvk: str) -> tuple[list[dict], list]:
+        """Voer Anthropic tool_use-blokken uit via MCP-servers.
+
+        Geeft de tool-resultaten terug plus de bronfouten die onderweg optraden,
+        zodat de stream ze als `bron_fout`-event kan tonen terwijl het gesprek
+        gewoon doorloopt.
+        """
         tool_results = []
+        bronfouten = []
         for tool_use in tool_uses:
             arguments = _inject_session_kvk(tool_use.name, tool_use.input, session_kvk)
             logger.info("Tool-aanroep [claude]: %s (velden: %s)", tool_use.name, _arg_keys(arguments))
-            try:
-                result = await self.registry.call_tool(tool_use.name, arguments)
-            except Exception as e:
-                result = f"Fout bij tool '{tool_use.name}': {e}"
-                _log_tool_error(tool_use.name, e)
+            result, fout = await _bron_aanroep(
+                partial(self.registry.call_tool, tool_use.name, arguments),
+                tool_use.name,
+                arguments,
+            )
+            if fout:
+                bronfouten.append(fout)
 
             tool_results.append(
                 {
@@ -1109,7 +1365,7 @@ class VLAMHost:
                     "content": result,
                 }
             )
-        return tool_results
+        return tool_results, bronfouten
 
     @staticmethod
     def _to_openai_messages(messages: list[dict], system_prompt: str) -> list[dict]:

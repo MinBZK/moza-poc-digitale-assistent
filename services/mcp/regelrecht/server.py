@@ -401,6 +401,9 @@ async def _execute_law(arguments: dict) -> tuple[dict, bool]:
     if not law:
         return {
             "error": "ONTBREKEND_VELD",
+            # `velden` apart van `message`: de host bouwt daar een
+            # gebruikersmelding mee (zie services/host/errors.py).
+            "velden": ["law"],
             "message": "Parameter 'law' is verplicht.",
         }, False
 

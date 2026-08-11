@@ -229,6 +229,9 @@ def _verbruik(arguments: dict) -> list[TextContent]:
                 text=json.dumps(
                     {
                         "error": "ONTBREKEND_VELD",
+                        # `velden` apart van `message`: de host bouwt daar een
+                        # gebruikersmelding mee (zie services/host/errors.py).
+                        "velden": ["kvk_nummer"],
                         "message": "kvk_nummer is verplicht.",
                     },
                     ensure_ascii=False,

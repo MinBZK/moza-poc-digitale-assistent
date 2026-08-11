@@ -239,7 +239,13 @@ def _zoek_regeling(arguments: dict) -> list[TextContent]:
             TextContent(
                 type="text",
                 text=json.dumps(
-                    {"error": "ONTBREKEND_VELD", "message": "Trefwoord is verplicht."},
+                    {
+                        "error": "ONTBREKEND_VELD",
+                        # `velden` apart van `message`: de host bouwt daar een
+                        # gebruikersmelding mee (zie services/host/errors.py).
+                        "velden": ["trefwoord"],
+                        "message": "Trefwoord is verplicht.",
+                    },
                     ensure_ascii=False,
                 ),
             )
@@ -281,6 +287,10 @@ def _indienen(arguments: dict) -> list[TextContent]:
                 text=json.dumps(
                     {
                         "error": "ONTBREKENDE_VELDEN",
+                        # `velden` apart van `message`: de host bouwt daar een
+                        # gebruikersmelding mee, en mag `message` (technische
+                        # tekst) niet in een zin aan de gebruiker overnemen.
+                        "velden": missing,
                         "message": f"Verplichte velden ontbreken: {', '.join(missing)}",
                     },
                     ensure_ascii=False,

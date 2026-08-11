@@ -75,4 +75,6 @@ een geweigerde sleutel geeft een 400 respectievelijk een `error`-event, zonder
 iets van de waarde prijs te geven. Sleutels gaan nooit mee naar een subprocess
 (`subprocess_env.py`) en worden uit logregels geredigeerd (`log_redaction.py`).
 
-**Streaming events**: de UI verwacht `status`, `tool`, `case`, `answer`, `error` en `done`. Zie de docstrings van `chat_stream` voor het exacte contract.
+**Streaming events**: de UI verwacht `status`, `tool`, `case`, `bron_fout`, `answer`, `error` en `done`. `error` is het eindpunt van een gesprek, `bron_fout` niet: daarbij viel een bron uit terwijl de assistent doorwerkt en volgt het antwoord alsnog (PDR-011). Zie de docstrings van `chat_stream` voor het exacte contract.
+
+**HTTP-foutrespons** (gewijzigd t.o.v. eerdere versies): de niet-streamende endpoints geven het foutobject op topniveau terug (`{"type": "error", "code": ..., "message": ..., "herstelbaar": ...}`), niet meer als string onder `detail`. Zie de bijlage van [PDR-011](../../docs/decisions/PDR-011-foutmeldingen-catalogus.md).

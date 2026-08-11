@@ -1,3 +1,4 @@
+<!-- bronnen: kvk, regelrecht, koop -->
 Voorbeeld: regelgeving toepassen en verdiepen (RegelRecht + KOOP)
 
 Gebruiker: Wat is de energiebesparingsplicht en geldt die voor mijn bedrijf?

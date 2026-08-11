@@ -91,3 +91,33 @@ def test_chat_stream_zonder_header_blokkeert_hard(monkeypatch):
     r = client.post("/chat/stream", json={"message": "hoi"})
     assert "log eerst in" in r.text.lower()
     assert called["stream"] is False
+
+
+def test_error_events_dragen_ook_de_session_id(monkeypatch):
+    """Een beurt die op een `error` eindigt vraagt om een nieuwe poging.
+
+    Zonder het server-gemunte session_id start die poging een nieuw gesprek en
+    is de context weg — precies wanneer de melding zegt "probeer het opnieuw".
+    """
+    import json as _json
+
+    async def _stream_met_error(session_id, message, mode="vlam", session_kvk="", **kw):
+        yield {"type": "status", "message": "Vraag analyseren…"}
+        yield {"type": "error", "code": "LLM_MAX_STAPPEN", "message": "te veel stappen"}
+
+    monkeypatch.setattr(api, "kvk_uit_header", _fake_allowlist_check)
+    monkeypatch.setattr(api.host, "chat_stream", _stream_met_error)
+
+    r = client.post(
+        "/chat/stream", json={"message": "hoi"}, headers={"X-Test-User": "85234567"}
+    )
+    assert r.status_code == 200
+
+    payloads = [
+        _json.loads(regel[len("data: ") :])
+        for regel in r.text.splitlines()
+        if regel.startswith("data: ")
+    ]
+    fout = next(p for p in payloads if p.get("type") == "error")
+    assert fout.get("session_id"), "error-event zonder session_id"
+    assert fout.get("mode") == "vlam"

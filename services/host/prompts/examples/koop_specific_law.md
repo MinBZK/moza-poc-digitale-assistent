@@ -1,3 +1,4 @@
+<!-- bronnen: koop -->
 Voorbeeld: specifieke wet opzoeken (KOOP)
 
 Gebruiker: Wat staat er in de Warenwet over voedselveiligheid?
