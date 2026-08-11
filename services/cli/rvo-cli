@@ -203,7 +203,12 @@ indienen() {
     [[ -z "$maatregelen_csv" ]] && missing+=("maatregelen")
 
     if [[ ${#missing[@]} -gt 0 ]]; then
-        echo "{\"error\":\"ONTBREKENDE_VELDEN\",\"message\":\"Verplichte velden ontbreken: ${missing[*]}\"}" >&2
+        # `velden` los van `message`: de host bouwt daar de gebruikersmelding mee
+        # (zie services/host/errors.py). Zonder die lijst weet de ondernemer wel
+        # dát er iets ontbreekt, maar niet wat.
+        local velden_json
+        velden_json=$(printf '%s\n' "${missing[@]}" | jq -R . | jq -s -c .)
+        echo "{\"error\":\"ONTBREKENDE_VELDEN\",\"velden\":${velden_json},\"message\":\"Verplichte velden ontbreken: ${missing[*]}\"}" >&2
         exit 1
     fi
 

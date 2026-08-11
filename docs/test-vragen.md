@@ -93,3 +93,59 @@
 1. "Kijk of ik moet rapporteren, zoek de juiste regeling, en dien de rapportage in met maatregelen: LED, isolatie en warmtepomp."
    -> KvK `mijn_bedrijf` -> RegelRecht `check` -> RVO `zoek_regeling` -> RVO `indienen`
 2. "Help me van begin tot eind: controleer mijn verplichtingen, vind de juiste regeling en dien mijn rapportage in."
+
+---
+
+## Foutscenario's (PDR-011)
+
+Deze gevallen zijn niet met pytest af te dekken: ze hangen aan een echte
+LLM-aanroep of aan een omgeving die je opzettelijk stukmaakt. Draai ze
+handmatig met een geldige sleutel. Beoordelingscriterium is telkens hetzelfde:
+**de gebruiker weet wát er misging en wát hij nu kan doen**, en de assistent
+verzint niets om het gat te vullen.
+
+### Bron valt uit
+
+Start de host met een kapotte bron en stel de bijbehorende vraag.
+
+1. `MCP_SERVER_KOOP=/bestaat/niet` -> "Laat de tekst van het Besluit activiteiten leefomgeving zien."
+   -> verwacht: de assistent noemt de KOOP Regelingenbank én verwijst naar
+   wetten.overheid.nl; géén wetsartikel uit eigen kennis.
+2. `REGELRECHT_RPC_URL=https://bestaat.niet.invalid` -> "Geldt de energiebesparingsplicht voor mijn bedrijf?"
+   -> verwacht: de toets kan niet worden uitgevoerd, met een verwijzing naar RVO;
+   de al opgehaalde gegevens (bedrijfsnaam, adres, verbruik) worden wél getoond,
+   met bronvermelding.
+3. `MCP_SERVER_NETBEHEERDER=/bestaat/niet` -> "Hoeveel elektriciteit verbruikt mijn bedrijf?"
+   -> verwacht: de Business Wallet is niet beschikbaar, met het advies de
+   energierekening te raadplegen; geen geschat verbruik.
+
+### AI-model faalt
+
+4. `CLAUDE_TIMEOUT=1` (of `VLAM_TIMEOUT=1`) -> een willekeurige vraag.
+   -> verwacht: melding met hoelang er is gewacht en het advies de vraag korter
+   te stellen. Niet: "controleer uw API-sleutel".
+5. Een onjuiste API-sleutel invullen in het instellingenpaneel.
+   -> verwacht: melding dat de sleutel niet wordt geaccepteerd. Niet: "probeer
+   het later opnieuw" (dat helpt hier niet).
+6. `CLAUDE_MODEL=bestaat-niet-4` -> een willekeurige vraag.
+   -> verwacht: melding dat het ingestelde model niet bestaat, met verwijzing
+   naar de beheerder.
+
+### Vraag buiten het taakgebied of onduidelijk
+
+7. "Mijn werknemer wil vier dagen gaan werken. Moet ik daarmee instemmen?"
+   -> verwacht: benoemt arbeidsrecht, zegt dat dat buiten het taakgebied valt,
+   noemt waar het wél kan, en sluit af met een concrete voorbeeldvraag.
+8. "Wat wordt het weer morgen?"
+   -> verwacht: idem, met een brug terug naar bedrijfsgegevens of verplichtingen.
+9. "hoe zit dat dan met die verplichting"
+   -> verwacht: één verduidelijkingsvraag met twee of drie opties, elk met een
+   voorbeeldvraag. Niet: gokken en meteen een tool aanroepen.
+10. "hoeveel is dat bij ons"
+    -> verwacht: idem; de assistent vraagt waar "dat" naar verwijst.
+
+### Invoer
+
+11. Lege vraag versturen -> melding dat er geen vraag is meegestuurd, met een
+    voorbeeldvraag. Geen LLM- of bron-aanroep.
+12. Vraag van meer dan 4000 tekens -> melding met de grens erin genoemd.

@@ -2,11 +2,19 @@ name: Production deploy
 
 # Bouwt de backend-image, pusht naar GHCR en deployt naar ZAD in project pm-5sj
 # (hetzelfde project als de frontend, zodat de frontend-pod de backend intern
-# bereikt). Beveiligingskeuzes (zie README en PR-omschrijving):
+# bereikt). Beveiligingskeuzes (zie docs/decisions/PDR-010 en de host-README):
 #   - backend is internal-only: NIET "Publiceer op het web" op ZAD;
 #   - GEEN LLM-sleutels op de deployment — gebruikers leveren een sleutel via de
 #     UI (x-vlam-api-key / x-claude-api-key). Daarom staat hier geen enkele
-#     LLM-secret; alleen ZAD_API_KEY is nodig voor de deploy.
+#     LLM-secret; alleen ZAD_API_KEY is nodig voor de deploy. Dat is een bewuste
+#     keuze (PDR-010): geen gedeelde sleutel om leeg te trekken op een host die
+#     nog geen authenticatie op /chat heeft.
+#   - ALLOWED_ORIGINS blijft in de component-config LEEG. Dat is de strikte
+#     stand: de frontend-pod bereikt de backend same-origin via de reverse
+#     proxy, dus CORS komt er niet aan te pas. Zet hier niets in "voor de
+#     zekerheid" — dat opent iets wat nu dicht is. Is er ooit wél cross-origin
+#     verkeer, dan een concrete whitelist en nooit "*"; bij "*" waarschuwt de
+#     host bij het opstarten (zie docs/deploy-zad.md).
 
 on:
   push:

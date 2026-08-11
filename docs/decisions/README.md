@@ -12,6 +12,8 @@ Beslissingen rond de Digitale Assistent. Lees de PDRs in volgorde — elke nieuw
 | [PDR-007](PDR-007-demo-persona-en-netbeheerder-bron.md) | Demo-persona's, netbeheerder/Business Wallet en EML-maatregelen | Geaccepteerd |
 | [PDR-008](PDR-008-generieke-regelrecht-tool-en-wallet.md) | Eén generieke RegelRecht-tool en energiegegevens via de Business Wallet | Geaccepteerd |
 | [PDR-009](PDR-009-sessie-identiteit-host-side.md) | Bedrijfsidentiteit server-side bepaald door de host-sessie (MVP-01) | Geaccepteerd |
+| [PDR-010](PDR-010-sleutel-van-de-gebruiker.md) | De LLM-sleutel komt van de gebruiker, niet van de server (MVP-02) | Geaccepteerd |
+| [PDR-011](PDR-011-foutmeldingen-catalogus.md) | Foutmeldingen uit één catalogus, met wat er misging én wat je kunt doen | Geaccepteerd |
 
 ## Vervangen of ongeldig verklaarde beslissingen
 

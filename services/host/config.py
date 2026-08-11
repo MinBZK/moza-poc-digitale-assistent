@@ -68,6 +68,19 @@ VLAM_PORT = int(os.getenv("VLAM_PORT", "8000"))
 VLAM_TIMEOUT = int(os.getenv("VLAM_TIMEOUT", "30"))
 CLAUDE_TIMEOUT = int(os.getenv("CLAUDE_TIMEOUT", "60"))
 
+# Time-out per bron-aanroep (seconden), voor MCP én CLI. Zonder deze grens kan
+# een bron die
+# het verzoek aanneemt maar nooit antwoordt de hele SSE-stream laten hangen: geen
+# antwoord, geen foutmelding, geen afsluiting. Het CLI-transport heeft daarbinnen
+# een eigen grens per subprocess: maximaal 30 s, en altijd 5 s korter dan deze.
+TOOL_TIMEOUT = int(os.getenv("TOOL_TIMEOUT", "45"))
+
+# Maximale lengte van één vraag. Zonder bovengrens belandt een willekeurig lang
+# bericht ongelezen in de gespreksgeschiedenis en faalt de LLM-call verderop met
+# een vage melding; hiermee weet de gebruiker meteen wat er mis is. Ruim boven
+# een normale vraag, ver onder het contextvenster van beide modellen.
+MAX_VRAAG_TEKENS = int(os.getenv("MAX_VRAAG_TEKENS", "4000"))
+
 # Security: CORS-origins en API-key overrides
 # ALLOWED_ORIGINS: komma-gescheiden lijst, leeg = geen CORS toegestaan
 # (browser-toegang van een andere origin wordt geweigerd). Zet expliciet
@@ -79,9 +92,16 @@ _origins_raw = os.getenv("ALLOWED_ORIGINS", "").strip()
 ALLOWED_ORIGINS: list[str] = (
     [o.strip() for o in _origins_raw.split(",") if o.strip()] if _origins_raw else []
 )
-# ALLOW_API_KEY_OVERRIDE: als true (PoC-default), worden x-vlam-api-key en
-# x-claude-api-key headers uit de UI gerespecteerd. Zet expliciet op "false"
-# in productie om alleen server-env keys toe te staan.
+# ALLOW_API_KEY_OVERRIDE: als true (de default), worden x-vlam-api-key en
+# x-claude-api-key uit de UI gerespecteerd. Dit is geen slordige default maar de
+# dragende aanname van de deployment: die draait zonder LLM-sleutels en elke
+# tester brengt zijn eigen sleutel mee (PDR-010). Zet op "false" zodra er wél
+# server-env keys staan; de headers worden dan genegeerd.
+#
+# Wat er aan de kant van de host tegenover staat (MVP-02): een sleutel leeft
+# precies één verzoek (`vlam_host._request_clients`), wordt op vorm getoetst
+# vóór gebruik (`api._validate_api_key`), gaat nooit mee naar een subprocess
+# (`subprocess_env.py`) en wordt uit logregels geredigeerd (`log_redaction.py`).
 ALLOW_API_KEY_OVERRIDE: bool = os.getenv("ALLOW_API_KEY_OVERRIDE", "true").lower() in (
     "true",
     "1",
@@ -123,7 +143,9 @@ __all__ = [
     "ALLOWED_ORIGINS",
     "ANTHROPIC_API_KEY",
     "CLAUDE_MODEL",
+    "MAX_VRAAG_TEKENS",
     "MCP_SERVERS",
+    "TOOL_TIMEOUT",
     "TEST_KVK_NUMMERS",
     "kvk_uit_header",
     "VLAM_API_KEY",
