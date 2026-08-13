@@ -3,33 +3,26 @@
 import hashlib
 import json
 import logging
-import os
 from pathlib import Path
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+from errors import bron_uit_tool, schoon_echo
+from subprocess_env import MCP_ALLOWLIST, subprocess_env
+
 logger = logging.getLogger("vlam.mcp_client")
 
-# Alleen deze env-vars gaan naar MCP-subprocessen. Bewust GEEN LLM-sleutels
-# (ANTHROPIC_API_KEY / VLAM_API_KEY): geen enkele MCP-server heeft die nodig, en
-# ze in vijf extra processen laten leven vergroot het lek-oppervlak onnodig
-# (PDR-007: identiteit/config bij de bron; sleutel-blootstelling minimaliseren).
-# Systeemvars (PATH etc.) blijven nodig om de interpreter te kunnen starten.
-_SUBPROCESS_ENV_ALLOWLIST = (
-    # systeem
-    "PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TZ",
-    "TMPDIR", "TEMP", "TMP", "TERM",
-    "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE",
-    "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT",
-    # app-config die de servers daadwerkelijk gebruiken
-    "DEMO_KVK_NUMMER", "REGELRECHT_RPC_URL", "BAG_API_KEY", "KVK_TEST_API_KEY",
-)
+logger = logging.getLogger("vlam.mcp_client")
 
 
 def _subprocess_env() -> dict:
-    """Bouw de env voor MCP-subprocessen: alleen de allowlist, geen LLM-keys."""
-    return {k: v for k, v in os.environ.items() if k in _SUBPROCESS_ENV_ALLOWLIST}
+    """Bouw de env voor MCP-subprocessen: alleen de allowlist, geen LLM-keys.
+
+    De lijst staat sinds MVP-02 in `subprocess_env.py`, gedeeld met het
+    CLI-transport dat dezelfde regel moet volgen.
+    """
+    return subprocess_env(MCP_ALLOWLIST)
 
 
 def _strip_kvk_param(schema: dict) -> dict:
@@ -69,6 +62,26 @@ def _tool_fingerprint(tool) -> str:
     }
     blob = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
     return hashlib.sha256(blob).hexdigest()[:16]
+
+
+# Meldingen waarmee de MCP-SDK een schending van het tool-schema teruggeeft.
+# Die komen van de validatielaag, niet uit de bron, en zijn door het model zelf
+# op te lossen door de aanroep te corrigeren. Bewust niet het bredere
+# "validation error for": dat is ook het standaardformaat van pydantic, en een
+# pydantic-fout uit een server-handler kan de aangeboden waarde meedragen -- dan
+# zou er alsnog broninhoud langs het lek-vangnet komen.
+_VALIDATIE_SIGNALEN = (
+    "input validation error",
+    "is a required property",
+    "additional properties are not allowed",
+    "is not of type",
+)
+
+
+def _is_validatiefout(tekst: str) -> bool:
+    """Herken een schemavalidatie-melding van de MCP-SDK."""
+    lager = (tekst or "").lower()
+    return any(signaal in lager for signaal in _VALIDATIE_SIGNALEN)
 
 
 class MCPServerConnection:
@@ -116,9 +129,27 @@ class MCPServerConnection:
             raise RuntimeError(f"Server '{self.name}' is niet verbonden")
         result = await self.session.call_tool(tool_name, arguments)
         # Combineer alle content-blokken tot tekst
-        return "\n".join(
+        tekst = "\n".join(
             block.text for block in result.content if hasattr(block, "text")
         )
+        if getattr(result, "isError", False):
+            # De MCP-SDK vangt élke onafgevangen exception in een server-handler
+            # af en levert `str(exc)` als gewone tekst met isError=True. Zonder
+            # deze check zou die tekst — met paden, interne URL's en soms een
+            # sleutel — als geslaagd resultaat het gesprek in gaan. De inhoud
+            # hoort in de log, de gebruiker krijgt een catalogusmelding.
+            logger.error("Server '%s' meldt een fout bij '%s': %s", self.name, tool_name, tekst)
+            if _is_validatiefout(tekst):
+                # Schemavalidatie door de SDK: een fout van het model, niet van
+                # de bron. De melding gaat terug naar het model zodat het de
+                # aanroep kan corrigeren; die tekst gaat over het tool-schema en
+                # bevat geen bron-interne gegevens.
+                return json.dumps(
+                    {"error": "LLM_TOOLCALL_ONGELDIG", "validatiefout": schoon_echo(tekst, 200)},
+                    ensure_ascii=False,
+                )
+            return json.dumps({"error": "TOOL_ONVERWACHT"}, ensure_ascii=False)
+        return tekst
 
     async def disconnect(self):
         """Sluit de verbinding."""
@@ -184,7 +215,20 @@ class MCPToolRegistry:
     async def call_tool(self, tool_key: str, arguments: dict) -> str:
         """Roep een tool aan via de juiste server."""
         if tool_key not in self.tool_map:
-            return f"Onbekende tool: {tool_key}"
+            # Een bron die bij startup niet opkwam heeft geen tools in de
+            # registry: de aanroep landt hier. Alleen dán is "de bron ligt eruit"
+            # waar — draait de server wél, dan verzon het model een toolnaam en
+            # is doorverwijzen naar de beheerder onjuist.
+            bron = bron_uit_tool(tool_key)
+            code = (
+                "BRON_NIET_GESTART"
+                if bron and bron not in self.connections
+                else "ONBEKENDE_TOOL"
+            )
+            # %r en afgekapt: de toolnaam komt van het LLM en kan regeleindes
+            # bevatten, waarmee een valse logregel te schrijven zou zijn.
+            logger.warning("Tool niet in de registry: %r (%s)", str(tool_key)[:80], code)
+            return json.dumps({"error": code}, ensure_ascii=False)
 
         server_name, _ = self.tool_map[tool_key]
         # Haal de originele tool-naam terug (zonder server-prefix)

@@ -76,8 +76,21 @@ def test_api_logregel_bevat_geen_kvk_nummer():
 
 
 def test_maskering_laat_overige_segmenten_ongemoeid():
-    # Alleen een 8-cijferig pad-segment is een KvK-nummer; laat de rest staan,
-    # anders wordt de logregel onbruikbaar voor debuggen.
+    # Het endpoint blijft leesbaar, anders wordt de logregel onbruikbaar voor
+    # debuggen; alleen de bedrijfs-identificatie gaat eruit.
     srv = _load_server()
     assert srv._pad_zonder_kvk("/v1/basisprofielen") == "/v1/basisprofielen"
-    assert srv._pad_zonder_kvk("/v1/vestigingen/000052341288").endswith("000052341288")
+    assert srv._pad_zonder_kvk("/v1/zoeken?q=test") == "/v1/zoeken?q=test"
+
+
+def test_maskering_dekt_ook_het_vestigingsnummer():
+    """Twaalf cijfers wijzen hetzelfde bedrijf aan als acht.
+
+    `/v1/vestigingsprofielen/<nr>` kwam er eerder ongemaskeerd doorheen omdat de
+    regel alleen op acht cijfers lette. In de mock-tabel is het vestigingsnummer
+    letterlijk "0000" + het KvK-nummer, dus dat is de sessie-identiteit in de log.
+    """
+    srv = _load_server()
+    gemaskeerd = srv._pad_zonder_kvk("/v1/vestigingsprofielen/000085234567")
+    assert gemaskeerd == "/v1/vestigingsprofielen/<kvk>"
+    assert "85234567" not in gemaskeerd

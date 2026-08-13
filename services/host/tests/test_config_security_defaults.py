@@ -1,7 +1,7 @@
 """Guard: de strenge security-defaults uit CLAUDE.md / config.py.
 
 - ALLOWED_ORIGINS: leeg/ontbrekend => géén CORS (geen stille terugval op "*").
-- ALLOW_API_KEY_OVERRIDE: PoC-default true; expliciet "false" zet hem uit.
+- ALLOW_API_KEY_OVERRIDE: default true; expliciet "false" zet hem uit.
 
 config.py leest env op import-tijd, dus we herladen de module met
 gemonkeypatchte env per scenario.
@@ -68,8 +68,10 @@ def test_allow_api_key_override_parsing(monkeypatch, raw, verwacht):
 
 
 def test_allow_api_key_override_default_is_true_when_unset(monkeypatch):
-    # PoC-default uit config.py / CLAUDE.md: niet gezet => true. Dit is de
-    # meest security-relevante default, dus expliciet borgen. conftest forceert
-    # alleen de LLM-keys leeg, daarom verwijderen we deze var hier zelf.
+    # Niet gezet => true, en dat is een bewuste keuze (PDR-010): de deployment
+    # draait zonder LLM-sleutels, dus zonder deze default werkt de assistent
+    # daar niet. Wie hem omzet, moet server-sleutels zetten. Expliciet geborgd
+    # omdat het gedrag hier van afhangt. conftest forceert alleen de LLM-keys
+    # leeg, daarom verwijderen we deze var hier zelf.
     cfg = _reload_config(monkeypatch, ALLOW_API_KEY_OVERRIDE=None)
     assert cfg.ALLOW_API_KEY_OVERRIDE is True

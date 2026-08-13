@@ -27,6 +27,7 @@ TESTPROFIELEN = {
     "koffiezaak": "85234567",
     "bloemenkweker": "62345681",
     "haarstylist": "56789012",
+    "bouwmanagement": "61234570",
 }
 
 _DREMPELS = vlam_host.REGELRECHT_DEFINITIES_ALLOWLIST[

@@ -38,6 +38,12 @@ van persona = host herstarten. Bewust simpel gehouden voor de demo.
   mee (alleen HOME/PATH e.d.) — config via env bereikte de servers nooit.
   De host geeft nu expliciet `os.environ` door (`mcp_client.py`). Dit gold
   ook al voor `REGELRECHT_RPC_URL`.
+
+  > **Bijgesteld door PDR-010 (MVP-02).** "Expliciet `os.environ` doorgeven" is
+  > vervangen door een expliciete allowlist per transport
+  > (`services/host/subprocess_env.py`): de config die de servers uitlezen komt
+  > erdoor, LLM-sleutels niet. Dit PDR blijft staan als audit-trail; voor de
+  > actuele regel geldt PDR-010 §4.
 - Mock-persona's moeten de échte API-vorm volgen (KvK Basisprofiel), anders
   wijkt downstream-gedrag (adres-extractie, BAG-verrijking) af tussen mock
   en echt.

@@ -77,10 +77,27 @@ def _resolve_kvk(arguments: dict | None) -> str | None:
 # Cache per KvK-nummer (de server bedient meerdere bedrijven binnen zijn lifetime)
 _profiel_cache: dict[str, dict] = {}
 
+# Idem per vestigingsnummer, voor het vestigingsprofiel.
+_vestigingsprofiel_cache: dict[str, dict] = {}
+
 # ---------------------------------------------------------------------------
 # Mock-persona's — KvK-nummers die niet in de KvK Test API bestaan en
 # volledig lokaal worden geserveerd. Vorm volgt de KvK Basisprofiel API
 # zodat downstream-logica (adres-extractie, BAG-verrijking) identiek werkt.
+#
+# Welk veld op welk niveau hoort, is afgelezen aan de echte Test API en niet
+# aan wat handig uitkomt. Het basisprofiel draagt `totaalWerkzamePersonen`;
+# de uitsplitsing naar voltijd en deeltijd, het RSIN en de websites zitten in
+# het vestigingsprofiel (MOCK_VESTIGINGSPROFIELEN) respectievelijk bij de
+# eigenaar. Zet je ze op de profielwortel, dan werkt de mock wél en een echt
+# KvK-nummer niet — en dat verschil merk je pas tijdens een sessie.
+#
+# De adressenlijst staat in API-volgorde: correspondentieadres eerst, dan
+# bezoekadres. `_extract_address` kiest daarom op type en niet op positie.
+#
+# Waarden volgen MinBZK/moza-poc `_data/personas.json`: de respondent leest ze
+# op het scherm. `tests/test_personas_frontend_pariteit.py` leest dat bestand
+# en faalt zodra de twee repo's uiteenlopen.
 # ---------------------------------------------------------------------------
 
 MOCK_PROFIELEN: dict[str, dict] = {
@@ -97,23 +114,32 @@ MOCK_PROFIELEN: dict[str, dict] = {
                 "indHoofdactiviteit": "Ja",
             }
         ],
-        "materieleRegistratie": {"datumAanvang": "20220301"},
+        "materieleRegistratie": {"datumAanvang": "20210314"},
         "statusinformatie": "actief",
         "_embedded": {
             "hoofdvestiging": {
-                "vestigingsnummer": "000052341288",
+                "vestigingsnummer": "000085234567",
                 "eersteHandelsnaam": "Koffiezaak Noon",
                 "indHoofdvestiging": "Ja",
                 "totaalWerkzamePersonen": 4,
+                "websites": ["https://www.koffiezaaknoon.nl"],
                 "adressen": [
                     {
-                        "type": "bezoekadres",
-                        "volledigAdres": "Witte de Withstraat 27, 3012BL Rotterdam",
-                        "straatnaam": "Witte de Withstraat",
-                        "huisnummer": 27,
-                        "postcode": "3012BL",
+                        "type": "correspondentieadres",
+                        "volledigAdres": "Meent 88, 3011JM Rotterdam",
+                        "straatnaam": "Meent",
+                        "huisnummer": 88,
+                        "postcode": "3011JM",
                         "plaats": "Rotterdam",
-                    }
+                    },
+                    {
+                        "type": "bezoekadres",
+                        "volledigAdres": "Meent 88, 3011JM Rotterdam",
+                        "straatnaam": "Meent",
+                        "huisnummer": 88,
+                        "postcode": "3011JM",
+                        "plaats": "Rotterdam",
+                    },
                 ],
                 "sbiActiviteiten": [
                     {
@@ -153,7 +179,19 @@ MOCK_PROFIELEN: dict[str, dict] = {
                 "eersteHandelsnaam": "Kwekerij De Bloesem",
                 "indHoofdvestiging": "Ja",
                 "totaalWerkzamePersonen": 7,
+                "websites": ["https://www.kwekerijdebloesem.nl"],
+                # De pagina Adresgegevens toont vestigings- én postadres. Voor
+                # deze kweker zijn ze gelijk; dat is geen kopieerfout maar wat
+                # het scherm toont.
                 "adressen": [
+                    {
+                        "type": "correspondentieadres",
+                        "volledigAdres": "Hoefweg 210, 2665KG Bleiswijk",
+                        "straatnaam": "Hoefweg",
+                        "huisnummer": 210,
+                        "postcode": "2665KG",
+                        "plaats": "Bleiswijk",
+                    },
                     {
                         "type": "bezoekadres",
                         "volledigAdres": "Hoefweg 210, 2665KG Bleiswijk",
@@ -161,7 +199,7 @@ MOCK_PROFIELEN: dict[str, dict] = {
                         "huisnummer": 210,
                         "postcode": "2665KG",
                         "plaats": "Bleiswijk",
-                    }
+                    },
                 ],
                 "sbiActiviteiten": [
                     {
@@ -201,7 +239,16 @@ MOCK_PROFIELEN: dict[str, dict] = {
                 "eersteHandelsnaam": "Roots & Locks",
                 "indHoofdvestiging": "Ja",
                 "totaalWerkzamePersonen": 1,
+                "websites": ["https://www.rootsandlocks.nl"],
                 "adressen": [
+                    {
+                        "type": "correspondentieadres",
+                        "volledigAdres": "Witte de Withstraat 18, 3012BP Rotterdam",
+                        "straatnaam": "Witte de Withstraat",
+                        "huisnummer": 18,
+                        "postcode": "3012BP",
+                        "plaats": "Rotterdam",
+                    },
                     {
                         "type": "bezoekadres",
                         "volledigAdres": "Witte de Withstraat 18, 3012BP Rotterdam",
@@ -209,7 +256,7 @@ MOCK_PROFIELEN: dict[str, dict] = {
                         "huisnummer": 18,
                         "postcode": "3012BP",
                         "plaats": "Rotterdam",
-                    }
+                    },
                 ],
                 "sbiActiviteiten": [
                     {
@@ -221,6 +268,125 @@ MOCK_PROFIELEN: dict[str, dict] = {
             }
         },
     },
+    # Vogel Bouwregie B.V. — de persona die de frontend op dit moment als
+    # actief serveert. Het postadres is een postbus en wijkt dus af van het
+    # bezoekadres; dat is precies het geval waarin adres-op-positie kiezen de
+    # BAG-verrijking op het verkeerde pand zou zetten.
+    "61234570": {
+        "kvkNummer": "61234570",
+        "naam": "Vogel Bouwregie B.V.",
+        "statutaireNaam": "Vogel Bouwregie B.V.",
+        "rechtsvorm": "Besloten vennootschap",
+        "totaalWerkzamePersonen": 9,
+        "handelsnamen": [{"naam": "Vogel Bouwregie B.V.", "volgorde": 0}],
+        "sbiActiviteiten": [
+            {
+                "sbiCode": "41",
+                "sbiOmschrijving": (
+                    "Algemene burgerlijke en utiliteitsbouw en projectontwikkeling"
+                ),
+                "indHoofdactiviteit": "Ja",
+            },
+            {
+                "sbiCode": "71121",
+                "sbiOmschrijving": (
+                    "Ingenieurs en overig technisch ontwerp en advies"
+                ),
+                "indHoofdactiviteit": "Nee",
+            },
+        ],
+        "materieleRegistratie": {"datumAanvang": "20140305"},
+        "statusinformatie": "actief",
+        "_embedded": {
+            "hoofdvestiging": {
+                "vestigingsnummer": "000061234570",
+                "eersteHandelsnaam": "Vogel Bouwregie B.V.",
+                "indHoofdvestiging": "Ja",
+                "totaalWerkzamePersonen": 9,
+                "websites": ["https://www.vogelbouwregie.nl"],
+                "adressen": [
+                    {
+                        "type": "correspondentieadres",
+                        "volledigAdres": "Postbus 8120, 3009AC Rotterdam",
+                        "straatnaam": "Postbus",
+                        "huisnummer": 8120,
+                        "postcode": "3009AC",
+                        "plaats": "Rotterdam",
+                    },
+                    {
+                        "type": "bezoekadres",
+                        "volledigAdres": "Waalhaven 120, 3089JJ Rotterdam",
+                        "straatnaam": "Waalhaven",
+                        "huisnummer": 120,
+                        "postcode": "3089JJ",
+                        "plaats": "Rotterdam",
+                    },
+                ],
+                "sbiActiviteiten": [
+                    {
+                        "sbiCode": "41",
+                        "sbiOmschrijving": (
+                            "Algemene burgerlijke en utiliteitsbouw en "
+                            "projectontwikkeling"
+                        ),
+                        "indHoofdactiviteit": "Ja",
+                    }
+                ],
+            }
+        },
+    },
+}
+
+# Het vestigingsprofiel is een eigen endpoint (/v1/vestigingsprofielen/<nr>) en
+# draagt wat het basisprofiel niet heeft: de uitsplitsing voltijd/deeltijd, het
+# RSIN en de volledige adressenlijst. De frontend toont die uitsplitsing op de
+# pagina Bedrijfsgegevens, dus zonder deze bron antwoordt de assistent met het
+# totaal en leest de ondernemer een verschil dat er niet is.
+MOCK_VESTIGINGSPROFIELEN: dict[str, dict] = {
+    "000085234567": {
+        "vestigingsnummer": "000085234567",
+        "kvkNummer": "85234567",
+        "eersteHandelsnaam": "Koffiezaak Noon",
+        "indHoofdvestiging": "Ja",
+        "rsin": "85234567",
+        "totaalWerkzamePersonen": 4,
+        "voltijdWerkzamePersonen": 1,
+        "deeltijdWerkzamePersonen": 3,
+        "websites": ["https://www.koffiezaaknoon.nl"],
+    },
+    "000062345681": {
+        "vestigingsnummer": "000062345681",
+        "kvkNummer": "62345681",
+        "eersteHandelsnaam": "Kwekerij De Bloesem",
+        "indHoofdvestiging": "Ja",
+        "rsin": "62345681",
+        "totaalWerkzamePersonen": 7,
+        "voltijdWerkzamePersonen": 5,
+        "deeltijdWerkzamePersonen": 2,
+        "websites": ["https://www.kwekerijdebloesem.nl"],
+    },
+    "000056789012": {
+        "vestigingsnummer": "000056789012",
+        "kvkNummer": "56789012",
+        "eersteHandelsnaam": "Roots & Locks",
+        "indHoofdvestiging": "Ja",
+        "rsin": "56789012",
+        "totaalWerkzamePersonen": 1,
+        "voltijdWerkzamePersonen": 1,
+        "deeltijdWerkzamePersonen": 0,
+        "websites": ["https://www.rootsandlocks.nl"],
+    },
+    "000061234570": {
+        "vestigingsnummer": "000061234570",
+        "kvkNummer": "61234570",
+        "eersteHandelsnaam": "Vogel Bouwregie B.V.",
+        "indHoofdvestiging": "Ja",
+        "rsin": "61234570",
+        "totaalWerkzamePersonen": 9,
+        "voltijdWerkzamePersonen": 8,
+        "deeltijdWerkzamePersonen": 1,
+        "websites": ["https://www.vogelbouwregie.nl"],
+    },
 }
 
 MOCK_VESTIGINGEN: dict[str, dict] = {
@@ -229,10 +395,10 @@ MOCK_VESTIGINGEN: dict[str, dict] = {
         "aantalCommercieleVestigingen": 1,
         "vestigingen": [
             {
-                "vestigingsnummer": "000052341288",
+                "vestigingsnummer": "000085234567",
                 "eersteHandelsnaam": "Koffiezaak Noon",
                 "indHoofdvestiging": "Ja",
-                "volledigAdres": "Witte de Withstraat 27, 3012BL Rotterdam",
+                "volledigAdres": "Meent 88, 3011JM Rotterdam",
             }
         ],
     },
@@ -260,22 +426,44 @@ MOCK_VESTIGINGEN: dict[str, dict] = {
             }
         ],
     },
+    "61234570": {
+        "kvkNummer": "61234570",
+        "aantalCommercieleVestigingen": 1,
+        "vestigingen": [
+            {
+                "vestigingsnummer": "000061234570",
+                "eersteHandelsnaam": "Vogel Bouwregie B.V.",
+                "indHoofdvestiging": "Ja",
+                "volledigAdres": "Waalhaven 120, 3089JJ Rotterdam",
+            }
+        ],
+    },
 }
 
+# De echte /eigenaar-response draagt `rsin`, `rechtsvorm` en
+# `uitgebreideRechtsvorm` op het hoogste niveau. De geneste `natuurlijkPersoon`
+# en `rechtspersoon` zijn een toevoeging van deze mock, zodat de assistent een
+# naam kan noemen waar de Test API alleen een rechtsvorm teruggeeft.
 MOCK_EIGENAREN: dict[str, dict] = {
     "85234567": {
         "kvkNummer": "85234567",
+        "rsin": "85234567",
         "rechtsvorm": "Eenmanszaak",
+        "uitgebreideRechtsvorm": "Eenmanszaak",
         "natuurlijkPersoon": {
             "geslachtsnaam": "van Dam",
             "voornamen": "Claudia",
             "volledigeNaam": "Claudia van Dam",
         },
     },
-    # VOF: geen rechtspersoonlijkheid, de vennootschap zelf is de eigenaar.
+    # VOF: geen rechtspersoonlijkheid, de vennootschap zelf is de eigenaar. De
+    # vennoten staan in het UBO-register, een apart register met een eigen
+    # bron; die kent deze server niet, dus de assistent noemt hier geen namen.
     "62345681": {
         "kvkNummer": "62345681",
+        "rsin": "62345681",
         "rechtsvorm": "Vennootschap onder firma",
+        "uitgebreideRechtsvorm": "Vennootschap onder firma",
         "rechtspersoon": {
             "rsin": "62345681",
             "statutaireNaam": "Kwekerij De Bloesem",
@@ -283,29 +471,45 @@ MOCK_EIGENAREN: dict[str, dict] = {
     },
     "56789012": {
         "kvkNummer": "56789012",
+        "rsin": "56789012",
         "rechtsvorm": "Eenmanszaak",
+        "uitgebreideRechtsvorm": "Eenmanszaak",
         "natuurlijkPersoon": {
             "geslachtsnaam": "Vogel",
             "voornamen": "Robin",
             "volledigeNaam": "Robin Vogel",
         },
     },
+    "61234570": {
+        "kvkNummer": "61234570",
+        "rsin": "61234570",
+        "rechtsvorm": "Besloten vennootschap",
+        "uitgebreideRechtsvorm": "Besloten vennootschap",
+        "rechtspersoon": {
+            "rsin": "61234570",
+            "statutaireNaam": "Vogel Bouwregie B.V.",
+        },
+    },
 }
 
 
-# Het KvK-nummer zit in het API-pad (/v1/basisprofielen/<kvk>/...). Dat nummer
-# is de identiteit van de sessie en hoort niet in de logs — consistent met
-# _audit_log hieronder en met de host, die alleen argument-namen logt (PDR-009).
-_KVK_IN_PAD = re.compile(r"/\d{8}(?=/|$)")
+# Het bedrijf zit in het API-pad: als KvK-nummer (8 cijfers,
+# /v1/basisprofielen/<kvk>/...) of als vestigingsnummer (12 cijfers,
+# /v1/vestigingsprofielen/<nr>). Allebei wijzen ze één bedrijf aan, dus allebei
+# horen ze niet in de logs — consistent met _audit_log hieronder en met de host,
+# die alleen argument-namen logt (PDR-009). Eén patroon voor beide lengtes: een
+# regel die alleen op acht cijfers let, laat het vestigingsnummer ongemoeid
+# passeren, en in de mock-tabel is dat letterlijk "0000" + het KvK-nummer.
+_BEDRIJF_IN_PAD = re.compile(r"/(?:\d{8}|\d{12})(?=/|$)")
 
 
 def _pad_zonder_kvk(path: str) -> str:
-    """Geef het API-pad terug met het KvK-nummer vervangen, voor logging.
+    """Geef het API-pad terug met de bedrijfs-identificatie vervangen, voor logging.
 
     Welk endpoint is aangeroepen blijft zichtbaar (nuttig bij debuggen); welk
     bedrijf het betrof niet.
     """
-    return _KVK_IN_PAD.sub("/<kvk>", path)
+    return _BEDRIJF_IN_PAD.sub("/<kvk>", path)
 
 
 def _kvk_fetch(path: str) -> dict:
@@ -329,6 +533,81 @@ async def _get_basisprofiel(kvk: str) -> dict:
         None, _kvk_fetch, f"/v1/basisprofielen/{kvk}"
     )
     _profiel_cache[kvk] = profiel
+    return profiel
+
+
+async def _get_vestigingsprofiel(vestigingsnummer: str) -> dict:
+    """Haal het vestigingsprofiel op (voltijd/deeltijd, RSIN, websites).
+
+    Gecachet net als het basisprofiel: het LLM roept `mijn_bedrijf` meerdere
+    keren per gesprek aan, en zonder cache kost elke aanroep een verse
+    round-trip van maximaal tien seconden bovenop de BAG-call.
+    """
+    if vestigingsnummer in _vestigingsprofiel_cache:
+        return _vestigingsprofiel_cache[vestigingsnummer]
+    if vestigingsnummer in MOCK_VESTIGINGSPROFIELEN:
+        return MOCK_VESTIGINGSPROFIELEN[vestigingsnummer]
+    loop = asyncio.get_event_loop()
+    vestigingsprofiel = await loop.run_in_executor(
+        None, _kvk_fetch, f"/v1/vestigingsprofielen/{vestigingsnummer}"
+    )
+    _vestigingsprofiel_cache[vestigingsnummer] = vestigingsprofiel
+    return vestigingsprofiel
+
+
+# Wat het basisprofiel niet draagt maar het vestigingsprofiel wel. Alleen deze
+# velden overnemen: de rest zou het basisprofiel stilzwijgend van vorm laten
+# veranderen, en dan weet de assistent niet meer welke bron hij citeert.
+_VESTIGINGSPROFIEL_VELDEN = (
+    "voltijdWerkzamePersonen",
+    "deeltijdWerkzamePersonen",
+    "websites",
+)
+
+
+async def _enrich_with_vestigingsprofiel(profiel: dict) -> dict:
+    """Vul de hoofdvestiging aan met de personeelsuitsplitsing en de websites.
+
+    De frontend toont voltijd en deeltijd apart; het basisprofiel kent alleen
+    het totaal. Zonder deze aanvulling noemt de assistent een ander getal dan
+    het scherm. Een falend vestigingsprofiel mag het basisprofiel niet meeslepen
+    — de gebruiker heeft meer aan een profiel zonder uitsplitsing dan aan een
+    foutmelding — dus dat blijft bij een logregel.
+
+    Vandaar `except Exception`, net als bij `_bag_fetch`. Smaller vangen dekt
+    dit pad niet: `_kvk_fetch` doet `json.loads` binnen het `urlopen`-blok, dus
+    een read-timeout (`TimeoutError`), een HTML-foutpagina (`JSONDecodeError`)
+    en een afgebroken verbinding (`IncompleteRead`) zijn geen van drie een
+    `HTTPError` of `URLError`. Die zouden dan uit `call_tool` ontsnappen en hun
+    tekst aan het LLM voeren — precies wat PDR-011 verbiedt.
+    """
+    hoofdvestiging = profiel.get("_embedded", {}).get("hoofdvestiging", {})
+    vestigingsnummer = hoofdvestiging.get("vestigingsnummer")
+    if not vestigingsnummer:
+        return profiel
+
+    try:
+        vestigingsprofiel = await _get_vestigingsprofiel(vestigingsnummer)
+    except Exception as exc:
+        logger.warning("vestigingsprofiel niet opgehaald: %s", type(exc).__name__)
+        return profiel
+
+    # Op wáárde toetsen, niet op aanwezigheid van de sleutel. De KvK-API geeft
+    # een geregistreerd-maar-leeg veld terug als null of [], en dat zou hier een
+    # gevulde waarde uit het basisprofiel overschrijven: de assistent vertelt de
+    # ondernemer dan dat zijn bedrijf geen website heeft.
+    aanvulling = {
+        veld: vestigingsprofiel[veld]
+        for veld in _VESTIGINGSPROFIEL_VELDEN
+        if vestigingsprofiel.get(veld) not in (None, "", [], {})
+    }
+    if not aanvulling:
+        return profiel
+
+    # Niet de cache muteren: _profiel_cache deelt dit dict tussen aanroepen.
+    profiel = dict(profiel)
+    profiel["_embedded"] = dict(profiel["_embedded"])
+    profiel["_embedded"]["hoofdvestiging"] = {**hoofdvestiging, **aanvulling}
     return profiel
 
 
@@ -373,7 +652,7 @@ _BAG_DEMO_FALLBACK = {
     },
     # Koffiezaak Noon (mock-persona Claudia van Dam) — horecapand, geen
     # woonfunctie, dus de woonfunctie-uitzondering geldt niet.
-    "3012BL-27": {
+    "3011JM-88": {
         "gebruiksdoelen": ["bijeenkomstfunctie"],
         "oppervlakte": 140,
         "oorspronkelijkBouwjaar": "1923",
@@ -394,6 +673,15 @@ _BAG_DEMO_FALLBACK = {
         "oppervlakte": 65,
         "oorspronkelijkBouwjaar": "1931",
         "nummeraanduidingIdentificatie": "0599200000398765",
+    },
+    # Vogel Bouwregie B.V. (mock-persona bouwmanagement) — bedrijfsloods met
+    # kantoor in de haven. Op het postbusadres staat bewust geen entry: komt
+    # die sleutel toch langs, dan koos de adres-extractie het verkeerde adres.
+    "3089JJ-120": {
+        "gebruiksdoelen": ["kantoorfunctie", "industriefunctie"],
+        "oppervlakte": 1240,
+        "oorspronkelijkBouwjaar": "1998",
+        "nummeraanduidingIdentificatie": "0599200000427531",
     },
 }
 
@@ -726,7 +1014,9 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             profiel = await _get_basisprofiel(kvk)
         except (HTTPError, URLError) as exc:
             return _api_error(exc)
-        # Verrijk met BAG-gegevens (gebruiksdoel pand / woonfunctie)
+        # Vul aan met de personeelsuitsplitsing uit het vestigingsprofiel en
+        # verrijk met BAG-gegevens (gebruiksdoel pand / woonfunctie)
+        profiel = await _enrich_with_vestigingsprofiel(profiel)
         profiel = await _enrich_with_bag(profiel)
         _audit_log("mijn_bedrijf", {"kvk_nummer": kvk}, profiel)
         return [TextContent(type="text", text=_wrap_provenance(profiel))]

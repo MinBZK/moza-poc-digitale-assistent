@@ -11,19 +11,33 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 # Leeg de env-variabelen voordat config.py geladen wordt, zodat het
 # lokale .env-bestand (met echte keys) niet wordt overgenomen.
 os.environ["ANTHROPIC_API_KEY"] = ""
 os.environ["VLAM_API_KEY"] = ""
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+# De host-modules liggen een map hoger; zonder dit draait het script alleen als
+# je toevallig in services/host staat.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import anthropic
-import openai
+import anthropic  # noqa: E402
+import openai  # noqa: E402
 
-from vlam_host import VLAMHost
+import vlam_host  # noqa: E402
+from config import ALLOW_API_KEY_OVERRIDE  # noqa: E402
+from vlam_host import VLAMHost  # noqa: E402
+
+
+def _geen_sleutel_code() -> str:
+    """Welke melding hoort bij "geen sleutel" in deze omgeving?
+
+    Staat de override uit, dan negeert de host een ingevulde sleutel en verwijst
+    de melding naar de beheerder in plaats van naar het instellingenpaneel.
+    """
+    return "LLM_GEEN_SLEUTEL" if ALLOW_API_KEY_OVERRIDE else "LLM_NIET_INGESTELD"
 
 
 async def collect(gen):
@@ -35,14 +49,20 @@ def summary(events):
     return [(e["type"], e.get("message", e.get("data", ""))[:80]) for e in events]
 
 
-def assert_has_event(events, event_type, message_contains=None):
+def assert_has_event(events, event_type, code=None):
+    """Zoek een event, desgewenst met een specifieke foutcode.
+
+    Op `code` en niet op een tekstfragment (PDR-011): de melding is bewust
+    herschrijfbaar, de code is het contract. Zo breekt dit script niet op een
+    betere formulering, wel op een verkeerde classificatie.
+    """
     for e in events:
         if e["type"] != event_type:
             continue
-        if message_contains is None or message_contains in e.get("message", ""):
+        if code is None or e.get("code") == code:
             return e
     raise AssertionError(
-        f"Geen {event_type!r}-event met {message_contains!r} gevonden. "
+        f"Geen {event_type!r}-event met code {code!r} gevonden. "
         f"Events: {summary(events)}"
     )
 
@@ -76,7 +96,7 @@ async def scenario_vlam_no_key():
     """VLAM geselecteerd, geen API-sleutel, geen override."""
     host = VLAMHost()
     events = await collect(host.chat_stream("s1", "hi", mode="vlam"))
-    assert_has_event(events, "error", "VLAM-backend is niet geconfigureerd")
+    assert_has_event(events, "error", _geen_sleutel_code())
     assert_has_event(events, "done")
     return events
 
@@ -85,7 +105,7 @@ async def scenario_claude_no_key():
     """Claude geselecteerd, geen API-sleutel, geen override."""
     host = VLAMHost()
     events = await collect(host.chat_stream("s2", "hi", mode="claude"))
-    assert_has_event(events, "error", "Claude-backend is niet geconfigureerd")
+    assert_has_event(events, "error", _geen_sleutel_code())
     assert_has_event(events, "done")
     return events
 
@@ -94,7 +114,7 @@ async def scenario_cli_vlam_no_key():
     """CLI:vlam geselecteerd, geen API-sleutel — zelfde check als MCP."""
     host = VLAMHost()
     events = await collect(host.chat_stream("s3", "hi", mode="cli:vlam"))
-    assert_has_event(events, "error", "VLAM-backend is niet geconfigureerd")
+    assert_has_event(events, "error", _geen_sleutel_code())
     return events
 
 
@@ -102,39 +122,44 @@ async def scenario_cli_claude_no_key():
     """CLI:claude geselecteerd, geen API-sleutel — zelfde check als MCP."""
     host = VLAMHost()
     events = await collect(host.chat_stream("s4", "hi", mode="cli:claude"))
-    assert_has_event(events, "error", "Claude-backend is niet geconfigureerd")
+    assert_has_event(events, "error", _geen_sleutel_code())
     return events
 
 
+# Sleutels met de vorm die de host accepteert (minstens 20 tekens, cijfer én
+# letter — zie api._validate_api_key en log_redaction.looks_like_a_key).
+FAKE_CLAUDE_KEY = "sk-ant-fake000000000000000"
+FAKE_VLAM_KEY = "vlamtoken-fake0123456789"
+
+
 async def scenario_claude_upstream_error():
-    """Claude met override-key, maar upstream retourneert 401."""
+    """Claude met override-key, maar upstream retourneert 401.
+
+    We vervangen de SDK-constructor, niet een host-methode: zo loopt het
+    scenario door het échte `_request_clients`-pad, inclusief het sluiten van de
+    override-client na afloop.
+    """
     host = VLAMHost()
 
-    # Vervang de Anthropic client-methode door een mock die een status-error gooit.
-    async def fail(**kwargs):
-        raise make_fake_status_error()
+    class FakeClaudeClient:
+        def __init__(self, api_key="", **_kwargs):
+            self.api_key = api_key
+            self.messages = SimpleNamespace(create=self._create)
 
-    # chat_stream wisselt self.claude_client via _resolve_clients; daar kunnen we
-    # niet eenvoudig op mocken. In plaats daarvan mocken we _resolve_clients.
-    from unittest.mock import patch
+        async def _create(self, **kwargs):
+            raise make_fake_status_error()
 
-    class FakeClient:
-        api_key = "sk-fake"
+        async def close(self):
+            pass
 
-        class messages:
-            @staticmethod
-            async def create(**kwargs):
-                raise make_fake_status_error()
-
-    with patch.object(
-        host, "_resolve_clients", return_value=(FakeClient(), host.vlam_client)
-    ):
+    with patch.object(vlam_host.anthropic, "AsyncAnthropic", FakeClaudeClient):
         events = await collect(
             host.chat_stream(
-                "s5", "hi", mode="claude", claude_api_key_override="sk-fake"
+                "s5", "hi", mode="claude", claude_api_key_override=FAKE_CLAUDE_KEY
             )
         )
-    assert_has_event(events, "error", "niet bereikbaar")
+    # 401 upstream = een geweigerde sleutel, geen algemene storing.
+    assert_has_event(events, "error", "LLM_SLEUTEL_ONGELDIG")
     return events
 
 
@@ -142,33 +167,35 @@ async def scenario_vlam_upstream_error():
     """VLAM met override-key, maar upstream retourneert 500."""
     host = VLAMHost()
 
-    class FakeCompletions:
-        @staticmethod
-        async def create(**kwargs):
+    class FakeVlamClient:
+        def __init__(self, api_key="", **_kwargs):
+            self.api_key = api_key
+            self.chat = SimpleNamespace(
+                completions=SimpleNamespace(create=self._create)
+            )
+
+        async def _create(self, **kwargs):
             raise openai.APIStatusError(
                 message="Server error",
                 response=AsyncMock(status_code=500),
                 body={"error": "upstream"},
             )
 
-    class FakeChat:
-        completions = FakeCompletions()
+        async def close(self):
+            pass
 
-    class FakeVlamClient:
-        api_key = "fake"
-        chat = FakeChat()
-
-    from unittest.mock import patch
-
-    with patch.object(
-        host, "_resolve_clients", return_value=(host.claude_client, FakeVlamClient())
+    # Zonder base-url slaat `_request_clients` de vlam-override over.
+    with (
+        patch.object(vlam_host.openai, "AsyncOpenAI", FakeVlamClient),
+        patch.object(vlam_host, "VLAM_BASE_URL", "https://vlam.test/v1"),
     ):
         events = await collect(
             host.chat_stream(
-                "s6", "hi", mode="vlam", vlam_api_key_override="fake"
+                "s6", "hi", mode="vlam", vlam_api_key_override=FAKE_VLAM_KEY
             )
         )
-    assert_has_event(events, "error", "niet bereikbaar")
+    # 500 upstream = het model ligt er tijdelijk uit.
+    assert_has_event(events, "error", "LLM_OVERBELAST")
     return events
 
 

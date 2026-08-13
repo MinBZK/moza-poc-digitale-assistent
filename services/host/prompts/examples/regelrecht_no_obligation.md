@@ -1,3 +1,4 @@
+<!-- bronnen: kvk, regelrecht -->
 Voorbeeld: geen verplichting (RegelRecht)
 
 Gebruiker: Ik verbruik 30.000 kWh elektriciteit en 15.000 m3 gas per jaar. Moet ik rapporteren?

@@ -1,3 +1,5 @@
+<!-- bronnen: kvk, regelrecht, rvo -->
+<!-- bronnen-optioneel: netbeheerder -->
 # Voorbeeld: informatieplicht-flow met bronnen, feitelijke vragen en restvraag
 
 Gebruiker: "Ik kreeg een melding dat de informatieplicht energiebesparing binnenkort voor mijn bedrijf geldt. Wat moet ik doen?"
@@ -17,9 +19,9 @@ Assistent (pas NA toestemming: na kvk__mijn_bedrijf, netbeheerder__verbruik [Bus
 "Dank u. Ik heb het voorwerk voor u gedaan. Dit heb ik met uw toestemming geraadpleegd:
 
 **Geraadpleegde bronnen**
-- KvK Handelsregister: Koffiezaak Noon, KvK 85234567, café (SBI 56102), Witte de Withstraat 27, Rotterdam - geen woonfunctie (via BAG).
+- KvK Handelsregister: Koffiezaak Noon, KvK 85234567, café (SBI 56102), Meent 88, Rotterdam - geen woonfunctie (via BAG).
 - Uw Business Wallet: 61.250 kWh elektriciteit en 9.800 m³ gas (peiljaar 2025). Uw netbeheerder gaf deze attestatie af. U hebt hem met mij gedeeld.
-- RegelRecht (art. 5.15d Besluit activiteiten leefomgeving): uw elektriciteitsverbruik ligt boven de drempel. **De informatieplicht geldt voor uw bedrijf.**
+- RegelRecht (art. 5.15d Besluit activiteiten leefomgeving): uw elektriciteitsverbruik ligt boven de drempel uit RegelRecht. **De informatieplicht geldt voor uw bedrijf.**
 
 **Berekening**
 - Elektriciteit: 61.250 kWh vs. de drempel uit RegelRecht - overschreden
