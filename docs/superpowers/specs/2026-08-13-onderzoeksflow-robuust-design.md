@@ -266,12 +266,24 @@ Drie details, elk ervan sloopt het stilletjes:
 
 ## Deel 4 — verificatie
 
-**Herhaling als acceptatiecriterium.** Tien doorlopen per modus. Bij een
-foutkans van een derde mist vijf runs de fout nog in 13 procent van de gevallen;
-tien runs in ongeveer 1,7 procent. Eén groene doorloop is geen bewijs.
+**Herhaling als acceptatiecriterium.** Vijf doorlopen per modus.
+
+Wat dat waard is, expliciet: bij een foutkans van een derde missen vijf schone
+runs de fout nog in ongeveer 13 procent van de gevallen. Tien runs zou dat naar
+1,7 procent brengen. Vijf is dus een redelijke eerste peiling — genoeg om te
+zien óf de aanpak werkt, niet genoeg om "opgelost" te concluderen.
+
+Escalatieregel: blijft één controle na vijf runs wisselvallig, dan gaat díe
+controle naar tien runs voordat we hem groen noemen. Zo betalen we de extra
+beurten alleen waar ze iets opleveren.
+
+Vijf runs is dertig LLM-beurten per modus. `claude` telt nu niet mee: die
+backend is onbruikbaar tot de sleutel krediet heeft.
 
 **Eerst een nulmeting** op de huidige code, zodat we een gemeten foutpercentage
-hebben in plaats van een indruk.
+hebben in plaats van een indruk. Met vijf runs is die nulmeting ook meteen de
+maatstaf: zie je vóór de wijziging twee van de vijf runs falen en erna nul, dan
+is dat een signaal — geen bewijs, maar wel het verschil tussen meten en hopen.
 
 `services/host/scripts/onderzoeksflow.py` krijgt erbij:
 
@@ -285,7 +297,7 @@ hebben in plaats van een indruk.
 - het `answer`-event draagt `maatregelen` met `code` én `omschrijving`,
   gefilterd op geldend
 - de flow haalt het einde: `rvo__indienen`, een `case`-event, "in behandeling"
-- per run een regel machineleesbare uitvoer, zodat tien runs te aggregeren zijn
+- per run een regel machineleesbare uitvoer, zodat de runs te aggregeren zijn
 
 De eerste twee controles vervangen de waardevergelijking uit het vorige ontwerp.
 Die kon een verzonnen adres alleen vinden door het met het juiste te vergelijken;
@@ -295,7 +307,8 @@ Een tweede meetlat draait op de **ruwe** modeltekst vóór substitutie. Anders
 toetst het script het werk van de host en niet dat van het model, en zie je niet
 of het model zich aan de slots houdt.
 
-**Acceptatie:** tien opeenvolgende runs zonder besmettende bevinding.
+**Acceptatie:** vijf opeenvolgende runs zonder besmettende bevinding, met de
+escalatieregel hierboven voor wat wisselvallig blijft.
 B1-afwijkingen en taalfouten worden als getal gerapporteerd en blokkeren niet.
 
 ## Besluiten
