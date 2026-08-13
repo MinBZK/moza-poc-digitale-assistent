@@ -142,6 +142,32 @@ def test_bloemenkweker_is_indieningsplichtig():
     assert totaal["jaarlijks_gasverbruik_m3"] > 25000
 
 
+def test_de_bloesem_heeft_geen_onderzoeksplicht(netbeheerder=None):
+    """De onderzoeksplicht heeft een ander handelingsperspectief dan rapporteren.
+
+    De assistent biedt dat niet. Raakt de persona die drempel toch, dan is een
+    'dit helpt me niet' van de respondent niet meer te scheiden van een gat in
+    de implementatie - en dat is precies de uitkomst die het onderzoek moet
+    kunnen meten.
+    """
+    if netbeheerder is None:
+        netbeheerder = _load("netbeheerder")
+
+    DREMPEL_ONDERZOEK_GAS_M3 = 170_000
+    DREMPEL_ONDERZOEK_ELEKTRICITEIT_KWH = 10_000_000
+    DREMPEL_GAS_M3 = 25_000
+
+    totaal = netbeheerder._verbruik_voor("62345681")["totaal"]
+    gas = totaal["jaarlijks_gasverbruik_m3"]
+    elektriciteit = totaal["jaarlijks_elektriciteitsverbruik_kwh"]
+
+    assert gas < DREMPEL_ONDERZOEK_GAS_M3, f"{gas} m3 geeft een onderzoeksplicht"
+    assert elektriciteit < DREMPEL_ONDERZOEK_ELEKTRICITEIT_KWH
+    # ... maar de informatieplicht moet blijven gelden, anders valt het
+    # testscript uit elkaar: er is dan niets te rapporteren.
+    assert gas > DREMPEL_GAS_M3
+
+
 def test_elke_mockpersona_is_compleet():
     """Een persona bestaat in alle lagen, of nergens.
 
