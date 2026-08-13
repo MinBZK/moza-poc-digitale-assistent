@@ -133,7 +133,7 @@ def _terminale(events) -> list[str]:
 async def test_claude_stream_geeft_nette_melding_bij_falende_bron():
     host = _host()
     host.claude_client = _fake_claude_client([_claude_toolcall_resp(), _claude_final_resp()])
-    events = await _events(host._chat_claude_stream([{"role": "user", "content": "hoi"}], SESSIE, host.claude_client))
+    events = await _events(host._chat_claude_stream([{"role": "user", "content": "hoi"}], SESSIE, host.claude_client, {}))
 
     for event in events:
         _bevat_geen_lek(str(event), "SSE-event")
@@ -149,7 +149,7 @@ async def test_tool_resultaat_naar_het_llm_bevat_geen_techniek():
     host = _host()
     berichten = [{"role": "user", "content": "hoi"}]
     host.claude_client = _fake_claude_client([_claude_toolcall_resp(), _claude_final_resp()])
-    await _events(host._chat_claude_stream(berichten, SESSIE, host.claude_client))
+    await _events(host._chat_claude_stream(berichten, SESSIE, host.claude_client, {}))
 
     tool_resultaten = [
         blok
@@ -167,7 +167,7 @@ async def test_tool_resultaat_naar_het_llm_bevat_geen_techniek():
 async def test_vlam_stream_geeft_nette_melding_bij_falende_bron():
     host = _host()
     host.vlam_client = _fake_vlam_client([_vlam_toolcall_msg(), _vlam_final_msg()])
-    events = await _events(host._chat_vlam_stream([{"role": "user", "content": "hoi"}], SESSIE, host.vlam_client))
+    events = await _events(host._chat_vlam_stream([{"role": "user", "content": "hoi"}], SESSIE, host.vlam_client, {}))
     for event in events:
         _bevat_geen_lek(str(event), "SSE-event")
     assert any(e["type"] == "bron_fout" for e in events)
@@ -177,7 +177,7 @@ async def test_vlam_blocking_pad_lekt_niet():
     host = _host()
     berichten = [{"role": "user", "content": "hoi"}]
     host.vlam_client = _fake_vlam_client([_vlam_toolcall_msg(), _vlam_final_msg()])
-    antwoord = await host._chat_vlam(berichten, SESSIE, host.vlam_client)
+    antwoord = await host._chat_vlam(berichten, SESSIE, host.vlam_client, {})
     _bevat_geen_lek(antwoord, "antwoord")
 
 
@@ -191,7 +191,7 @@ async def test_cli_claude_pad_lekt_niet(monkeypatch):
     monkeypatch.setattr(vlam_host, "execute_cli_tool", _falende_cli)
     host = _host()
     host.claude_client = _fake_claude_client([_claude_toolcall_resp(), _claude_final_resp()])
-    events = await _events(host._chat_cli_stream([{"role": "user", "content": "hoi"}], SESSIE, host.claude_client))
+    events = await _events(host._chat_cli_stream([{"role": "user", "content": "hoi"}], SESSIE, host.claude_client, {}))
     for event in events:
         _bevat_geen_lek(str(event), "SSE-event")
     assert any(e["type"] == "bron_fout" for e in events)
@@ -204,7 +204,7 @@ async def test_cli_vlam_pad_lekt_niet(monkeypatch):
     monkeypatch.setattr(vlam_host, "execute_cli_tool", _falende_cli)
     host = _host()
     host.vlam_client = _fake_vlam_client([_vlam_toolcall_msg(), _vlam_final_msg()])
-    events = await _events(host._chat_vlam_cli_stream([{"role": "user", "content": "hoi"}], SESSIE, host.vlam_client))
+    events = await _events(host._chat_vlam_cli_stream([{"role": "user", "content": "hoi"}], SESSIE, host.vlam_client, {}))
     for event in events:
         _bevat_geen_lek(str(event), "SSE-event")
     assert any(e["type"] == "bron_fout" for e in events)
@@ -238,7 +238,7 @@ async def test_onleesbare_toolcall_breekt_de_stream_niet():
     host.vlam_client = types.SimpleNamespace(
         chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=_create))
     )
-    events = await _events(host._chat_vlam_stream([{"role": "user", "content": "hoi"}], SESSIE, host.vlam_client))
+    events = await _events(host._chat_vlam_stream([{"role": "user", "content": "hoi"}], SESSIE, host.vlam_client, {}))
 
     assert events[-1]["type"] == "answer", "het gesprek hoort gewoon door te lopen"
     assert _terminale(events) == ["answer"], "precies één eindpunt"
@@ -258,7 +258,7 @@ async def test_onbereikbare_bron_wordt_als_zodanig_gemeld():
     """Een bron die niet opstartte, staat niet in de registry."""
     host = vlam_host.VLAMHost()
     host.vlam_client = _fake_vlam_client([_vlam_toolcall_msg(), _vlam_final_msg()])
-    events = await _events(host._chat_vlam_stream([{"role": "user", "content": "hoi"}], SESSIE, host.vlam_client))
+    events = await _events(host._chat_vlam_stream([{"role": "user", "content": "hoi"}], SESSIE, host.vlam_client, {}))
 
     bronfouten = [e for e in events if e["type"] == "bron_fout"]
     assert bronfouten and bronfouten[0]["code"] == "BRON_NIET_GESTART"
@@ -381,7 +381,7 @@ async def test_hangende_bron_laat_de_stream_niet_eeuwig_staan(monkeypatch):
     host.vlam_client = _fake_vlam_client([_vlam_toolcall_msg(), _vlam_final_msg()])
 
     events = await asyncio.wait_for(
-        _events(host._chat_vlam_stream([{"role": "user", "content": "hoi"}], SESSIE, host.vlam_client)),
+        _events(host._chat_vlam_stream([{"role": "user", "content": "hoi"}], SESSIE, host.vlam_client, {})),
         timeout=5,
     )
     bronfouten = [e for e in events if e["type"] == "bron_fout"]
@@ -404,7 +404,7 @@ async def test_weggevallen_verbinding_meldt_de_bron_en_het_alternatief():
     host.registry = _WeggevallenRegistry()
     host.vlam_client = _fake_vlam_client([_vlam_toolcall_msg(), _vlam_final_msg()])
 
-    events = await _events(host._chat_vlam_stream([{"role": "user", "content": "hoi"}], SESSIE, host.vlam_client))
+    events = await _events(host._chat_vlam_stream([{"role": "user", "content": "hoi"}], SESSIE, host.vlam_client, {}))
     bronfouten = [e for e in events if e["type"] == "bron_fout"]
     assert bronfouten and bronfouten[0]["code"] == "SOURCE_UNAVAILABLE"
     assert "wetten.overheid.nl" in bronfouten[0]["message"]
@@ -456,7 +456,7 @@ async def test_afgekapt_antwoord_gaat_niet_verloren():
     host.vlam_client = types.SimpleNamespace(
         chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=_afgekapt))
     )
-    events = await _events(host._chat_vlam_stream([{"role": "user", "content": "hoi"}], SESSIE, host.vlam_client))
+    events = await _events(host._chat_vlam_stream([{"role": "user", "content": "hoi"}], SESSIE, host.vlam_client, {}))
 
     codes = [e.get("code") for e in events]
     assert "LLM_ANTWOORD_AFGEKAPT" in codes

@@ -115,7 +115,7 @@ async def test_vlam_stream_pad_injecteert_kvk():
     host = _host_with_recording_registry()
     vlam = _fake_vlam_client([_vlam_toolcall_msg(), _vlam_final_msg()])
     await _drain(
-        host._chat_vlam_stream([{"role": "user", "content": "hoi"}], SESSIE, vlam)
+        host._chat_vlam_stream([{"role": "user", "content": "hoi"}], SESSIE, vlam, {})
     )
     assert host.registry.calls[0][1]["kvk_nummer"] == SESSIE
 
@@ -123,7 +123,7 @@ async def test_vlam_stream_pad_injecteert_kvk():
 async def test_vlam_blocking_pad_injecteert_kvk():
     host = _host_with_recording_registry()
     vlam = _fake_vlam_client([_vlam_toolcall_msg(), _vlam_final_msg()])
-    await host._chat_vlam([{"role": "user", "content": "hoi"}], SESSIE, vlam)
+    await host._chat_vlam([{"role": "user", "content": "hoi"}], SESSIE, vlam, {})
     assert host.registry.calls[0][1]["kvk_nummer"] == SESSIE
 
 
@@ -138,7 +138,7 @@ async def test_cli_claude_pad_injecteert_kvk(monkeypatch):
 
     monkeypatch.setattr(vlam_host, "execute_cli_tool", _fake_cli)
     await _drain(
-        host._chat_cli_stream([{"role": "user", "content": "hoi"}], SESSIE, claude)
+        host._chat_cli_stream([{"role": "user", "content": "hoi"}], SESSIE, claude, {})
     )
     assert recorded[0][1]["kvk_nummer"] == SESSIE
 
@@ -154,7 +154,7 @@ async def test_cli_vlam_pad_injecteert_kvk(monkeypatch):
 
     monkeypatch.setattr(vlam_host, "execute_cli_tool", _fake_cli)
     await _drain(
-        host._chat_vlam_cli_stream([{"role": "user", "content": "hoi"}], SESSIE, vlam)
+        host._chat_vlam_cli_stream([{"role": "user", "content": "hoi"}], SESSIE, vlam, {})
     )
     assert recorded[0][1]["kvk_nummer"] == SESSIE
 

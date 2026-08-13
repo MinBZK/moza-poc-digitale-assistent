@@ -40,6 +40,7 @@ from errors import (
     naar_llm,
     verrijk_llm,
 )
+from feiten import feiten_uit_tool
 from log_redaction import redact_always, redact_temporarily
 from mcp_client import MCPToolRegistry
 
@@ -471,6 +472,10 @@ class VLAMHost:
         )
         self.registry = MCPToolRegistry()
         self.conversations: dict[str, list[dict]] = {}
+        # Feiten per gesprek, geoogst uit tool-resultaten. Zelfde sleutel als
+        # self.conversations, zodat één opruimmechanisme later allebei dekt -
+        # geen van beide heeft nu een TTL.
+        self.feiten: dict[str, dict] = {}
         # Houdt bij welke servers gelukt/mislukt zijn
         self.server_status: dict[str, str] = {}
 
@@ -750,6 +755,7 @@ class VLAMHost:
         if conv_key not in self.conversations:
             self.conversations[conv_key] = []
         messages = self.conversations[conv_key]
+        feiten = self.feiten.setdefault(conv_key, {})
         # Zie chat_stream: bij een leeg modelantwoord draaien we de hele beurt
         # terug, anders blokkeert een assistent-bericht met lege inhoud elke
         # volgende beurt in deze sessie.
@@ -762,9 +768,9 @@ class VLAMHost:
             if mode == "vlam":
                 if not vlam:
                     return _geen_sleutel_fout("vlam").tekst
-                antwoord = await self._chat_vlam(messages, session_kvk, vlam)
+                antwoord = await self._chat_vlam(messages, session_kvk, vlam, feiten)
             else:
-                antwoord = await self._chat_claude(messages, session_kvk, claude)
+                antwoord = await self._chat_claude(messages, session_kvk, claude, feiten)
             if antwoord == maak_fout("LLM_LEEG_ANTWOORD").tekst:
                 del messages[herstelpunt:]
             return antwoord
@@ -813,6 +819,7 @@ class VLAMHost:
                 if conv_key not in self.conversations:
                     self.conversations[conv_key] = []
                 messages = self.conversations[conv_key]
+                feiten = self.feiten.setdefault(conv_key, {})
                 # Beginstand van deze beurt. Loopt de beurt stuk op een leeg
                 # modelantwoord, dan draaien we hierop terug: een
                 # assistent-bericht met lege inhoud blijft anders in de
@@ -831,15 +838,15 @@ class VLAMHost:
                     yield naar_event(_geen_sleutel_fout("claude"))
                 elif llm == "vlam":
                     gen = (
-                        self._chat_vlam_cli_stream(messages, session_kvk, vlam)
+                        self._chat_vlam_cli_stream(messages, session_kvk, vlam, feiten)
                         if use_cli
-                        else self._chat_vlam_stream(messages, session_kvk, vlam)
+                        else self._chat_vlam_stream(messages, session_kvk, vlam, feiten)
                     )
                 else:
                     gen = (
-                        self._chat_cli_stream(messages, session_kvk, claude)
+                        self._chat_cli_stream(messages, session_kvk, claude, feiten)
                         if use_cli
-                        else self._chat_claude_stream(messages, session_kvk, claude)
+                        else self._chat_claude_stream(messages, session_kvk, claude, feiten)
                     )
 
                 if gen is not None:
@@ -874,13 +881,14 @@ class VLAMHost:
     # ------------------------------------------------------------------
 
     async def _chat_claude_stream(
-        self, messages: list[dict], session_kvk: str, claude
+        self, messages: list[dict], session_kvk: str, claude, feiten: dict
     ) -> AsyncGenerator[dict, None]:
         """Claude agentic loop die status-events yieldt.
 
         `claude` is de client van dít verzoek (MVP-02) en is verplicht: geen
         stille terugval op de gedeelde server-client, zodat een vergeten
-        argument niet ongemerkt de verkeerde sleutel gebruikt.
+        argument niet ongemerkt de verkeerde sleutel gebruikt. `feiten` is de
+        sessiekaart uit `self.feiten` (by reference) — alleen `.update()`en.
         """
         tools = self.registry.get_anthropic_tools()
         system_prompt = self._system_prompt("claude")
@@ -932,7 +940,9 @@ class VLAMHost:
                 yield naar_event(fout, "bron_fout")
             # Emit lopende zaak als case-event bij succesvolle indiening
             for tu, tr in zip(tool_uses, tool_results, strict=True):
-                zaak = _extract_lopende_zaak(tu.name, tr.get("content", ""))
+                inhoud = tr.get("content", "")
+                feiten.update(feiten_uit_tool(tu.name, inhoud))
+                zaak = _extract_lopende_zaak(tu.name, inhoud)
                 if zaak:
                     yield {"type": "case", "data": zaak}
             messages.append({"role": "user", "content": tool_results})
@@ -941,11 +951,13 @@ class VLAMHost:
         yield naar_event(maak_fout("LLM_MAX_STAPPEN"))
 
     async def _chat_vlam_stream(
-        self, messages: list[dict], session_kvk: str, vlam
+        self, messages: list[dict], session_kvk: str, vlam, feiten: dict
     ) -> AsyncGenerator[dict, None]:
         """VLAM agentic loop (native OpenAI tool-calling) die status-events yieldt.
 
         `vlam` is de client van dít verzoek (MVP-02), verplicht meegegeven.
+        `feiten` is de sessiekaart uit `self.feiten` (by reference) — alleen
+        `.update()`en.
         """
         tools_openai = self.registry.get_openai_tools()
         system_prompt = self._system_prompt("vlam")
@@ -1024,6 +1036,7 @@ class VLAMHost:
                 if fout:
                     yield naar_event(fout, "bron_fout")
 
+                feiten.update(feiten_uit_tool(tool_key, result))
                 zaak = _extract_lopende_zaak(tool_key, result)
                 if zaak:
                     yield {"type": "case", "data": zaak}
@@ -1041,11 +1054,13 @@ class VLAMHost:
     # ------------------------------------------------------------------
 
     async def _chat_cli_stream(
-        self, messages: list[dict], session_kvk: str, claude
+        self, messages: list[dict], session_kvk: str, claude, feiten: dict
     ) -> AsyncGenerator[dict, None]:
         """Claude agentic loop die CLI-tools aanroept i.p.v. MCP-servers.
 
         `claude` is de client van dít verzoek (MVP-02), verplicht meegegeven.
+        `feiten` is de sessiekaart uit `self.feiten` (by reference) — alleen
+        `.update()`en.
         """
         tools = CLI_TOOL_DEFINITIONS_ANTHROPIC
         system_prompt = self._system_prompt(
@@ -1103,6 +1118,7 @@ class VLAMHost:
                 if fout:
                     yield naar_event(fout, "bron_fout")
 
+                feiten.update(feiten_uit_tool(tu.name, result))
                 zaak = _extract_lopende_zaak(tu.name, result)
                 if zaak:
                     yield {"type": "case", "data": zaak}
@@ -1125,11 +1141,13 @@ class VLAMHost:
     # ------------------------------------------------------------------
 
     async def _chat_vlam_cli_stream(
-        self, messages: list[dict], session_kvk: str, vlam
+        self, messages: list[dict], session_kvk: str, vlam, feiten: dict
     ) -> AsyncGenerator[dict, None]:
         """VLAM agentic loop (native tool-calling) met CLI-tools i.p.v. MCP.
 
         `vlam` is de client van dít verzoek (MVP-02), verplicht meegegeven.
+        `feiten` is de sessiekaart uit `self.feiten` (by reference) — alleen
+        `.update()`en.
         """
         tools_openai = CLI_TOOL_DEFINITIONS_OPENAI
         system_prompt = self._system_prompt(
@@ -1200,6 +1218,7 @@ class VLAMHost:
                 if fout:
                     yield naar_event(fout, "bron_fout")
 
+                feiten.update(feiten_uit_tool(tool_key, result))
                 zaak = _extract_lopende_zaak(tool_key, result)
                 if zaak:
                     yield {"type": "case", "data": zaak}
@@ -1216,8 +1235,14 @@ class VLAMHost:
     # Claude (Anthropic API) — blocking (non-streaming, backwards-compatibel)
     # ------------------------------------------------------------------
 
-    async def _chat_claude(self, messages: list[dict], session_kvk: str, claude) -> str:
-        """`claude` is de client van dít verzoek (MVP-02), verplicht meegegeven."""
+    async def _chat_claude(
+        self, messages: list[dict], session_kvk: str, claude, feiten: dict
+    ) -> str:
+        """`claude` is de client van dít verzoek (MVP-02), verplicht meegegeven.
+
+        `feiten` is de sessiekaart uit `self.feiten` (by reference) — alleen
+        `.update()`en.
+        """
         if not claude.api_key:
             return _geen_sleutel_fout("claude").tekst
         tools = self.registry.get_anthropic_tools()
@@ -1254,6 +1279,8 @@ class VLAMHost:
                 return _antwoord_tekst(text, _is_afgekapt(response))
 
             tool_results, _ = await self._execute_tools(tool_uses, session_kvk)
+            for tu, tr in zip(tool_uses, tool_results, strict=True):
+                feiten.update(feiten_uit_tool(tu.name, tr.get("content", "")))
             messages.append({"role": "user", "content": tool_results})
 
         return maak_fout("LLM_MAX_STAPPEN").tekst
@@ -1262,8 +1289,14 @@ class VLAMHost:
     # VLAM (OpenAI-compatibele API — UbiOps/Mistral) — agentic loop
     # ------------------------------------------------------------------
 
-    async def _chat_vlam(self, messages: list[dict], session_kvk: str, vlam) -> str:
-        """`vlam` is de client van dít verzoek (MVP-02), verplicht meegegeven."""
+    async def _chat_vlam(
+        self, messages: list[dict], session_kvk: str, vlam, feiten: dict
+    ) -> str:
+        """`vlam` is de client van dít verzoek (MVP-02), verplicht meegegeven.
+
+        `feiten` is de sessiekaart uit `self.feiten` (by reference) — alleen
+        `.update()`en.
+        """
         tools_openai = self.registry.get_openai_tools()
         system_prompt = self._system_prompt("vlam")
         openai_messages = self._to_openai_messages(messages, system_prompt)
@@ -1324,6 +1357,7 @@ class VLAMHost:
                         arguments,
                     )
 
+                feiten.update(feiten_uit_tool(tool_key, result))
                 openai_messages.append(
                     {
                         "role": "tool",
