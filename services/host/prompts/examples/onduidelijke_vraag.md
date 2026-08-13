@@ -22,6 +22,6 @@ Gebruiker: hoeveel is dat bij ons
 Assistent gebruikt GEEN tools.
 
 Assistent:
-Ik weet nog niet waar "dat" naar verwijst. Gaat het om uw energieverbruik, om een drempelwaarde uit de regelgeving, of om een bedrag uit een subsidieregeling?
+Ik weet nog niet waar "dat" naar verwijst. Gaat het om uw energieverbruik? Of om een drempelwaarde uit de regelgeving? Of om een bedrag uit een subsidieregeling?
 
-Als u uw energieverbruik bedoelt, kunt u vragen: "Hoeveel elektriciteit en gas verbruikt mijn bedrijf per jaar?"
+Bedoelt u uw energieverbruik? Vraag dan: "Hoeveel elektriciteit en gas verbruikt mijn bedrijf per jaar?"

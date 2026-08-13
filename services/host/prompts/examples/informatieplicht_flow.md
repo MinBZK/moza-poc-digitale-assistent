@@ -19,21 +19,21 @@ Assistent (pas NA toestemming: na kvk__mijn_bedrijf, netbeheerder__verbruik [Bus
 "Dank u. Ik heb het voorwerk voor u gedaan. Dit heb ik met uw toestemming geraadpleegd:
 
 **Geraadpleegde bronnen**
-- KvK Handelsregister: Koffiezaak Noon, KvK 85234567, café (SBI 56102), Meent 88, Rotterdam - geen woonfunctie (via BAG).
-- Uw Business Wallet: energieverbruik-attestatie - 61.250 kWh elektriciteit en 9.800 m³ gas (peiljaar 2025), afgegeven door uw netbeheerder en met uw toestemming gedeeld.
-- RegelRecht (art. 5.15d Besluit activiteiten leefomgeving): uw elektriciteitsverbruik ligt boven de drempel uit RegelRecht - **de informatieplicht geldt voor uw bedrijf**.
+- KvK Handelsregister: Koffiezaak Noon, KvK 85234567, café (SBI 56102), Meent 88, Rotterdam - geen woonfunctie.
+- Uw Business Wallet: 61.250 kWh elektriciteit en 9.800 m³ gas (peiljaar 2025). Uw netbeheerder gaf deze attestatie af. U hebt hem met mij gedeeld.
+- RegelRecht (art. 5.15d Besluit activiteiten leefomgeving): uw elektriciteitsverbruik ligt boven de drempel uit RegelRecht. **De informatieplicht geldt voor uw bedrijf.**
 
 **Berekening**
 - Elektriciteit: 61.250 kWh vs. de drempel uit RegelRecht - overschreden
 - Aardgas: 9.800 m³ vs. de drempel uit RegelRecht - niet overschreden
 - Woonfunctie-uitzondering: nee
 
-U hoeft dus niets op te zoeken. Om te bepalen wélke maatregelen voor uw zaak gelden, heb ik nog twee feitelijke vragen. Deze staan nergens geregistreerd - alleen u weet dit; het blijft een feit dat u aanlevert, geen juridische beoordeling. Uw antwoorden worden bewaard voor de volgende rapportageronde.
+U hoeft dus niets op te zoeken. Om te bepalen wélke maatregelen voor uw zaak gelden, heb ik nog twee feitelijke vragen. Deze staan nergens geregistreerd. Alleen u weet dit. Het blijft een feit dat u aanlevert, geen juridische beoordeling. Uw antwoorden worden bewaard voor de volgende rapportageronde.
 
 1. Heeft het bedrijf een koel- of vriesinstallatie (koelcel, koelmeubel)?
 2. Heeft het bedrijf een afzuiginstallatie (keuken of ruimteventilatie)?"
 
-(De assistent heeft deze vragen afgelezen uit regelrecht__execute_law met law "omgevingswet/energiebesparing/maatregelen": met lege parameters aangeroepen meldt de tool de benodigde_feiten - de vraagteksten komen uit de machine-uitvoerbare regel zelf.)
+(De assistent las deze vragen af uit regelrecht__execute_law, law "omgevingswet/energiebesparing/maatregelen". Roep die tool met lege parameters aan, dan meldt hij de benodigde_feiten. De vraagteksten komen dus uit de regel zelf.)
 
 Gebruiker: "Ja allebei."
 
@@ -59,6 +59,6 @@ Gebruiker: "Ja, dien maar in."
 
 Assistent (na rvo__indienen met maatregelen-status en bedrijfskenmerken):
 
-"✅ Uw rapportage is ingediend (referentie RVO-EBR-2026-85234567-001) en in behandeling genomen. U vindt de status terug onder 'Lopende zaken'; u hoort het zodra er een vervolgactie nodig is.
+"✅ Uw rapportage is ingediend (referentie RVO-EBR-2026-85234567-001) en in behandeling genomen. U vindt de status terug onder 'Lopende zaken'. U hoort het zodra er iets van u nodig is.
 
 Uw antwoorden (koelinstallatie, afzuiginstallatie) zijn bewaard; bij de volgende ronde (2030) staat het voorwerk al klaar."
