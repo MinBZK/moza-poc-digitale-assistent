@@ -111,10 +111,99 @@ staan als noodpad, maar wordt in de gewone flow niet meer gebruikt. Hij is een
 kopie van wetsconstanten die stil kan afdrijven; dat is een bestaand risico dat
 dit ontwerp niet vergroot en niet oplost.
 
-## Deel 2 — feiten uit de bron, elke beurt
+## Deel 2 — het model schrijft geen feiten meer, maar slots
 
-**Feitenkaart per sessie.** De host oogst uit elk tool-resultaat de canonieke
-feiten, op dezelfde plek waar `_extract_lopende_zaak` nu al meeleest:
+Het model construeert geen tekst met feiten erin. Het schrijft plaatshouders, en
+de host vult die in uit de bron:
+
+```
+model:  "Uw bedrijf {{BEDRIJFSNAAM}} verbruikt {{ELEKTRICITEIT_KWH}} kWh per
+         jaar. Dat ligt boven de drempel van {{DREMPEL_ELEKTRICITEIT_KWH}} kWh."
+
+host:   "Uw bedrijf Kwekerij De Bloesem verbruikt 420.000 kWh per jaar. Dat ligt
+         boven de drempel van 50.000 kWh."
+```
+
+Een feit dat het model nooit schrijft, kan het niet fout schrijven. Dat is
+sterker dan de feiten vers in de prompt leggen: dat maakt verzinnen alleen
+onwaarschijnlijker.
+
+De winst zit ook in de verificatie. Een fout adres is nu alleen te betrappen
+door het met het juiste te vergelijken; een verzonnen waarde als "Bloemenlaan 12"
+staat in geen enkele feitenkaart en matcht dus nergens mee. Met slots wordt de
+regel structureel — "dit antwoord hoort `{{VESTIGINGSADRES}}` te bevatten" — en
+dat vangt ook wat waardevergelijking mist.
+
+### Substitutie in de host, niet in de frontend
+
+De frontend heeft de feiten niet. Daar invullen betekent ze alsnog meesturen
+(dus het gestructureerde contract tóch bouwen), plus een wijziging in
+`MinBZK/moza-poc`, plus zorgvuldigheid rond `innerHTML`: `digitale-assistent.js`
+zet `p.innerHTML = parseMarkdown(text)`, en waarden die daar ongeëscaped in
+landen zijn een injectiepad — nu laag risico omdat ze uit onze eigen mocks
+komen, maar het is de verkeerde kant op.
+
+De host heeft de feitenkaart al. Eén plek, geen tweede repo, even deterministisch.
+
+### Syntax
+
+`{{SLOT}}`. Niet `[SLOT]`: dat botst met markdown-links, en de frontend parseert
+markdown. Niet `___`: dat betekent in `format.md` al "hier vult de gebruiker iets
+in", en die twee betekenissen door elkaar halen is vragen om verwarring.
+
+Eén bekende overlap: `MinBZK/moza-poc` is een Eleventy-site en `{{ }}` is
+Nunjucks-syntax. Dat botst niet, omdat chatberichten via `parseMarkdown` in de
+DOM komen en niet door de templating heen gaan. Het wordt wél een probleem zodra
+iemand een assistent-antwoord in een template rendert — vandaar dat de host
+substitueert en er nooit een onopgelost slot uitgaat.
+
+### Slotwoordenboek
+
+Vast en gesloten. Elk slot heeft één bron en één weergaveregel; de host formatteert
+(duizendtallen, datums, ja/nee), zodat opmaak niet meer per antwoord verschilt.
+
+| bron | slots |
+|---|---|
+| `kvk__mijn_bedrijf` | `BEDRIJFSNAAM`, `KVK_NUMMER`, `VESTIGINGSADRES`, `VESTIGINGSNUMMER`, `RECHTSVORM`, `WOONFUNCTIE`, `GEBRUIKSDOEL` |
+| `netbeheerder__verbruik` | `ELEKTRICITEIT_KWH`, `GAS_M3`, `PEILJAAR`, `NETBEHEERDER` |
+| `regelrecht__execute_law` | `DREMPEL_ELEKTRICITEIT_KWH`, `DREMPEL_GAS_M3`, `DREMPEL_ONDERZOEK_ELEKTRICITEIT_KWH`, `DREMPEL_ONDERZOEK_GAS_M3`, `VOLGENDE_DEADLINE`, `RAPPORTAGE_FREQUENTIE_JAREN`, `RAPPORTAGE_METHODE`, `BEVOEGD_GEZAG` |
+| `rvo__indienen` | `REFERENTIENUMMER` |
+
+### Oordelen als slot
+
+RegelRecht geeft `heeft_energiebesparingsplicht`, `heeft_informatieplicht` en
+`heeft_onderzoeksplicht` al terug. Die worden `OORDEEL_*`-slots die op "wel" of
+"niet" resolven, zodat het model schrijft: "De informatieplicht geldt
+{{OORDEEL_INFORMATIEPLICHT}} voor uw bedrijf."
+
+Dit is het minst elegante deel van het ontwerp en dat hoort gezegd. Een slot dat
+een woord middenin een zin bepaalt maakt de zinsbouw stroef, en het model moet
+de zin eromheen zo formuleren dat beide waarden passen. Het alternatief — het
+oordeel als vrije tekst laten en achteraf toetsen — laat precies de fout staan
+die we in run 1 zagen: juiste conclusie, verkeerde onderbouwing.
+
+### Grenzen
+
+**Het lost verkeerd redeneren niet op, alleen verkeerd onthouden.** Slots dekken
+feiten en oordelen. De redenering ertussen ("dat ligt boven de drempel") blijft
+tekst van het model.
+
+**Half meedoen is de reële faalmodus.** Het model kan sommige feiten als slot
+schrijven en andere letterlijk. Drie regels in de host vangen dat af:
+
+1. Een letterlijke waarde die in de feitenkaart voorkomt is een overtreding.
+2. Een slot dat niet opgelost kan worden — bron nog niet geraadpleegd, of een
+   naam buiten het woordenboek — is een **harde fout**. `{{VESTIGINGSADRES}}` in
+   beeld besmet de meting net zo goed als een fout adres.
+3. Het rapport vóór indiening moet de voorgeschreven slots bevatten.
+
+Regel 2 maakt "Verzin GEEN informatie" uit `guardrails.md` voor het eerst
+mechanisch: het model kán een feit niet noemen dat het niet heeft.
+
+### Feitenkaart
+
+De substitutie heeft een bron nodig. De host oogst uit elk tool-resultaat de
+canonieke feiten, op dezelfde plek waar `_extract_lopende_zaak` nu al meeleest:
 
 | tool | feiten |
 |---|---|
@@ -124,27 +213,32 @@ feiten, op dezelfde plek waar `_extract_lopende_zaak` nu al meeleest:
 
 Opgeslagen op dezelfde sleutel als `self.conversations`.
 
-**Elke beurt terug de prompt in**, als samengesteld blok naast
-`bronnen_status.md`. De systeemprompt wordt per beurt opnieuw gebouwd
-(`_system_prompt`), en `bronnen_offline` is het bestaande precedent voor
-dynamische toestand die zo de prompt in gaat.
+De kaart hoeft niet elke beurt de prompt in: het model heeft de wáárden niet
+meer nodig, alleen de slotnamen. Wat wél per beurt de prompt in gaat is **welke
+slots nu beschikbaar zijn** — dus welke bronnen al geraadpleegd zijn. De
+systeemprompt wordt per beurt opnieuw gebouwd (`_system_prompt`) en
+`bronnen_offline` is het bestaande precedent voor dynamische toestand die zo de
+prompt in gaat.
 
-De promptregel wordt scherper dan "toon de bekende gegevens": neem deze waarden
-letterlijk over, en staat een waarde er niet bij, zeg dan dat je hem niet hebt.
-Dat is wat `guardrails.md` al eist met "Verzin GEEN informatie", nu met een bron
-om het aan op te hangen.
+Dat scheelt ook context: acht feiten per beurt meesturen kost tokens die nu naar
+de slotnamen gaan, en die lijst is korter en stabiel.
 
-**Grens van deze maatregel.** Dit haalt de gemeten oorzaak weg — reconstructie
-uit een lang gesprek — maar maakt verzinnen niet onmogelijk. Volledig dichtzetten
-vraagt dat de feiten niet meer door het model heen gaan, en dat is een
-gestructureerd rapport-event met een nieuwe renderer in `MinBZK/moza-poc`.
-Bewust niet nu: een frontend-wijziging die niemand vóór 25 augustus in een
-browser heeft gezien is een groter risico dan wat het wegneemt.
+### Reikwijdte
 
-Een live correctie in de host — de foute regel vervangen vlak vóór verzending —
-is overwogen en verworpen. De host zou dan modeltekst herschrijven op
-patroonherkenning, en dat is een nieuwe klasse fouten twaalf dagen voor een
-onderzoek.
+Slots overal waar een feit valt, niet alleen in het rapport. Het oordeel in
+beurt 2 bevat bedrijfsnaam en verbruik en is het eerste dat de respondent leest;
+daar een gat laten zou de duurste plek zijn om het over te slaan.
+
+De vereiste-slots-controle (regel 3 hierboven) geldt wél alleen voor het
+rapport, omdat daar in `tool_usage.md` vastligt welke velden erin horen. Voor de
+andere antwoorden gelden regel 1 en 2.
+
+### Verworpen alternatief
+
+Een live correctie in de host — de foute regel opsporen en vervangen vlak vóór
+verzending — is overwogen en verworpen. De host zou dan modeltekst herschrijven
+op patroonherkenning, en dat is een nieuwe klasse fouten twaalf dagen voor een
+onderzoek. Slots doen hetzelfde werk vooraf en zonder gokken.
 
 ## Deel 3 — het maatregelen-formulier deterministisch
 
@@ -181,14 +275,25 @@ hebben in plaats van een indruk.
 
 `services/host/scripts/onderzoeksflow.py` krijgt erbij:
 
-- elk feit in het antwoord tegen de feitenkaart (adres doet dat al; verbruik,
-  KvK-nummer, bedrijfsnaam en vestigingsnummer erbij)
-- elk getal in de berekening moet voorkomen in `drempelwaarden` of
-  `gebruikte_waarden` — dat vangt ook een verzonnen drempel die toevallig klopt
+- **geen onopgelost slot** in enig antwoord — een `{{…}}` op het scherm is een
+  even harde fout als een verkeerd feit
+- **geen letterlijk feit waar een slot hoort** — elke waarde uit de feitenkaart
+  die letterlijk in de tekst staat betekent dat het model het slot omzeild heeft
+- **elke ingevulde waarde gelijk aan de bron**, zodat de substitutie zelf ook
+  getoetst is en niet alleen het model
+- **de vereiste slots in het rapport**, conform `tool_usage.md`
 - het `answer`-event draagt `maatregelen` met `code` én `omschrijving`,
   gefilterd op geldend
 - de flow haalt het einde: `rvo__indienen`, een `case`-event, "in behandeling"
 - per run een regel machineleesbare uitvoer, zodat tien runs te aggregeren zijn
+
+De eerste twee controles vervangen de waardevergelijking uit het vorige ontwerp.
+Die kon een verzonnen adres alleen vinden door het met het juiste te vergelijken;
+deze twee vangen ook een waarde die nergens vandaan komt.
+
+Een tweede meetlat draait op de **ruwe** modeltekst vóór substitutie. Anders
+toetst het script het werk van de host en niet dat van het model, en zie je niet
+of het model zich aan de slots houdt.
 
 **Acceptatie:** tien opeenvolgende runs zonder besmettende bevinding.
 B1-afwijkingen en taalfouten worden als getal gerapporteerd en blokkeren niet.
@@ -222,9 +327,6 @@ gemeten en wordt de moduskeuze een gemeten beslissing in plaats van een aanname.
   probleem en wordt daarom op dezelfde sleutel gehouden, zodat één
   opruimmechanisme later allebei dekt. Voor een begeleide sessie met een handvol
   gesprekken is het geen probleem, maar het hoort niet stilzwijgend te groeien.
-- `.env.example` beschrijft 62345681 als "plicht via gas", terwijl De Bloesem met
-  420.000 kWh ook boven de elektriciteitsdrempel zit. Onjuist maar onschadelijk;
-  meenemen als het toch geraakt wordt.
 - De misleidende foutmelding bij een LLM-billingfout (`LLM_VERZOEK_ONGELDIG` met
   actie "formuleer uw vraag anders"). Hoort in de foutcatalogus van PDR-011,
   niet in deze branch.
@@ -235,3 +337,6 @@ gemeten en wordt de moduskeuze een gemeten beslissing in plaats van een aanname.
   testscript uit elkaar valt als het verbruik onder de drempel zakt. 140.000
   blijft boven 25.000, dus die hoort te slagen — narekenen, niet aannemen.
 - De pariteitstest met `MinBZK/moza-poc` moet groen blijven.
+- `.env.example` beschrijft 62345681 als "plicht via gas", terwijl De Bloesem ook
+  boven de elektriciteitsdrempel van 50.000 kWh zit. Het is plicht via beide. We
+  raken die mockdata toch aan voor het gasverbruik, dus de regel gaat mee.
