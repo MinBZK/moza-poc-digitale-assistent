@@ -279,7 +279,7 @@ async def test_netbeheerder_zonder_vastgelegde_toestemming_wordt_geweigerd():
     )
 
     assert host.toestemming.get(conv_key, False) is False
-    tool_results, bronfouten = await host._execute_tools([tool_use], SESSIE, conv_key)
+    tool_results, bronfouten, aangeroepen = await host._execute_tools([tool_use], SESSIE, conv_key)
 
     assert len(bronfouten) == 1
     assert bronfouten[0].code == "TOESTEMMING_VEREIST"
@@ -288,6 +288,9 @@ async def test_netbeheerder_zonder_vastgelegde_toestemming_wordt_geweigerd():
     # De catalogusmelding uit errors.py, niet een verzonnen tekst.
     assert payload["gebruikersmelding"] == errors.maak_fout("TOESTEMMING_VEREIST", bron="netbeheerder").tekst
     assert host.toestemming.get(conv_key, False) is False
+    # De poort weigerde: geen raadpleging, dus hoort de tool niet bij de namen
+    # waarvoor de aanroeper een `tool`-event mag tonen (taak 8).
+    assert "netbeheerder__verbruik" not in aangeroepen
 
 
 async def test_netbeheerder_met_vastgelegde_toestemming_bereikt_de_bron():
@@ -318,18 +321,95 @@ async def test_netbeheerder_met_vastgelegde_toestemming_bereikt_de_bron():
         type="tool_use", name="netbeheerder__verbruik", input={}, id="tu1"
     )
 
-    tool_results, bronfouten = await host._execute_tools([tool_use], SESSIE, conv_key)
+    tool_results, bronfouten, aangeroepen = await host._execute_tools([tool_use], SESSIE, conv_key)
 
     assert registry.aanroepen == 1
     assert not bronfouten
     assert json.loads(tool_results[0]["content"])["data"]["beschikbaar"] is True
+    # De poort liet 'm door: dit tel als raadpleging, dus hoort de tool wél bij
+    # de namen waarvoor de aanroeper een `tool`-event mag tonen (taak 8).
+    assert aangeroepen == ["netbeheerder__verbruik"]
+
+
+async def test_geweigerde_netbeheerder_aanroep_levert_geen_tool_event_op():
+    """Taak 8: een geweigerde aanroep mag de client niet laten denken dat de
+    Business Wallet geraadpleegd is. Vóór deze fix stond het `tool`-event er
+    al vóórdat de PDR-008-poort kon weigeren (`_bron_aanroep_gated`); de
+    registry hieronder raiset zodra de bron ondanks de weigering toch bereikt
+    wordt, en de eventstroom bewijst het andere deel: geen `tool`-event voor
+    `netbeheerder__verbruik`, wel een `bron_fout` met de weigeringscode.
+    """
+    host = vlam_host.VLAMHost()
+
+    class _RegistryNetbeheerderNooitBereikt:
+        tool_map = {
+            "regelrecht__execute_law": ("regelrecht", {}),
+            "netbeheerder__verbruik": ("netbeheerder", {}),
+        }
+
+        def get_openai_tools(self):
+            return []
+
+        def get_anthropic_tools(self):
+            return []
+
+        async def call_tool(self, tool_key, arguments):
+            if tool_key == "netbeheerder__verbruik":
+                raise AssertionError(
+                    "netbeheerder__verbruik bereikte de registry zonder vastgelegde "
+                    "toestemming — de PDR-008-poort had dit moeten tegenhouden"
+                )
+            # De wet zelf mag wel raadplegen; de uitkomst doet er hier niet toe.
+            return json.dumps({"data": {"beschikbaar": True}})
+
+    host.registry = _RegistryNetbeheerderNooitBereikt()
+
+    # Zelfde modelgestuurde beweging als hieronder, maar zonder toestemming:
+    # het model roept `netbeheerder__verbruik` zelf aan en sluit de beurt
+    # daarna af met tekst.
+    beurten = iter(
+        [
+            types.SimpleNamespace(
+                content=[
+                    types.SimpleNamespace(
+                        type="tool_use", id="tu1", name="netbeheerder__verbruik", input={}
+                    )
+                ],
+                usage=None,
+            ),
+            types.SimpleNamespace(
+                content=[types.SimpleNamespace(type="text", text="Ik vraag eerst om toestemming.")],
+                usage=None,
+            ),
+        ]
+    )
+
+    async def _create(**kwargs):
+        return next(beurten)
+
+    host.claude_client = types.SimpleNamespace(
+        api_key="x", messages=types.SimpleNamespace(create=_create)
+    )
+
+    events = [
+        e
+        async for e in host.chat_stream(
+            "sess", "Wat is mijn energieverbruik?", mode="claude", session_kvk=SESSIE
+        )
+    ]
+
+    tool_events = [e for e in events if e.get("type") == "tool"]
+    assert "netbeheerder__verbruik" not in [e.get("tool") for e in tool_events]
+    bronfouten = [e for e in events if e.get("type") == "bron_fout"]
+    assert any(e.get("code") == "TOESTEMMING_VEREIST" for e in bronfouten)
 
 
 async def test_toestemming_op_het_verzoek_ontsluit_een_modelgestuurde_aanroep():
     """End-to-end via het publieke contract: `toestemming: true` op het
     verzoek (de "Delen"-knop) zet de vlag vóórdat het model aan zet is, en
     laat een aanroep die het model zelf initieert — niet de regelloop —
-    daarna gewoon door de poort.
+    daarna gewoon door de poort. Taak 8: die raadpleging levert nu ook wél
+    een `tool`-event op — het spiegelbeeld van de weigering hierboven.
     """
     host = vlam_host.VLAMHost()
 
@@ -379,17 +459,20 @@ async def test_toestemming_op_het_verzoek_ontsluit_een_modelgestuurde_aanroep():
         api_key="x", messages=types.SimpleNamespace(create=_create)
     )
 
-    await _drain(
-        host.chat_stream(
+    events = [
+        e
+        async for e in host.chat_stream(
             "sess",
             "Wat is mijn energieverbruik?",
             mode="claude",
             session_kvk=SESSIE,
             toestemming=True,
         )
-    )
+    ]
 
     assert "netbeheerder__verbruik" in registry.aanroepen
+    tool_events = [e for e in events if e.get("type") == "tool"]
+    assert "netbeheerder__verbruik" in [e.get("tool") for e in tool_events]
 
 
 async def test_geslaagde_netbeheerder_aanroep_zet_de_toestemmingsvlag_niet_meer():

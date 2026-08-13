@@ -8,9 +8,9 @@ Assistent (de host heeft de toets al vóór dit antwoord uitgevoerd - "STATUS VA
 
 "Dat kan ik voor u uitzoeken. Daarvoor heb ik uw energieverbruik nodig uit uw Business Wallet. Dat is een attestatie, afgegeven door uw netbeheerder. Mag ik dat voor u ophalen en gebruiken?"
 
-Gebruiker: "Ja, ga je gang."
+Gebruiker: "Ja, ga je gang." (verstuurd via de "Delen"-knop, die toestemming op dit verzoek vastlegt)
 
-Assistent (toestemming gegeven: roept nu ZELF netbeheerder__verbruik aan - dat legt de toestemming vast voor de rest van het gesprek):
+Assistent (de host heeft, zodra de toestemming vastlag, vóór dit antwoord zelf al netbeheerder__verbruik voor u aangeroepen - de assistent roept die tool nooit zelf aan):
 
 "Dank u. Ik heb uw verbruik nu opgehaald uit de Business Wallet. Dat is {{ELEKTRICITEIT_KWH}} kWh elektriciteit en {{GAS_M3}} m³ gas (peiljaar {{PEILJAAR}}). Ik werk de toets hiermee bij. Stelt u gerust uw volgende vraag."
 

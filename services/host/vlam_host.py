@@ -878,15 +878,21 @@ class VLAMHost:
 
         async def call_tool(tool_key: str, arguments: dict) -> str:
             arguments = _inject_session_kvk(tool_key, arguments, session_kvk)
-            await queue.put(
-                {"type": "tool", "message": _tool_label(tool_key), "tool": tool_key}
-            )
-            resultaat, fout = await self._bron_aanroep_gated(
+            # Het `tool`-event gaat pas ná de aanroep uit: `volg_regel` stopt
+            # weliswaar zelf al vóór een toestemmingsplichtig veld zonder
+            # toestemming (regelloop.py), maar de poort is de enige plek die dat
+            # afdwingt - mocht ze hier ooit toch weigeren, dan hoort er geen
+            # event te komen dat een raadpleging meldt die niet plaatsvond.
+            resultaat, fout, aangeroepen = await self._bron_aanroep_gated(
                 partial(self.registry.call_tool, tool_key, arguments),
                 tool_key,
                 arguments,
                 conv_key,
             )
+            if aangeroepen:
+                await queue.put(
+                    {"type": "tool", "message": _tool_label(tool_key), "tool": tool_key}
+                )
             if fout:
                 await queue.put(naar_event(fout, "bron_fout"))
             feiten.update(feiten_uit_tool(tool_key, resultaat))
@@ -1208,14 +1214,15 @@ class VLAMHost:
                     yield event
                 return
 
-            for tu in tool_uses:
-                yield {
-                    "type": "tool",
-                    "message": _tool_label(tu.name),
-                    "tool": tu.name,
-                }
-
-            tool_results, bronfouten = await self._execute_tools(tool_uses, session_kvk, conv_key)
+            # Het `tool`-event gaat pas ná de aanroep uit (niet ervoor): de
+            # PDR-008-poort in `_execute_tools` kan een aanroep weigeren, en
+            # dan is de bron niet geraadpleegd - een event vooraf zou dat aan
+            # de client melden alsof het wel gebeurde.
+            tool_results, bronfouten, aangeroepen = await self._execute_tools(
+                tool_uses, session_kvk, conv_key
+            )
+            for naam in aangeroepen:
+                yield {"type": "tool", "message": _tool_label(naam), "tool": naam}
             for fout in bronfouten:
                 yield naar_event(fout, "bron_fout")
             # Emit lopende zaak als case-event bij succesvolle indiening
@@ -1311,12 +1318,6 @@ class VLAMHost:
 
             for tc in tool_calls:
                 tool_key = tc.function.name
-                yield {
-                    "type": "tool",
-                    "message": _tool_label(tool_key),
-                    "tool": tool_key,
-                }
-
                 arguments = _lees_tool_argumenten(tc.function.arguments)
                 if arguments is None:
                     # Geen event: het model corrigeert dit zelf in de volgende
@@ -1329,12 +1330,21 @@ class VLAMHost:
                     continue
                 arguments = _inject_session_kvk(tool_key, arguments, session_kvk)
                 logger.info("Tool-aanroep [vlam]: %s (velden: %s)", tool_key, _arg_keys(arguments))
-                result, fout = await self._bron_aanroep_gated(
+                # Het `tool`-event gaat pas ná de aanroep uit: de PDR-008-poort
+                # kan hem weigeren, en dan is de bron niet geraadpleegd - een
+                # event vooraf zou dat aan de client melden alsof het wel gebeurde.
+                result, fout, aangeroepen = await self._bron_aanroep_gated(
                     partial(self.registry.call_tool, tool_key, arguments),
                     tool_key,
                     arguments,
                     conv_key,
                 )
+                if aangeroepen:
+                    yield {
+                        "type": "tool",
+                        "message": _tool_label(tool_key),
+                        "tool": tool_key,
+                    }
                 if fout:
                     yield naar_event(fout, "bron_fout")
 
@@ -1593,7 +1603,7 @@ class VLAMHost:
                 text = "\n".join(b.text for b in assistant_content if hasattr(b, "text"))
                 return _antwoord_tekst(text, _is_afgekapt(response), feiten)
 
-            tool_results, _ = await self._execute_tools(tool_uses, session_kvk, conv_key)
+            tool_results, _, _ = await self._execute_tools(tool_uses, session_kvk, conv_key)
             for tu, tr in zip(tool_uses, tool_results, strict=True):
                 feiten.update(feiten_uit_tool(tu.name, tr.get("content", "")))
             messages.append({"role": "user", "content": tool_results})
@@ -1675,7 +1685,7 @@ class VLAMHost:
                     logger.info(
                         "Tool-aanroep [vlam]: %s (velden: %s)", tool_key, _arg_keys(arguments)
                     )
-                    result, _ = await self._bron_aanroep_gated(
+                    result, _, _ = await self._bron_aanroep_gated(
                         partial(self.registry.call_tool, tool_key, arguments),
                         tool_key,
                         arguments,
@@ -1699,7 +1709,7 @@ class VLAMHost:
 
     async def _bron_aanroep_gated(
         self, aanroep, tool_key: str, arguments: dict, conv_key: str
-    ) -> tuple[str, object]:
+    ) -> tuple[str, object, bool]:
         """`_bron_aanroep`, met de PDR-008-poort voor de Business Wallet ervoor.
 
         Dit is de enige plek waar een MCP-tool-aanroep de registry bereikt —
@@ -1713,6 +1723,11 @@ class VLAMHost:
         Prompt-instructies alleen bleken dat niet te stoppen: het model riep de
         tool zelf aan zodra de systeemprompt liet doorschemeren dat er verbruik
         nodig was. Deze poort staat daarom in de host, niet in de prompt.
+
+        Geeft `(resultaat, fout_of_None, aangeroepen)` terug. `aangeroepen` is
+        False zodra de poort heeft geweigerd: de bron is dan niet geraadpleegd,
+        en de aanroeper mag daar geen `tool`-event voor tonen - dat zou de
+        client iets laten zien dat niet gebeurd is.
         """
         if tool_key == "netbeheerder__verbruik" and not self.toestemming.get(conv_key, False):
             fout = maak_fout("TOESTEMMING_VEREIST", bron="netbeheerder")
@@ -1720,12 +1735,13 @@ class VLAMHost:
                 "Business Wallet geweigerd zonder vastgelegde toestemming [conv_key=%r]",
                 conv_key,
             )
-            return naar_llm(fout), fout
-        return await _bron_aanroep(aanroep, tool_key, arguments)
+            return naar_llm(fout), fout, False
+        resultaat, fout = await _bron_aanroep(aanroep, tool_key, arguments)
+        return resultaat, fout, True
 
     async def _execute_tools(
         self, tool_uses, session_kvk: str, conv_key: str = ""
-    ) -> tuple[list[dict], list]:
+    ) -> tuple[list[dict], list, list[str]]:
         """Voer Anthropic tool_use-blokken uit via MCP-servers.
 
         Geeft de tool-resultaten terug plus de bronfouten die onderweg optraden,
@@ -1733,18 +1749,27 @@ class VLAMHost:
         gewoon doorloopt. `conv_key` gaat naar `_bron_aanroep_gated`, dat de
         PDR-008-poort toepast (netbeheerder__verbruik zonder vastgelegde
         toestemming komt hier nooit door naar de registry).
+
+        De derde waarde (`aangeroepen`) draagt de namen van de tools die de
+        poort daadwerkelijk doorliet: alleen daarvoor mag de aanroeper een
+        `tool`-event tonen. Een geweigerde aanroep staat wél in `tool_uses`
+        (het model deed de poging), maar hoort hier niet in - anders meldt de
+        UI een raadpleging die nooit plaatsvond.
         """
         tool_results = []
         bronfouten = []
+        aangeroepen = []
         for tool_use in tool_uses:
             arguments = _inject_session_kvk(tool_use.name, tool_use.input, session_kvk)
             logger.info("Tool-aanroep [claude]: %s (velden: %s)", tool_use.name, _arg_keys(arguments))
-            result, fout = await self._bron_aanroep_gated(
+            result, fout, ok = await self._bron_aanroep_gated(
                 partial(self.registry.call_tool, tool_use.name, arguments),
                 tool_use.name,
                 arguments,
                 conv_key,
             )
+            if ok:
+                aangeroepen.append(tool_use.name)
             if fout:
                 bronfouten.append(fout)
 
@@ -1755,7 +1780,7 @@ class VLAMHost:
                     "content": result,
                 }
             )
-        return tool_results, bronfouten
+        return tool_results, bronfouten, aangeroepen
 
     @staticmethod
     def _to_openai_messages(messages: list[dict], system_prompt: str) -> list[dict]:

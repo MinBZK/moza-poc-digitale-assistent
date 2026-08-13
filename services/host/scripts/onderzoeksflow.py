@@ -69,6 +69,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from taalniveau import MAX_WOORDEN_PER_ZIN, meet  # noqa: E402
 
+import errors  # noqa: E402
 import regelrouting  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -222,6 +223,31 @@ _ROUTETOOLS = {veld.tool for veld in regelrouting.HERKOMST.values() if veld.tool
 _TOESTEMMINGSTOOLS = {
     veld.tool for veld in regelrouting.HERKOMST.values() if veld.tool and veld.toestemming
 }
+
+
+def _geraadpleegde_toestemmingstools(tools: list[str], events: list[dict]) -> list[str]:
+    """Toestemmingsplichtige tools die de host ook écht raadpleegde, niet alleen probeerde.
+
+    Een naam in `tools` komt uit een `tool`-event en bewijst op zichzelf niet
+    dat de bron geraadpleegd is: de PDR-008-poort in
+    `vlam_host._bron_aanroep_gated` kan de aanroep hebben geweigerd
+    (`TOESTEMMING_VEREIST`) zonder de bron te raken. Sinds taak 8 stuurt de
+    host bij zo'n weigering geen `tool`-event meer, maar deze controle heet
+    "is deze bron geraadpleegd" en moet dat blijven meten ook als die garantie
+    ooit verzwakt — vandaar de expliciete kruiscontrole tegen een
+    `bron_fout`-event met code TOESTEMMING_VEREIST, in plaats van blind op de
+    aanwezigheid van de naam in `tools` te vertrouwen. Poging en raadpleging
+    zijn niet hetzelfde, en een controle die zegt te meten of een bron is
+    geraadpleegd mag niet slagen of falen op een poging die geweigerd werd.
+    """
+    geweigerd = {
+        e.get("bron")
+        for e in events
+        if e.get("type") == "bron_fout" and e.get("code") == "TOESTEMMING_VEREIST"
+    }
+    return [
+        t for t in tools if t in _TOESTEMMINGSTOOLS and errors.bron_uit_tool(t) not in geweigerd
+    ]
 
 
 def _controleer_wet_eerst(loop: Loop, stap: str, tools: list[str]) -> None:
@@ -442,11 +468,12 @@ def draai(loop: Loop, persona: Persona) -> None:
     print("\n=== 1. vraag naar de plicht (toestemming eerst) ===")
     antwoord, tools, events = loop.beurt("Geldt de energiebesparingsplicht voor mijn bedrijf?")
     loop.controleer("stap1", not _fouten(events), "geen foutmelding", "\n".join(_fouten(events)))
+    geraadpleegd = _geraadpleegde_toestemmingstools(tools, events)
     loop.controleer(
         "stap1",
-        not any(t in _TOESTEMMINGSTOOLS for t in tools),
-        "geen toestemmingsplichtige bron aangeroepen vóór toestemming (PDR-008)",
-        f"wel aangeroepen: {tools}",
+        not geraadpleegd,
+        "geen toestemmingsplichtige bron geraadpleegd vóór toestemming (PDR-008)",
+        f"wel geraadpleegd: {geraadpleegd} (alle genoemde tools: {tools})",
     )
     loop.controleer(
         "stap1",
