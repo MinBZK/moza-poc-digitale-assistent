@@ -130,7 +130,7 @@ class Persona:
 
 PERSONAS = {
     "62345681": Persona(
-        "62345681", "Kwekerij De Bloesem", "Bleiswijk", "Hoefweg 210", "420.000", "198.000", True
+        "62345681", "Kwekerij De Bloesem", "Bleiswijk", "Hoefweg 210", "420.000", "140.000", True
     ),
     "85234567": Persona(
         "85234567", "Koffiezaak Noon", "Rotterdam", "Meent 88", "61.250", "9.800", True
@@ -396,36 +396,77 @@ def draai(loop: Loop, persona: Persona) -> None:
     _b1(loop, "stap6", antwoord)
 
 
+def aggregeer(runs: list[list[Uitkomst]]) -> dict[str, str]:
+    """Per controle: hoe vaak geslaagd van hoe vaak uitgevoerd.
+
+    De noemer is het aantal keren dat de controle daadwerkelijk draaide, niet
+    het aantal runs. Een run die halverwege afbreekt heeft die controle niet
+    uitgevoerd, en dat is iets anders dan hem niet halen.
+    """
+    tellers: dict[str, list[int]] = {}
+    for run in runs:
+        for uitkomst in run:
+            geslaagd, totaal = tellers.setdefault(uitkomst.reden, [0, 0])
+            tellers[uitkomst.reden] = [geslaagd + int(uitkomst.ok), totaal + 1]
+    return {reden: f"{g}/{t}" for reden, (g, t) in tellers.items()}
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--host", default="http://127.0.0.1:8000")
     p.add_argument("--kvk", default="62345681", choices=sorted(PERSONAS))
     p.add_argument("--transcript", help="schrijf alle events naar dit JSON-bestand")
     p.add_argument("--mode", default="vlam", choices=["vlam", "claude", "cli:vlam", "cli:claude"])
+    p.add_argument("--runs", type=int, default=1, help="aantal doorlopen")
+    p.add_argument("--json", help="schrijf een machineleesbare samenvatting hierheen")
     a = p.parse_args()
 
     persona = PERSONAS[a.kvk]
     print(f"Persona: {persona.naam} ({persona.kvk}), modus {a.mode}, host {a.host}")
 
-    loop = Loop(host=a.host, kvk=a.kvk, mode=a.mode)
-    try:
-        draai(loop, persona)
-    except httpx.HTTPError as e:
-        print(f"\nAFGEBROKEN: {type(e).__name__}: {e}")
-        return 1
+    alle_runs: list[list[Uitkomst]] = []
+    for nummer in range(1, a.runs + 1):
+        print(f"\n{'#' * 70}\n# RUN {nummer} van {a.runs}\n{'#' * 70}")
+        loop = Loop(host=a.host, kvk=a.kvk, mode=a.mode)
+        try:
+            draai(loop, persona)
+        except httpx.HTTPError as e:
+            print(f"RUN {nummer} AFGEBROKEN: {type(e).__name__}: {e}")
+        alle_runs.append(loop.uitkomsten)
 
     if a.transcript:
         Path(a.transcript).write_text(
             json.dumps(loop.transcript, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        print(f"\ntranscript weggeschreven naar {a.transcript}")
+        print(f"\ntranscript weggeschreven naar {a.transcript} (laatste run)")
 
-    mislukt = [u for u in loop.uitkomsten if not u.ok]
-    print(f"\n{'=' * 70}")
-    print(f"{len(loop.uitkomsten) - len(mislukt)} van {len(loop.uitkomsten)} controles geslaagd")
-    for u in mislukt:
-        print(f"  FOUT  {u.stap}: {u.reden}")
-    return 1 if mislukt else 0
+    samenvatting = aggregeer(alle_runs)
+    print(f"\n{'=' * 70}\nSAMENVATTING OVER {a.runs} RUN(S)")
+    for reden, score in sorted(samenvatting.items()):
+        geslaagd, totaal = (int(x) for x in score.split("/"))
+        vlag = "OK  " if geslaagd == totaal else "FOUT"
+        print(f"  [{vlag}] {score}  {reden}")
+
+    if a.json:
+        Path(a.json).write_text(
+            json.dumps(
+                {
+                    "modus": a.mode,
+                    "kvk": a.kvk,
+                    "runs": a.runs,
+                    "samenvatting": samenvatting,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        print(f"\nsamenvatting weggeschreven naar {a.json}")
+
+    alles_groen = all(
+        score.split("/")[0] == score.split("/")[1] for score in samenvatting.values()
+    )
+    return 0 if alles_groen else 1
 
 
 if __name__ == "__main__":
