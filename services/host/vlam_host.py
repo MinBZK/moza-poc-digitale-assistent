@@ -189,7 +189,10 @@ def _geen_sleutel_fout(backend: str = ""):
 
 
 def _antwoord_events(
-    tekst: str, afgekapt: bool = False, feiten: dict | None = None
+    tekst: str,
+    afgekapt: bool = False,
+    feiten: dict | None = None,
+    maatregelen: list[dict] | None = None,
 ) -> list[dict]:
     """De events die bij dit antwoord horen.
 
@@ -206,6 +209,11 @@ def _antwoord_events(
     is meestal grotendeels bruikbaar en weggooien is een grotere achteruitgang
     dan de afbreking zelf. De melding gaat eraan vooraf als niet-terminaal
     event, zodat de gebruiker weet dat er meer was.
+
+    `maatregelen` gaat alleen mee als deze beurt de EML-tool daadwerkelijk
+    heeft aangeroepen (`vraagSpec` in digitale-assistent.js leest dit veld vóór
+    het terugvalt op tekst parsen); anders draagt elk volgend antwoord een
+    verouderd formulier mee.
     """
     tekst, ontbrekend = vul_slots(tekst, feiten or {})
     if ontbrekend:
@@ -214,13 +222,16 @@ def _antwoord_events(
     if not (tekst or "").strip():
         logger.error("Het model gaf een leeg antwoord terug")
         return [naar_event(maak_fout("LLM_LEEG_ANTWOORD"))]
+    antwoord = {"type": "answer", "message": tekst}
+    if maatregelen:
+        antwoord["maatregelen"] = maatregelen
     if afgekapt:
         logger.warning("Het antwoord van het model is afgekapt op max_tokens")
         return [
             naar_event(maak_fout("LLM_ANTWOORD_AFGEKAPT"), "bron_fout"),
-            {"type": "answer", "message": tekst},
+            antwoord,
         ]
-    return [{"type": "answer", "message": tekst}]
+    return [antwoord]
 
 
 def _antwoord_tekst(tekst: str, afgekapt: bool = False, feiten: dict | None = None) -> str:
@@ -324,6 +335,28 @@ def _extract_lopende_zaak(tool_name: str, result: str) -> dict | None:
         return data.get("lopende_zaak")
     except (json.JSONDecodeError, AttributeError):
         return None
+
+
+def maatregelen_voor_event(tool_naam: str, resultaat: str) -> list[dict] | None:
+    """De geldende EML-maatregelen als veld voor het answer-event.
+
+    De frontend (vraagSpec in digitale-assistent.js) leest `maatregelen` vóór het
+    terugvalt op het parsen van de platte tekst, en verwacht `omschrijving` waar
+    de MCP-server `naam` levert. Zonder die hermapping toont het formulier kale
+    codes.
+    """
+    if tool_naam != "regelrecht__execute_law":
+        return None
+    try:
+        data = json.loads(resultaat).get("data") or {}
+    except (ValueError, AttributeError):
+        return None
+    geldend = [
+        {"code": m.get("code", ""), "omschrijving": m.get("naam", "")}
+        for m in (data.get("maatregelen") or [])
+        if m.get("van_toepassing")
+    ]
+    return geldend or None
 
 
 def _log_tool_error(tool_key: str, exc: Exception, code: str = "") -> None:
@@ -914,6 +947,9 @@ class VLAMHost:
         tools = self.registry.get_anthropic_tools()
         system_prompt = self._system_prompt("claude")
 
+        # Per beurt (niet per iteratie): de tool-aanroep en het uiteindelijke
+        # tekstantwoord zitten meestal in verschillende agentic-stappen.
+        maatregelen_deze_beurt = None
         max_iterations = 10
         for _ in range(max_iterations):
             api_kwargs = {
@@ -945,7 +981,9 @@ class VLAMHost:
                 text = "\n".join(
                     b.text for b in assistant_content if hasattr(b, "text")
                 )
-                for event in _antwoord_events(text, _is_afgekapt(response), feiten):
+                for event in _antwoord_events(
+                    text, _is_afgekapt(response), feiten, maatregelen_deze_beurt
+                ):
                     yield event
                 return
 
@@ -963,6 +1001,9 @@ class VLAMHost:
             for tu, tr in zip(tool_uses, tool_results, strict=True):
                 inhoud = tr.get("content", "")
                 feiten.update(feiten_uit_tool(tu.name, inhoud))
+                maatregelen_deze_beurt = (
+                    maatregelen_voor_event(tu.name, inhoud) or maatregelen_deze_beurt
+                )
                 zaak = _extract_lopende_zaak(tu.name, inhoud)
                 if zaak:
                     yield {"type": "case", "data": zaak}
@@ -984,6 +1025,9 @@ class VLAMHost:
         system_prompt = self._system_prompt("vlam")
         openai_messages = self._to_openai_messages(messages, system_prompt)
 
+        # Per beurt (niet per iteratie): de tool-aanroep en het uiteindelijke
+        # tekstantwoord zitten meestal in verschillende agentic-stappen.
+        maatregelen_deze_beurt = None
         max_iterations = 10
         for _ in range(max_iterations):
             api_kwargs = {
@@ -1026,7 +1070,10 @@ class VLAMHost:
             tool_calls = assistant_msg.tool_calls
             if not tool_calls:
                 for event in _antwoord_events(
-                    assistant_msg.content or "", _is_afgekapt(choice), feiten
+                    assistant_msg.content or "",
+                    _is_afgekapt(choice),
+                    feiten,
+                    maatregelen_deze_beurt,
                 ):
                     yield event
                 return
@@ -1060,6 +1107,9 @@ class VLAMHost:
                     yield naar_event(fout, "bron_fout")
 
                 feiten.update(feiten_uit_tool(tool_key, result))
+                maatregelen_deze_beurt = (
+                    maatregelen_voor_event(tool_key, result) or maatregelen_deze_beurt
+                )
                 zaak = _extract_lopende_zaak(tool_key, result)
                 if zaak:
                     yield {"type": "case", "data": zaak}
