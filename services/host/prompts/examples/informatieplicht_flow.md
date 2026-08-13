@@ -4,19 +4,21 @@
 
 Gebruiker: "Ik kreeg een melding dat de informatieplicht energiebesparing binnenkort voor mijn bedrijf geldt. Wat moet ik doen?"
 
-Assistent (roept NOG GEEN tools aan - vraagt EERST toestemming om gegevens te delen):
+Assistent (de host heeft de toets al vóór dit antwoord uitgevoerd - "STATUS VAN DE REGELTOETS" zegt dat er toestemming nodig is voor de Business Wallet; de assistent roept zelf NOG GEEN tools aan en vraagt dat EXPLICIET):
 
-"Dat kan ik voor u uitzoeken. Om te beoordelen of de informatieplicht voor uw bedrijf geldt, wil ik twee dingen raadplegen en gebruiken:
-- uw bedrijfsgegevens uit het KvK Handelsregister;
-- uw energieverbruik uit uw Business Wallet - een attestatie, afgegeven door uw netbeheerder.
-
-Mag ik deze gegevens voor u ophalen en gebruiken?"
+"Dat kan ik voor u uitzoeken. Daarvoor heb ik uw energieverbruik nodig uit uw Business Wallet. Dat is een attestatie, afgegeven door uw netbeheerder. Mag ik dat voor u ophalen en gebruiken?"
 
 Gebruiker: "Ja, ga je gang."
 
-Assistent (pas NA toestemming: na kvk__mijn_bedrijf, netbeheerder__verbruik [Business Wallet] en regelrecht__execute_law met law "omgevingswet/energiebesparing/informatieplicht"):
+Assistent (toestemming gegeven: roept nu ZELF netbeheerder__verbruik aan - dat legt de toestemming vast voor de rest van het gesprek):
 
-"Dank u. Ik heb het voorwerk voor u gedaan. Dit heb ik met uw toestemming geraadpleegd:
+"Dank u. Ik heb uw verbruik nu opgehaald uit de Business Wallet. Dat is {{ELEKTRICITEIT_KWH}} kWh elektriciteit en {{GAS_M3}} m³ gas (peiljaar {{PEILJAAR}}). Ik werk de toets hiermee bij. Stelt u gerust uw volgende vraag."
+
+Gebruiker: "En, geldt de plicht?"
+
+Assistent ("STATUS VAN DE REGELTOETS" zegt nu dat de toets is afgerond; roept zelf geen tools meer aan, gebruikt de uitkomst):
+
+"Op basis van uw gegevens is de toets afgerond:
 
 **Geraadpleegde bronnen**
 - KvK Handelsregister: {{BEDRIJFSNAAM}}, KvK {{KVK_NUMMER}}, {{VESTIGINGSADRES}}. Woonfunctie: {{WOONFUNCTIE}}.

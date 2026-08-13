@@ -75,6 +75,13 @@ async def volg_regel(
 
         ontbrekend = data.get("ontbrekende_gegevens") or []
         if not ontbrekend:
+            if not data.get("missing_required", True):
+                # De engine heeft alles getoetst en niets ontbreekt: dit is een
+                # definitieve negatieve uitkomst ("de verplichting geldt
+                # niet"), geen onbekende toestand. Zonder `missing_required`
+                # (oudere servervorm) blijft de voorzichtige aanname staan:
+                # mogelijk mist er nog iets.
+                return Uitkomst(klaar=True, resultaat=data, wacht_op=None, reden="")
             return Uitkomst(
                 klaar=False,
                 resultaat=None,

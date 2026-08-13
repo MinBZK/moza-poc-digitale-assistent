@@ -174,6 +174,11 @@ class ChatRequest(BaseModel):
     message: str
     session_id: str | None = None
     mode: str = "vlam"  # "vlam" (met MCP-tools) of "claude" (zonder tools)
+    # Toestemming voor de Business Wallet (PDR-008), expliciet door de
+    # frontend gestuurd (de "Delen"-knop). `None`/`False` betekent hier "nog
+    # niet gegeven in dit verzoek", niet "ingetrokken" - eenmaal gegeven blijft
+    # gegeven voor de rest van de sessie (VLAMHost.toestemming).
+    toestemming: bool | None = None
 
 
 class ChatResponse(BaseModel):
@@ -433,7 +438,12 @@ async def chat(body: ChatRequest, request: Request):
             status_code=400, detail=INVALID_API_KEY_MESSAGE
         ) from None
     reply = await host.chat(
-        session_id, body.message, mode=mode, session_kvk=session_kvk, **api_keys
+        session_id,
+        body.message,
+        mode=mode,
+        session_kvk=session_kvk,
+        toestemming=body.toestemming,
+        **api_keys,
     )
     return ChatResponse(
         reply=reply, session_id=session_id, mode=mode, has_tools=host.has_tools
@@ -493,7 +503,12 @@ async def chat_stream(body: ChatRequest, request: Request):
         # het redactie-register haalt (PDR-010 §2).
         async with aclosing(
             host.chat_stream(
-                session_id, body.message, mode=mode, session_kvk=session_kvk, **api_keys
+                session_id,
+                body.message,
+                mode=mode,
+                session_kvk=session_kvk,
+                toestemming=body.toestemming,
+                **api_keys,
             )
         ) as stream:
             try:

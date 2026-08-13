@@ -147,46 +147,83 @@ def _compose_bronnen_status(bronnen_offline: list[str], has_tools: bool) -> str 
     return _load(bestand).replace("{bronnen}", "\n".join(regels))
 
 
-def _compose_regel_status(regel_status: dict | None) -> str | None:
-    """Build the block that tells the model what the rule loop already decided.
+def _regel_status_klaar_tekst(resultaat: dict) -> str:
+    """Tekst voor een afgeronde toets: de uitkomst, niet de interne sleutelnaam.
 
-    `regelloop.volg_regel` runs before the model sees the turn and gathers
-    everything it can by itself; this is the only channel through which the
-    model learns what is left — ask for consent, ask the ondernemer a
-    question the engine needs, or report that RegelRecht already produced an
-    outcome. Modeled after `_compose_bronnen_status`: same precedent, same
-    "tell the model what the host already knows" reasoning.
+    `voldoet_aan_voorwaarden` is de naam van het RegelRecht-veld, geen
+    juridisch oordeel op zich; die vertaalslag hoort hier, niet in de prompt
+    met de rauwe sleutelnaam erin (`missing_required`, `voldoet_aan_voorwaarden`
+    lezen als jargon, niet als een uitspraak richting de ondernemer).
+    """
+    if not resultaat.get("voldoet_aan_voorwaarden"):
+        return (
+            "De regeltoets is afgerond: deze verplichting geldt niet voor uw "
+            "bedrijf. Meld dat aan de ondernemer en vermeld dat de uitkomst uit "
+            "RegelRecht komt."
+        )
+    delen = ["De regeltoets is afgerond: de verplichting geldt voor uw bedrijf."]
+    uitkomsten = resultaat.get("uitkomsten") or {}
+    for veld, label in (
+        ("heeft_informatieplicht", "de informatieplicht"),
+        ("heeft_onderzoeksplicht", "de onderzoeksplicht"),
+        ("heeft_energiebesparingsplicht", "de energiebesparingsplicht"),
+    ):
+        if veld in uitkomsten:
+            waarde = "geldt" if uitkomsten[veld] else "geldt niet"
+            delen.append(f"{label.capitalize()} {waarde}.")
+    if uitkomsten.get("volgende_rapportage_deadline"):
+        delen.append(
+            f"Eerstvolgende rapportagedeadline: {uitkomsten['volgende_rapportage_deadline']}."
+        )
+    if uitkomsten.get("rapportage_frequentie_jaren"):
+        delen.append(
+            f"Rapportagefrequentie: elke {uitkomsten['rapportage_frequentie_jaren']} jaar."
+        )
+    delen.append(
+        "Formuleer uw antwoord op basis hiervan en vermeld dat de uitkomst uit "
+        "RegelRecht komt."
+    )
+    return " ".join(delen)
+
+
+def _compose_regel_status(regel_status: dict | None) -> str | None:
+    """Bouw het blok dat vertelt wat de regelloop deze beurt al heeft bepaald.
+
+    `regelloop.volg_regel` draait vóór het model de beurt ziet en haalt zelf op
+    wat hij kan; dit is het enige kanaal waarlangs het model dat te weten komt
+    — om toestemming vragen, de ondernemer een vraag stellen die de wet nodig
+    heeft, of melden dat RegelRecht al een uitkomst gaf. Naar het model van
+    `_compose_bronnen_status`: zelfde precedent, dezelfde redenering ("vertel
+    het model wat de host al weet").
+
+    De tekst bevat bewust GEEN interne veldnamen of wetpaden uit `reden` (die
+    is voor de log, niet voor de prompt) — foutmeldingen komen uit een
+    catalogus in gewone taal, niet uit een f-string met technische
+    identifiers erin (zie `errors.py`).
     """
     if not regel_status:
         return None
     wacht_op = regel_status.get("wacht_op")
-    reden = regel_status.get("reden", "")
     if wacht_op == "toestemming":
         status = (
-            f"{reden} Vraag de ondernemer EXPLICIET om akkoord voordat u deze bron "
-            "raadpleegt of de resultaten ervan gebruikt voor de toetsing. Wacht op "
-            "een duidelijk antwoord; raadpleeg de bron niet zonder dat akkoord."
+            "Voor het energieverbruik uit de Business Wallet is toestemming van "
+            "de ondernemer nodig (PDR-008). Vraag daar EXPLICIET om voordat u die "
+            "bron noemt of gebruikt, en wacht op een duidelijk antwoord."
         )
     elif wacht_op == "opgave":
         status = (
-            f"{reden} Stel deze vraag aan de ondernemer; dit is een gegeven dat "
-            "alleen hij weet en dat via het formulier binnenkomt, niet iets dat u "
-            "zelf kunt opzoeken of aannemen."
+            "Er is een gegeven nodig dat alleen de ondernemer weet. Vraag dat via "
+            "het formulier; dit is geen gegeven dat u zelf kunt opzoeken of "
+            "aannemen."
         )
     elif wacht_op == "onbekend":
         status = (
-            f"{reden} De assistent kan dit op dit moment niet bepalen. Meld dat "
-            "eerlijk aan de ondernemer in plaats van te gokken of de vraag over te "
-            "slaan."
+            "De assistent kan dit op dit moment niet automatisch bepalen. Meld "
+            "dat eerlijk aan de ondernemer in plaats van te gokken of de vraag "
+            "over te slaan."
         )
     else:
-        resultaat = regel_status.get("resultaat") or {}
-        status = (
-            "RegelRecht heeft de toets afgerond (voldoet_aan_voorwaarden: "
-            f"{resultaat.get('voldoet_aan_voorwaarden')}). Formuleer uw antwoord op "
-            "basis van deze uitkomst en de feiten die al bekend zijn, en vermeld dat "
-            "de uitkomst uit RegelRecht komt."
-        )
+        status = _regel_status_klaar_tekst(regel_status.get("resultaat") or {})
     return _load("shared/regel_status.md").replace("{status}", status)
 
 

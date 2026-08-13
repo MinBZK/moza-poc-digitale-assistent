@@ -176,23 +176,6 @@ def _inject_session_kvk(tool_key: str, arguments: dict, kvk: str) -> dict:
     return args
 
 
-def _toestemming_stand(feiten: dict, netbeheerder_al_gezien: bool) -> bool:
-    """Of toestemming voor de Business Wallet als gegeven mag gelden.
-
-    Dit is een AFLEIDING, geen registratie van instemming — er is geen
-    expliciete toestemmingsvlag. Toestemming geldt als gegeven zodra de
-    feitenkaart al een attestatie bevat, of zodra dit gesprek al een
-    `netbeheerder__verbruik`-resultaat heeft gezien (ook als de wallet toen
-    leeg bleek — anders vraagt de host elke beurt opnieuw om akkoord voor een
-    bron die al geraadpleegd is). Een PoC mag toestemming zo afleiden; een
-    systeem dat productie in gaat hoort een vastgelegde instemming te hebben.
-    Open punt, zie NEXT_STEPS.md.
-    """
-    if netbeheerder_al_gezien:
-        return True
-    return any(feit.get("soort") == "attestatie" for feit in feiten.values())
-
-
 def _regel_status_dict(uitkomst: Uitkomst) -> dict:
     """Vertaal `Uitkomst` naar wat de systeemprompt nodig heeft.
 
@@ -576,12 +559,12 @@ class VLAMHost:
         # self.conversations, zodat één opruimmechanisme later allebei dekt -
         # geen van beide heeft nu een TTL.
         self.feiten: dict[str, dict] = {}
-        # Of dit gesprek al een netbeheerder__verbruik-resultaat heeft gezien,
-        # ook als de wallet toen leeg bleek. Nodig voor de toestemmingsafleiding
-        # (_toestemming_stand): zonder deze boekhouding zou de host bij een lege
-        # wallet elke beurt opnieuw om akkoord vragen voor een bron die al
-        # geraadpleegd is.
-        self.netbeheerder_gezien: dict[str, bool] = {}
+        # Toestemming voor de Business Wallet (PDR-008), per gesprek. Een
+        # vastgelegde vlag, geen afleiding: gezet zodra de frontend expliciet
+        # `toestemming: true` stuurt, of zodra een `netbeheerder__verbruik`-
+        # aanroep (van het model, of van de regelloop zelf) slaagt. Eenmaal
+        # `True` blijft `True` binnen de sessie — er is hier geen intrekking.
+        self.toestemming: dict[str, bool] = {}
         # Houdt bij welke servers gelukt/mislukt zijn
         self.server_status: dict[str, str] = {}
 
@@ -844,8 +827,10 @@ class VLAMHost:
             finally:
                 await self._close_request_clients(own_clients)
 
-    async def _regel_status(self, feiten: dict, session_kvk: str, conv_key: str) -> dict:
-        """Draai de regelloop en vertaal de uitkomst naar wat de prompt nodig heeft.
+    async def _regel_status(
+        self, feiten: dict, session_kvk: str, conv_key: str
+    ) -> AsyncGenerator[dict, None]:
+        """Draai de regelloop en yield voortgang, met de uitkomst als laatste item.
 
         Dit is waar de regel de flow overneemt (taak 4): vóórdat het model iets
         ziet, heeft de host al opgehaald wat hij zelf kan. `volg_regel` roept
@@ -855,24 +840,78 @@ class VLAMHost:
         oogst in de feitenkaart (`feiten_uit_tool`) — zonder dat laatste
         verdwijnen de gegevens die de lus zelf ophaalt weer, want `volg_regel`
         werkt op een eigen kopie van `feiten` en geeft die niet terug.
+
+        `volg_regel` roept tools sequentieel aan binnen één coroutine en levert
+        pas bij de allerlaatste stap iets op; zonder een kanaal ertussenuit
+        blijft de UI blind voor wat de host ondertussen raadpleegt, en verschijnt
+        er nooit een `bron_fout` als zo'n aanroep faalt (PDR-011). De achtergrond-
+        taak zet elk tussenresultaat op een `asyncio.Queue` zodra het gebeurt.
+
+        Elk item draagt `type` "tool" of "bron_fout" — bedoeld voor de client —
+        behalve het laatste: dat draagt `type` "regel_status" met de uitkomst
+        voor de systeemprompt, en gaat niet naar de client (de aanroeper filtert
+        'm eruit).
         """
+        queue: asyncio.Queue[dict] = asyncio.Queue()
+
         async def call_tool(tool_key: str, arguments: dict) -> str:
             arguments = _inject_session_kvk(tool_key, arguments, session_kvk)
-            resultaat = await self.registry.call_tool(tool_key, arguments)
+            await queue.put(
+                {"type": "tool", "message": _tool_label(tool_key), "tool": tool_key}
+            )
+            resultaat, fout = await _bron_aanroep(
+                partial(self.registry.call_tool, tool_key, arguments), tool_key, arguments
+            )
+            if fout:
+                await queue.put(naar_event(fout, "bron_fout"))
             feiten.update(feiten_uit_tool(tool_key, resultaat))
-            if tool_key == "netbeheerder__verbruik":
-                self.netbeheerder_gezien[conv_key] = True
+            if tool_key == "netbeheerder__verbruik" and fout is None:
+                self.toestemming[conv_key] = True
             return resultaat
 
-        toestemming = _toestemming_stand(feiten, self.netbeheerder_gezien.get(conv_key, False))
-        uitkomst = await volg_regel(
-            law=_INFORMATIEPLICHT_LAW,
-            service=REGELRECHT_DEFINITIES_ALLOWLIST[_INFORMATIEPLICHT_LAW]["service"],
-            feiten=feiten,
-            call_tool=call_tool,
-            toestemming=toestemming,
-        )
-        return _regel_status_dict(uitkomst)
+        async def draai() -> None:
+            try:
+                uitkomst = await volg_regel(
+                    law=_INFORMATIEPLICHT_LAW,
+                    service=REGELRECHT_DEFINITIES_ALLOWLIST[_INFORMATIEPLICHT_LAW]["service"],
+                    feiten=feiten,
+                    call_tool=call_tool,
+                    toestemming=self.toestemming.get(conv_key, False),
+                )
+            except Exception:
+                # Een onverwachte fout hier (bv. onleesbare JSON van een bron)
+                # mag de generator niet eeuwig laten wachten op een item dat
+                # nooit komt: liever "onbekend" dan een hangende stream.
+                logger.exception("Regelloop onverwacht gefaald [conv_key=%r]", conv_key)
+                uitkomst = Uitkomst(
+                    klaar=False, resultaat=None, wacht_op="onbekend", reden=""
+                )
+            await queue.put({"type": "regel_status", "status": _regel_status_dict(uitkomst)})
+
+        taak = asyncio.create_task(draai())
+        try:
+            while True:
+                item = await queue.get()
+                yield item
+                if item["type"] == "regel_status":
+                    break
+        finally:
+            if not taak.done():
+                taak.cancel()
+
+    async def _regel_status_zonder_events(
+        self, feiten: dict, session_kvk: str, conv_key: str
+    ) -> dict | None:
+        """`_regel_status` afdraaien zonder de tussentijdse events door te geven.
+
+        Voor `chat()` (niet-streamend): er is geen kanaal om `tool`/`bron_fout`
+        naar de client te sturen, dus alleen de uiteindelijke regel_status telt.
+        """
+        status = None
+        async for event in self._regel_status(feiten, session_kvk, conv_key):
+            if event["type"] == "regel_status":
+                status = event["status"]
+        return status
 
     async def chat(
         self,
@@ -880,6 +919,7 @@ class VLAMHost:
         user_message: str,
         mode: str = "vlam",
         session_kvk: str = "",
+        toestemming: bool | None = None,
         vlam_api_key_override: str = "",
         claude_api_key_override: str = "",
     ) -> str:
@@ -889,17 +929,19 @@ class VLAMHost:
         Beide modi hebben toegang tot dezelfde MCP-tools (indien beschikbaar).
         session_kvk: het server-side bepaalde KvK-nummer van de sessie (PDR-009);
         de host injecteert dit bij elke bron-aanroep.
+        toestemming: expliciete toestemming voor de Business Wallet (PDR-008)
+        van dít verzoek. `True` legt de vlag voor de rest van de sessie vast;
+        `None`/`False` laat een eerder gegeven toestemming ongemoeid (geen
+        intrekking via dit veld).
         """
         conv_key = self._conv_key(session_kvk, session_id, mode)
         if conv_key not in self.conversations:
             self.conversations[conv_key] = []
         messages = self.conversations[conv_key]
         feiten = self.feiten.setdefault(conv_key, {})
-        # De regel vóór het model (taak 4): dit haalt op wat de host zelf kan en
-        # stopt waar toestemming, een opgave van de ondernemer, of een onbekend
-        # veld in de weg zit. Vóór de LLM-aanroep, zodat het model de uitkomst
-        # al kent in plaats van 'm zelf te moeten orkestreren.
-        regel_status = await self._regel_status(feiten, session_kvk, conv_key)
+        if toestemming:
+            self.toestemming[conv_key] = True
+        use_cli = mode.startswith("cli:")
         # Zie chat_stream: bij een leeg of onvolledig modelantwoord draaien we
         # de hele beurt terug (_HERSTEL_CODES), anders blokkeert een
         # assistent-bericht dat de respondent nooit zo zag elke volgende beurt
@@ -910,12 +952,33 @@ class VLAMHost:
         async with self._request_clients(
             vlam_api_key_override, claude_api_key_override, mode
         ) as (claude, vlam):
+            # De regel vóór het model (taak 4), pas ná de sleutelcontrole: een
+            # verzoek zonder bruikbare sleutel eindigt hier zonder ooit een bron
+            # te raadplegen (gelijk aan chat_stream). Alleen op het
+            # MCP-transport — CLI heeft geen execute_law-tool en blijft
+            # modelgeorkestreerd via regelrecht__check (cli_transport.md).
             if mode == "vlam":
                 if not vlam:
                     return _geen_sleutel_fout("vlam").tekst
-                antwoord = await self._chat_vlam(messages, session_kvk, vlam, feiten, regel_status)
+                regel_status = (
+                    None
+                    if use_cli
+                    else await self._regel_status_zonder_events(feiten, session_kvk, conv_key)
+                )
+                antwoord = await self._chat_vlam(
+                    messages, session_kvk, vlam, feiten, regel_status, conv_key
+                )
             else:
-                antwoord = await self._chat_claude(messages, session_kvk, claude, feiten, regel_status)
+                if not claude.api_key:
+                    return _geen_sleutel_fout("claude").tekst
+                regel_status = (
+                    None
+                    if use_cli
+                    else await self._regel_status_zonder_events(feiten, session_kvk, conv_key)
+                )
+                antwoord = await self._chat_claude(
+                    messages, session_kvk, claude, feiten, regel_status, conv_key
+                )
             if antwoord in _HERSTEL_TEKSTEN:
                 del messages[herstelpunt:]
             return antwoord
@@ -930,6 +993,7 @@ class VLAMHost:
         user_message: str,
         mode: str = "vlam",
         session_kvk: str = "",
+        toestemming: bool | None = None,
         vlam_api_key_override: str = "",
         claude_api_key_override: str = "",
     ) -> AsyncGenerator[dict, None]:
@@ -947,6 +1011,9 @@ class VLAMHost:
         `answer` en `error` zijn de eindpunten: er komt er altijd precies één,
         gevolgd door `done`. `bron_fout` is tussentijds — een bron viel uit maar
         het gesprek loopt door (PDR-011).
+
+        toestemming: expliciete toestemming voor de Business Wallet (PDR-008)
+        van dít verzoek. Zie `chat()`.
         """
         use_cli = mode.startswith("cli:")
         llm = mode.split(":")[-1] if use_cli else mode
@@ -965,6 +1032,8 @@ class VLAMHost:
                     self.conversations[conv_key] = []
                 messages = self.conversations[conv_key]
                 feiten = self.feiten.setdefault(conv_key, {})
+                if toestemming:
+                    self.toestemming[conv_key] = True
                 # Beginstand van deze beurt. Loopt de beurt stuk op een leeg of
                 # onvolledig modelantwoord (_HERSTEL_CODES), dan draaien we
                 # hierop terug: een assistent-bericht dat de respondent nooit zo
@@ -986,22 +1055,30 @@ class VLAMHost:
                     # De regel vóór het model (taak 4), vóór de LLM-aanroep. Alleen
                     # voor het MCP-transport: het CLI-transport heeft geen
                     # execute_law-tool (cli_transport.md) en blijft modelgeorkestreerd
-                    # via regelrecht__check.
-                    regel_status = (
-                        None if use_cli else await self._regel_status(feiten, session_kvk, conv_key)
-                    )
+                    # via regelrecht__check. De tussentijdse events (tool/bron_fout)
+                    # gaan meteen de stream in, zodat de respondent ziet dat er iets
+                    # geraadpleegd wordt terwijl het gebeurt, niet pas achteraf.
+                    regel_status = None
+                    if not use_cli:
+                        async for event in self._regel_status(feiten, session_kvk, conv_key):
+                            if event["type"] == "regel_status":
+                                regel_status = event["status"]
+                            else:
+                                yield event
                     if llm == "vlam":
                         gen = (
                             self._chat_vlam_cli_stream(messages, session_kvk, vlam, feiten)
                             if use_cli
-                            else self._chat_vlam_stream(messages, session_kvk, vlam, feiten, regel_status)
+                            else self._chat_vlam_stream(
+                                messages, session_kvk, vlam, feiten, regel_status, conv_key
+                            )
                         )
                     else:
                         gen = (
                             self._chat_cli_stream(messages, session_kvk, claude, feiten)
                             if use_cli
                             else self._chat_claude_stream(
-                                messages, session_kvk, claude, feiten, regel_status
+                                messages, session_kvk, claude, feiten, regel_status, conv_key
                             )
                         )
 
@@ -1043,6 +1120,7 @@ class VLAMHost:
         claude,
         feiten: dict,
         regel_status: dict | None = None,
+        conv_key: str = "",
     ) -> AsyncGenerator[dict, None]:
         """Claude agentic loop die status-events yieldt.
 
@@ -1052,6 +1130,8 @@ class VLAMHost:
         sessiekaart uit `self.feiten` (by reference) — alleen `.update()`en.
         `regel_status` is de uitkomst van de regelloop van vóór deze beurt
         (`_regel_status`); `None` als die niet gedraaid is (CLI-transport).
+        `conv_key` legt toestemming vast (PDR-008) als het model zelf
+        `netbeheerder__verbruik` aanroept — zie `_execute_tools`.
         """
         tools = self.registry.get_anthropic_tools()
         system_prompt = self._system_prompt("claude", regel_status=regel_status)
@@ -1103,7 +1183,7 @@ class VLAMHost:
                     "tool": tu.name,
                 }
 
-            tool_results, bronfouten = await self._execute_tools(tool_uses, session_kvk)
+            tool_results, bronfouten = await self._execute_tools(tool_uses, session_kvk, conv_key)
             for fout in bronfouten:
                 yield naar_event(fout, "bron_fout")
             # Emit lopende zaak als case-event bij succesvolle indiening
@@ -1128,6 +1208,7 @@ class VLAMHost:
         vlam,
         feiten: dict,
         regel_status: dict | None = None,
+        conv_key: str = "",
     ) -> AsyncGenerator[dict, None]:
         """VLAM agentic loop (native OpenAI tool-calling) die status-events yieldt.
 
@@ -1135,7 +1216,8 @@ class VLAMHost:
         `feiten` is de sessiekaart uit `self.feiten` (by reference) — alleen
         `.update()`en. `regel_status` is de uitkomst van de regelloop van vóór
         deze beurt (`_regel_status`); `None` als die niet gedraaid is
-        (CLI-transport).
+        (CLI-transport). `conv_key` legt toestemming vast (PDR-008) als het
+        model zelf `netbeheerder__verbruik` aanroept.
         """
         tools_openai = self.registry.get_openai_tools()
         system_prompt = self._system_prompt("vlam", regel_status=regel_status)
@@ -1223,6 +1305,8 @@ class VLAMHost:
                     yield naar_event(fout, "bron_fout")
 
                 feiten.update(feiten_uit_tool(tool_key, result))
+                if tool_key == "netbeheerder__verbruik" and fout is None:
+                    self.toestemming[conv_key] = True
                 maatregelen_deze_beurt = (
                     maatregelen_voor_event(tool_key, result) or maatregelen_deze_beurt
                 )
@@ -1433,12 +1517,14 @@ class VLAMHost:
         claude,
         feiten: dict,
         regel_status: dict | None = None,
+        conv_key: str = "",
     ) -> str:
         """`claude` is de client van dít verzoek (MVP-02), verplicht meegegeven.
 
         `feiten` is de sessiekaart uit `self.feiten` (by reference) — alleen
         `.update()`en. `regel_status` is de uitkomst van de regelloop van vóór
-        deze beurt (`_regel_status`).
+        deze beurt (`_regel_status`). `conv_key` legt toestemming vast
+        (PDR-008) als het model zelf `netbeheerder__verbruik` aanroept.
         """
         if not claude.api_key:
             return _geen_sleutel_fout("claude").tekst
@@ -1475,7 +1561,7 @@ class VLAMHost:
                 text = "\n".join(b.text for b in assistant_content if hasattr(b, "text"))
                 return _antwoord_tekst(text, _is_afgekapt(response), feiten)
 
-            tool_results, _ = await self._execute_tools(tool_uses, session_kvk)
+            tool_results, _ = await self._execute_tools(tool_uses, session_kvk, conv_key)
             for tu, tr in zip(tool_uses, tool_results, strict=True):
                 feiten.update(feiten_uit_tool(tu.name, tr.get("content", "")))
             messages.append({"role": "user", "content": tool_results})
@@ -1493,12 +1579,14 @@ class VLAMHost:
         vlam,
         feiten: dict,
         regel_status: dict | None = None,
+        conv_key: str = "",
     ) -> str:
         """`vlam` is de client van dít verzoek (MVP-02), verplicht meegegeven.
 
         `feiten` is de sessiekaart uit `self.feiten` (by reference) — alleen
         `.update()`en. `regel_status` is de uitkomst van de regelloop van vóór
-        deze beurt (`_regel_status`).
+        deze beurt (`_regel_status`). `conv_key` legt toestemming vast
+        (PDR-008) als het model zelf `netbeheerder__verbruik` aanroept.
         """
         tools_openai = self.registry.get_openai_tools()
         system_prompt = self._system_prompt("vlam", regel_status=regel_status)
@@ -1554,11 +1642,13 @@ class VLAMHost:
                     logger.info(
                         "Tool-aanroep [vlam]: %s (velden: %s)", tool_key, _arg_keys(arguments)
                     )
-                    result, _ = await _bron_aanroep(
+                    result, fout = await _bron_aanroep(
                         partial(self.registry.call_tool, tool_key, arguments),
                         tool_key,
                         arguments,
                     )
+                    if tool_key == "netbeheerder__verbruik" and fout is None:
+                        self.toestemming[conv_key] = True
 
                 feiten.update(feiten_uit_tool(tool_key, result))
                 openai_messages.append(
@@ -1575,12 +1665,15 @@ class VLAMHost:
     # Helpers
     # ------------------------------------------------------------------
 
-    async def _execute_tools(self, tool_uses, session_kvk: str) -> tuple[list[dict], list]:
+    async def _execute_tools(
+        self, tool_uses, session_kvk: str, conv_key: str = ""
+    ) -> tuple[list[dict], list]:
         """Voer Anthropic tool_use-blokken uit via MCP-servers.
 
         Geeft de tool-resultaten terug plus de bronfouten die onderweg optraden,
         zodat de stream ze als `bron_fout`-event kan tonen terwijl het gesprek
-        gewoon doorloopt.
+        gewoon doorloopt. `conv_key` legt toestemming vast (PDR-008) als het
+        model zelf `netbeheerder__verbruik` aanroept en die aanroep slaagt.
         """
         tool_results = []
         bronfouten = []
@@ -1594,6 +1687,8 @@ class VLAMHost:
             )
             if fout:
                 bronfouten.append(fout)
+            elif tool_use.name == "netbeheerder__verbruik":
+                self.toestemming[conv_key] = True
 
             tool_results.append(
                 {

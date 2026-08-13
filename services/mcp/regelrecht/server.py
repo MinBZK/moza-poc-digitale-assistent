@@ -246,6 +246,15 @@ def _simplify_result(structured: dict, definities: dict | None = None) -> dict:
 
     # Hoofdresultaten
     result["voldoet_aan_voorwaarden"] = structured.get("requirements_met", False)
+    # Onderscheidt "de verplichting geldt niet" (alles getoetst, niets mist)
+    # van "nog niet vast te stellen" (er mist nog een gegeven). Zonder dit
+    # veld is een definitieve negatieve uitkomst niet te onderscheiden van een
+    # onvolledige: beide geven hier `voldoet_aan_voorwaarden: False` terug.
+    # Alleen doorgeven als de engine het meegaf: ontbreekt het (oudere
+    # servervorm), dan moet de host-kant de voorzichtige aanname kunnen maken
+    # in plaats van hier stilzwijgend "niets mist" in te vullen.
+    if "missing_required" in structured:
+        result["missing_required"] = structured["missing_required"]
     result["uitkomsten"] = structured.get("output", {})
 
     # De waarden waarop de regel feitelijk rekende. Zonder deze moet het model

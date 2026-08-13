@@ -88,6 +88,45 @@ async def test_onbekend_veld_stopt_de_lus_in_plaats_van_te_raden():
     assert "OMZET_2025" in uit.reden
 
 
+async def test_definitieve_negatieve_uitkomst_is_klaar_niet_onbekend():
+    """`missing_required: False` zonder ontbrekende velden is een echt "nee".
+
+    De engine heeft dan alles getoetst en niets mist; `voldoet_aan_voorwaarden`
+    staat op False omdat de verplichting simpelweg niet geldt - dat is geen
+    onbekende toestand.
+    """
+    call_tool = _engine([
+        {"voldoet_aan_voorwaarden": False, "missing_required": False, "uitkomsten": {}},
+    ])
+    uit = await volg_regel(
+        law="omgevingswet/energiebesparing/informatieplicht",
+        service="RVO",
+        feiten={},
+        call_tool=call_tool,
+        toestemming=True,
+    )
+    assert uit.klaar is True
+    assert uit.wacht_op is None
+    assert uit.resultaat["voldoet_aan_voorwaarden"] is False
+
+
+async def test_ontbrekend_missing_required_blijft_voorzichtig_onbekend():
+    """Zonder het veld `missing_required` (oudere servervorm) niet aannemen
+    dat het een definitief "nee" is."""
+    call_tool = _engine([
+        {"voldoet_aan_voorwaarden": False, "uitkomsten": {}},
+    ])
+    uit = await volg_regel(
+        law="omgevingswet/energiebesparing/informatieplicht",
+        service="RVO",
+        feiten={},
+        call_tool=call_tool,
+        toestemming=True,
+    )
+    assert uit.klaar is False
+    assert uit.wacht_op == "onbekend"
+
+
 async def test_lus_loopt_niet_eindeloos_als_een_bron_niets_oplevert():
     """Een bron die het gevraagde veld niet levert mag geen oneindige lus geven.
 

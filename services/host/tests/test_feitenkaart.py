@@ -190,29 +190,29 @@ def test_regelrecht_levert_drempels_en_oordelen():
     assert feiten["VOLGENDE_DEADLINE"]["waarde"] == "2027-12-01"
 
 
-def test_gebruikte_waarde_uit_regelrecht_houdt_de_echte_bron():
+def test_gebruikte_waarde_uit_regelrecht_is_een_echo_geen_attestatie():
     """`gebruikte_waarden` echoot terug wat wíj de engine gaven.
 
-    Een verbruikscijfer dat zo terugkomt hoort de Business Wallet als bron te
-    houden, niet RegelRecht - anders schrijven we een attestatie van de
-    netbeheerder toe aan de wet.
+    Dat kan een feit uit de feitenkaart zijn, maar net zo goed een override
+    die het model verzon - die twee zijn hier niet te onderscheiden. Krijgt
+    zo'n waarde de soort van de oorspronkelijke bron (`attestatie`), dan zou
+    een modelgestuurde override kunnen doorgaan voor een bevestigde attestatie
+    van de netbeheerder, en de toestemmingsafleiding daarop kunnen leunen.
     """
     resultaat = _envelope(
         {"gebruikte_waarden": {"JAARLIJKS_GASVERBRUIK_M3": 140000}}
     )
     feiten = feiten_uit_tool("regelrecht__execute_law", resultaat)
     assert feiten["GAS_M3"]["waarde"] == 140000
-    assert feiten["GAS_M3"]["bron"] == "Business Wallet"
-    assert feiten["GAS_M3"]["soort"] == "attestatie"
+    assert feiten["GAS_M3"]["soort"] == "echo"
 
 
-def test_gebruikte_waarde_zonder_route_valt_terug_op_regelrecht():
-    """Een veld dat `regelrouting` niet kent, blijft aan RegelRecht toegeschreven."""
+def test_gebruikte_waarde_zonder_route_gebruikt_de_veldnaam_als_sleutel():
+    """Een veld dat `regelrouting` niet kent, blijft onder zijn eigen naam staan."""
     resultaat = _envelope({"gebruikte_waarden": {"ONBEKEND_VELD": 42}})
     feiten = feiten_uit_tool("regelrecht__execute_law", resultaat)
     assert feiten["ONBEKEND_VELD"]["waarde"] == 42
-    assert feiten["ONBEKEND_VELD"]["bron"] == "RegelRecht"
-    assert feiten["ONBEKEND_VELD"]["soort"] == "wetsconstante"
+    assert feiten["ONBEKEND_VELD"]["soort"] == "echo"
 
 
 def test_oordeel_met_expliciete_null_levert_geen_feit_op():

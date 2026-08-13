@@ -68,6 +68,27 @@ def test_zonder_input_geen_leeg_veld(regelrecht):
     assert "gebruikte_waarden" not in resultaat
 
 
+def test_missing_required_bereikt_het_model(regelrecht):
+    """Het onderscheid tussen "geldt niet" en "nog onvolledig" zit in dit veld.
+
+    `requirements_met: False` alléén is dubbelzinnig: dat geeft zowel een
+    definitieve negatieve uitkomst als een onvolledige toets. `_simplify_result`
+    liet `missing_required` tot nu toe onder de tafel vallen.
+    """
+    resultaat = regelrecht._simplify_result(
+        {"requirements_met": False, "missing_required": False, "output": {}, "input": {}}
+    )
+    assert resultaat["missing_required"] is False
+
+
+def test_missing_required_ontbreekt_als_de_engine_het_niet_meegeeft(regelrecht):
+    """Geen stille default hier: geeft de engine het veld niet mee (oudere
+    servervorm), dan moet de host-kant zelf de voorzichtige aanname kunnen
+    maken - niet deze functie die alvast "niets mist" invult."""
+    resultaat = regelrecht._simplify_result({"requirements_met": False})
+    assert "missing_required" not in resultaat
+
+
 # --- _definities_voor: caching, en juist NIET cachen bij een mislukte ophaal ---
 
 

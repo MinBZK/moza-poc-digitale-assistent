@@ -111,22 +111,27 @@ _UITKOMST_VELDEN = {
 
 
 def _herkomst_gebruikte_waarden(waarden: dict) -> dict:
-    """Herkomst per veld i.p.v. één vaste bron voor de hele dict.
+    """Herkomst voor `gebruikte_waarden`: een echo, nooit een eigen waarneming.
 
-    RegelRecht echoot hier terug wat wíj de engine als invoer gaven. Een
-    verbruikscijfer dat zo terugkomt hoort de Business Wallet als bron te
-    houden, niet de wet die het alleen doorgaf - anders schrijven we een
-    attestatie van de netbeheerder toe aan RegelRecht, en straks een opgave
-    van de ondernemer ook.
+    RegelRecht geeft hier terug wat WIJ als invoer instuurden — dat kan een
+    feit uit de feitenkaart zijn dat de host er zelf in zette, maar net zo
+    goed een override die het model verzon. Die twee zijn hier niet te
+    onderscheiden, dus krijgt geen enkele waarde hier de soort van de
+    oorspronkelijke bron (`attestatie`/`registratie`/`opgave`): dat zou een
+    modelgestuurde override laten doorgaan voor een bevestigde attestatie.
+    `echo` maakt expliciet dat dit alleen is wat wij instuurden.
     """
     feiten: dict[str, dict] = {}
     for naam, waarde in waarden.items():
         if waarde is None:
             continue
         veld = regelrouting.route(naam)
-        bron, soort = (veld.bron, veld.soort) if veld else ("RegelRecht", "wetsconstante")
         sleutel = veld.feitnaam if veld and veld.feitnaam else naam
-        feiten[sleutel] = {"waarde": waarde, "bron": bron, "soort": soort}
+        feiten[sleutel] = {
+            "waarde": waarde,
+            "bron": "RegelRecht (doorgegeven invoer)",
+            "soort": "echo",
+        }
     return feiten
 
 
