@@ -214,8 +214,10 @@ async def _definities_voor(law: str, service: str) -> dict:
             or {}
         )
     except Exception as e:
+        # Niet cachen: een mislukte ophaal is geen weten-dat-het-leeg-is, en
+        # anders legt één tijdelijke hik de drempelwaarden blijvend plat.
         logger.warning("Definities ophalen mislukt (%s): %s", law, e)
-        definities = {}
+        return {}
     _definities_cache[sleutel] = definities
     return definities
 

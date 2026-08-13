@@ -7,6 +7,7 @@ doorgeefluik moet het model getallen noemen die het niet heeft, terwijl de
 prompt verbiedt ze uit eigen kennis te halen.
 """
 
+import asyncio
 import importlib.util
 from pathlib import Path
 
@@ -65,3 +66,76 @@ def test_zonder_input_geen_leeg_veld(regelrecht):
         {"requirements_met": False, "output": {}, "input": {}}
     )
     assert "gebruikte_waarden" not in resultaat
+
+
+# --- _definities_voor: caching, en juist NIET cachen bij een mislukte ophaal ---
+
+
+def _rpc_structuredcontent(definities: dict) -> dict:
+    return {
+        "structuredContent": {
+            "rule_spec": {"properties": {"definitions": definities}},
+        }
+    }
+
+
+def test_definities_voor_cachet_bij_succes(regelrecht, monkeypatch):
+    """Een tweede aanroep voor dezelfde wet doet geen nieuwe RPC."""
+    regelrecht._definities_cache.clear()
+    aanroepen = []
+
+    async def nep_rpc(method, params):
+        aanroepen.append(params)
+        return _rpc_structuredcontent({"DREMPEL_GAS_M3": 25000})
+
+    monkeypatch.setattr(regelrecht, "_rpc_call", nep_rpc)
+    eerste = asyncio.run(regelrecht._definities_voor("wet/succes", "RVO"))
+    tweede = asyncio.run(regelrecht._definities_voor("wet/succes", "RVO"))
+
+    assert eerste == {"DREMPEL_GAS_M3": 25000}
+    assert tweede == {"DREMPEL_GAS_M3": 25000}
+    assert len(aanroepen) == 1
+
+
+def test_definities_voor_cachet_niet_bij_falen(regelrecht, monkeypatch):
+    """Een mislukte ophaal geeft {} terug, maar legt de wet niet blijvend plat:
+    een volgende aanroep probeert opnieuw in plaats van uit een lege cache te
+    lezen."""
+    regelrecht._definities_cache.clear()
+    aanroepen = []
+
+    async def nep_rpc_faalt(method, params):
+        aanroepen.append(params)
+        raise RuntimeError("RegelRecht RPC fout: tijdelijk niet bereikbaar")
+
+    monkeypatch.setattr(regelrecht, "_rpc_call", nep_rpc_faalt)
+    resultaat = asyncio.run(regelrecht._definities_voor("wet/falen", "RVO"))
+
+    assert resultaat == {}
+    assert "RVO/wet/falen" not in regelrecht._definities_cache
+
+    asyncio.run(regelrecht._definities_voor("wet/falen", "RVO"))
+    assert len(aanroepen) == 2  # opnieuw geprobeerd, niet uit cache beantwoord
+
+
+def test_definities_voor_herstelt_na_falen(regelrecht, monkeypatch):
+    """Na een mislukte en daarna geslaagde ophaal staat de goede waarde in de
+    cache."""
+    regelrecht._definities_cache.clear()
+    pogingen = {"aantal": 0}
+
+    async def nep_rpc_wisselend(method, params):
+        pogingen["aantal"] += 1
+        if pogingen["aantal"] == 1:
+            raise RuntimeError("tijdelijke hik")
+        return _rpc_structuredcontent({"DREMPEL_ELEKTRICITEIT_KWH": 50000})
+
+    monkeypatch.setattr(regelrecht, "_rpc_call", nep_rpc_wisselend)
+    eerste = asyncio.run(regelrecht._definities_voor("wet/herstel", "RVO"))
+    tweede = asyncio.run(regelrecht._definities_voor("wet/herstel", "RVO"))
+
+    assert eerste == {}
+    assert tweede == {"DREMPEL_ELEKTRICITEIT_KWH": 50000}
+    assert regelrecht._definities_cache["RVO/wet/herstel"] == {
+        "DREMPEL_ELEKTRICITEIT_KWH": 50000
+    }
