@@ -14,8 +14,19 @@ PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
 VOORBEELDEN = sorted((PROMPTS / "examples").glob("*.md"))
 
 # Waarden uit de mockpersona's die nooit letterlijk in een voorbeeld horen: als
-# het model ze imiteert, noemt het het bedrijf van iemand anders.
-_VERBODEN_LETTERLIJK = ("Koffiezaak Noon", "Test BV Donald", "Hoefweg 210", "Meent 88")
+# het model ze imiteert, noemt het het bedrijf van iemand anders. Dit vangt ook
+# SBI-activiteit en werkzame-personen-getallen: voor "Kwekerij De Bloesem" is
+# "Teelt van appels en peren" plausibel genoeg om niet op te vallen, wat het
+# juist het slechtste soort fout maakt.
+_VERBODEN_LETTERLIJK = (
+    "Koffiezaak Noon",
+    "Test BV Donald",
+    "Hoefweg 210",
+    "Meent 88",
+    "café (SBI 56102)",
+    "01241 - Teelt van appels en peren",
+    "Werkzame personen: 1",
+)
 
 
 def test_de_prompt_bevat_het_slotblok():

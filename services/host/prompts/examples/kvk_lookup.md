@@ -11,9 +11,7 @@ Uw bedrijf staat als volgt geregistreerd bij de KvK:
 - Handelsnaam: {{BEDRIJFSNAAM}}
 - KvK-nummer: {{KVK_NUMMER}}
 - Rechtsvorm: {{RECHTSVORM}}
-- SBI-activiteit: 01241 - Teelt van appels en peren
 - Vestigingsadres: {{VESTIGINGSADRES}}
-- Werkzame personen: 1
 - Gebruiksdoel pand: {{GEBRUIKSDOEL}}
 
 Bron: KvK Handelsregister

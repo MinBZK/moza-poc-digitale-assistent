@@ -19,7 +19,7 @@ Assistent (pas NA toestemming: na kvk__mijn_bedrijf, netbeheerder__verbruik [Bus
 "Dank u. Ik heb het voorwerk voor u gedaan. Dit heb ik met uw toestemming geraadpleegd:
 
 **Geraadpleegde bronnen**
-- KvK Handelsregister: {{BEDRIJFSNAAM}}, KvK {{KVK_NUMMER}}, café (SBI 56102), {{VESTIGINGSADRES}} - geen woonfunctie.
+- KvK Handelsregister: {{BEDRIJFSNAAM}}, KvK {{KVK_NUMMER}}, {{VESTIGINGSADRES}}. Woonfunctie: {{WOONFUNCTIE}}.
 - Uw Business Wallet: {{ELEKTRICITEIT_KWH}} kWh elektriciteit en {{GAS_M3}} m³ gas (peiljaar {{PEILJAAR}}). Uw netbeheerder gaf deze attestatie af. U hebt hem met mij gedeeld.
 - RegelRecht (art. 5.15d Besluit activiteiten leefomgeving): uw elektriciteitsverbruik ligt boven de drempel uit RegelRecht. **De informatieplicht geldt {{OORDEEL_INFORMATIEPLICHT}} voor uw bedrijf.**
 
