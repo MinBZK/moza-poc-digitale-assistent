@@ -28,6 +28,12 @@ from dataclasses import dataclass
 _KLINKERGROEP = re.compile(r"[aeiouyáéíóúàèìòùäëïöü]+", re.IGNORECASE)
 _WOORD = re.compile(r"[A-Za-zÀ-ÿ']+")
 
+# Einde van een zin: een leesteken, eventueel gevolgd door een sluitend
+# aanhalingsteken of haakje. Zonder die staart telt een geciteerde vraag
+# ('... kunt u vragen: "Hoeveel verbruikt mijn bedrijf?"') als onafgemaakt.
+_EINDE = re.compile(r"[.!?][)\"'”’]*$")
+_SPLITS = re.compile(r"(?<=[.!?])[)\"'”’]*\s+")
+
 # De grens die `prompts/blocks/shared/tone.md` zelf stelt.
 MAX_WOORDEN_PER_ZIN = 15
 
@@ -59,18 +65,29 @@ def _zinnen_uit(tekst: str, alleen_proza: bool) -> list[str]:
             continue
         schoon = re.sub(r"^[-*•]\s*", "", schoon)
         schoon = re.sub(r"^\d+[.)]\s*", "", schoon)
-        if schoon.endswith(":"):
-            # Een kopregel boven een opsomming ("Dit heb ik geraadpleegd:").
-            # Niet aan de volgende zin plakken - dat maakte er schijnzinnen van
-            # dertig woorden van - en zelf niet op lengte beoordelen.
-            continue
-        if alleen_proza and not schoon.endswith((".", "!", "?")):
-            # Een opsommingsregel zonder eindleesteken; die hoort niet als zin
-            # geteld te worden.
-            continue
+        if alleen_proza and not _EINDE.search(schoon):
+            # De regel loopt niet af op een eindleesteken. Dat is een
+            # opsommingsregel ("Handelsnaam: Test BV") of een kopregel boven een
+            # opsomming ("Dit heb ik geraadpleegd:"), en die horen niet als zin
+            # te tellen: aan de volgende regel geplakt maken ze er schijnzinnen
+            # van dertig woorden van.
+            #
+            # Alleen het slotfragment weggooien, niet de hele regel. Zulke
+            # kopregels dragen vaak eerst een paar complete zinnen ("Dank u. Ik
+            # heb het voorwerk voor u gedaan. Dit heb ik geraadpleegd:") en die
+            # zijn wel degelijk antwoordtekst. De hele regel laten vallen liet
+            # dertig complete zinnen in de voorbeelden ongemeten, waaronder een
+            # van zeventien woorden - een overschrijding die de test hoorde te
+            # vangen en niet zag.
+            compleet = [
+                deel for deel in _SPLITS.split(schoon) if _EINDE.search(deel)
+            ]
+            if not compleet:
+                continue
+            schoon = " ".join(compleet)
         regels.append(schoon)
     samen = " ".join(regels)
-    return [z.strip() for z in re.split(r"(?<=[.!?])\s+", samen) if z.strip()]
+    return [z.strip() for z in _SPLITS.split(samen) if z.strip()]
 
 
 def meet(tekst: str, alleen_proza: bool = True) -> Leesbaarheid | None:

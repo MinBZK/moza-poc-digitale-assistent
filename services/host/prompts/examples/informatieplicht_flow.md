@@ -33,7 +33,7 @@ U hoeft dus niets op te zoeken. Om te bepalen wélke maatregelen voor uw zaak ge
 1. Heeft het bedrijf een koel- of vriesinstallatie (koelcel, koelmeubel)?
 2. Heeft het bedrijf een afzuiginstallatie (keuken of ruimteventilatie)?"
 
-(De assistent heeft deze vragen afgelezen uit regelrecht__execute_law met law "omgevingswet/energiebesparing/maatregelen": met lege parameters aangeroepen meldt de tool de benodigde_feiten - de vraagteksten komen uit de machine-uitvoerbare regel zelf.)
+(De assistent las deze vragen af uit regelrecht__execute_law, law "omgevingswet/energiebesparing/maatregelen". Roep die tool met lege parameters aan, dan meldt hij de benodigde_feiten. De vraagteksten komen dus uit de regel zelf.)
 
 Gebruiker: "Ja allebei."
 

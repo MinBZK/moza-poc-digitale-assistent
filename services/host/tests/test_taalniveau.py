@@ -9,6 +9,7 @@ Deze tests bewaken de vorm, niet het begrip. Zie de docstring van taalniveau.py
 voor wat de maat wél en niet zegt.
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -17,10 +18,30 @@ from taalniveau import MAX_WOORDEN_PER_ZIN, Leesbaarheid, meet
 PROMPTS = Path(__file__).resolve().parents[1] / "prompts"
 VOORBEELDEN = sorted((PROMPTS / "examples").glob("*.md"))
 
-# Ondergrens voor de leesbaarheidsindex op de voorbeelden. Zie de docstring van
-# test_voorbeeldantwoorden_gebruiken_ook_alledaagse_woorden voor waarom dit 55 is
-# en niet de 60 die de moduledocstring als "vlot leesbaar" noemt.
-MIN_SCORE = 55
+# De leesbaarheidsindex van vandaag, per voorbeeld, als ondergrens.
+#
+# Bewust geen gezamenlijke drempel. De spreiding loopt van 25,5 tot 93,5 en dat
+# verschil zit niet in slordigheid maar in wat er te zeggen valt: een voorbeeld
+# dat wetten citeert draagt "Besluit activiteiten leefomgeving" en
+# "milieubelastende activiteiten", en die namen zijn niet te vereenvoudigen
+# zonder ze onjuist te maken. Eén drempel dwingt dan óf tot onwaarheid óf tot een
+# getal dat zo laag staat dat het niets meer tegenhoudt.
+#
+# Wat een ratel wél kan: bewaken dat een voorbeeld niet juridischer wordt dan het
+# was. Gaat een score omhoog, werk dan de waarde hier bij - dat is geen ruis maar
+# een verbetering die vastgelegd hoort te worden.
+BASISSCORE = {
+    "buiten_scope_met_brug.md": 58.1,
+    "informatieplicht_flow.md": 50.8,
+    "koop_regelrecht_combined.md": 64.7,
+    "koop_search.md": 25.5,
+    "koop_specific_law.md": 38.9,
+    "onduidelijke_vraag.md": 66.8,
+    "regelrecht_no_obligation.md": 58.4,
+}
+
+# Speling op de ratel, zodat een komma of een woordje wisselen geen rode CI geeft.
+MARGE = 2.0
 
 # Onder dit aantal gemeten woorden zegt de index niets: één zin van vijftien
 # woorden levert een getal op dat volledig door die ene zin bepaald wordt.
@@ -88,6 +109,62 @@ def test_afwijkende_opmaak_levert_geen_meting_op():
     assert gemeten is not None and gemeten.aantal_te_lang == 1
 
 
+GUARDRAILS = PROMPTS / "blocks" / "shared" / "guardrails.md"
+
+# De zinnen die `guardrails.md` letterlijk voorschrijft ("Zeg met deze vaste
+# zin: ..."). Dit is modeluitvoer die in een instructieblok woont, en daarmee de
+# blinde vlek van de rest van deze suite: de voorbeelden worden gemeten, de
+# blokken niet.
+_VASTE_FORMULERING = re.compile(r'vaste (?:zin|formulering)[^"]*"([^"]+)"')
+
+
+def _vaste_formuleringen() -> list[str]:
+    gevonden = _VASTE_FORMULERING.findall(GUARDRAILS.read_text())
+    assert gevonden, (
+        "geen voorgeschreven zinnen gevonden in guardrails.md. Is de "
+        "formulering 'vaste zin' veranderd, dan toetst deze test niets meer "
+        "en hoort dat op te vallen in plaats van stil te slagen."
+    )
+    return gevonden
+
+
+def test_voorgeschreven_zinnen_houden_zich_aan_de_regels_van_dezelfde_prompt():
+    """Wat het model letterlijk moet zeggen, telt als antwoord en niet als regel.
+
+    `format.md` verbiedt de em-dash als HARDE regel en `tone.md` staat maximaal
+    vijftien woorden per zin toe. Een blok dat het model opdraagt een zin uit te
+    spreken die daar overheen gaat, is geen instructie meer maar een uitzondering
+    die zichzelf uitdeelt - en het model heeft geen manier om te zien welke van
+    de twee regels wint.
+    """
+    for zin in _vaste_formuleringen():
+        assert "—" not in zin, (
+            f"voorgeschreven zin bevat een em-dash, wat format.md verbiedt: {zin}"
+        )
+        gemeten = meet(zin, alleen_proza=False)
+        assert gemeten is not None and gemeten.aantal_te_lang == 0, (
+            f"voorgeschreven zin gaat over {MAX_WOORDEN_PER_ZIN} woorden heen:\n  "
+            + "\n  ".join(gemeten.te_lange_zinnen if gemeten else [zin])
+        )
+
+
+def test_de_voorbeelden_demonstreren_de_voorgeschreven_zinnen_letterlijk():
+    """Anders leert het voorbeeld iets anders dan het blok voorschrijft.
+
+    Precies dat ging hier mis: de zin in `buiten_scope_met_brug.md` werd korter
+    gemaakt zonder `guardrails.md` mee te nemen, waarmee dezelfde prompt twee
+    verschillende formuleringen ging voorschrijven en demonstreren. Het model
+    imiteert dan het voorbeeld en de instructie wordt weer een wens - de fout
+    die deze suite hoort te vangen.
+    """
+    voorbeelden = "\n".join(pad.read_text() for pad in VOORBEELDEN)
+    for zin in _vaste_formuleringen():
+        assert zin in voorbeelden, (
+            f"guardrails.md schrijft deze zin letterlijk voor, maar geen enkel "
+            f"voorbeeld demonstreert hem:\n  {zin}"
+        )
+
+
 def test_de_maat_ziet_een_lange_zin():
     """Vangnet op het meetinstrument zelf."""
     kort = meet("Dit is kort. Dat helpt.")
@@ -146,11 +223,9 @@ def test_voorbeeldantwoorden_gebruiken_ook_alledaagse_woorden(pad):
     is hier gebeurd - `regelrecht_no_obligation.md` zakte van 58,8 naar 56,9
     terwijl er een te lange zin uit ging.
 
-    De drempel is 55 en niet de 60 uit de moduledocstring. 60 halen zou betekenen
-    dat de voorbeelden `energiebesparingsplicht` en `woonfunctie` gaan vermijden,
-    en dat zijn de namen die de regelgeving en de BAG er zelf aan geven; `tone.md`
-    vraagt vaktermen uit te leggen, niet weg te laten. 55 klemt de huidige stand
-    vast zodat die niet ongemerkt terugzakt; het is geen bewijs van B1.
+    Het is een ratel per bestand en geen gezamenlijke drempel; zie de toelichting
+    bij BASISSCORE. Een ratel bewijst geen B1 - hij bewijst alleen dat het niet
+    slechter werd.
     """
     gemeten = _meet_voorbeeld(pad)
     if gemeten.woorden < MIN_WOORDEN_VOOR_SCORE:
@@ -159,9 +234,33 @@ def test_voorbeeldantwoorden_gebruiken_ook_alledaagse_woorden(pad):
             f"leesbaarheidsindex. Flesch op een enkele zin is ruis: een getal "
             f"dat stellig oogt en niets zegt."
         )
-    assert gemeten.score >= MIN_SCORE, (
-        f"{pad.name}: score {gemeten.score:.1f} onder {MIN_SCORE} "
+    ondergrens = BASISSCORE[pad.name] - MARGE
+    assert gemeten.score >= ondergrens, (
+        f"{pad.name}: score {gemeten.score:.1f}, was {BASISSCORE[pad.name]:.1f} "
         f"({gemeten.woorden} woorden, gemiddeld "
         f"{gemeten.gemiddelde_zinslengte:.1f} woorden per zin) — de zinnen zijn "
         f"kort genoeg, de woorden niet."
+    )
+
+
+def test_elk_voorbeeld_heeft_een_vastgelegde_basisscore():
+    """Een nieuw voorbeeld hoort een bewuste ondergrens te krijgen.
+
+    Zonder deze test zou een voorbeeld dat niet in BASISSCORE staat een KeyError
+    geven op een plek waar niemand hem verwacht, of - erger - stil buiten de
+    ratel vallen als iemand dat met een .get() "oplost".
+    """
+    gemeten = {
+        pad.name: _meet_voorbeeld(pad)
+        for pad in VOORBEELDEN
+    }
+    hoort_erin = {
+        naam
+        for naam, meting in gemeten.items()
+        if meting.woorden >= MIN_WOORDEN_VOOR_SCORE
+    }
+    assert hoort_erin == set(BASISSCORE), (
+        f"BASISSCORE loopt niet gelijk met de voorbeelden. Ontbreekt: "
+        f"{sorted(hoort_erin - set(BASISSCORE))}. Te veel: "
+        f"{sorted(set(BASISSCORE) - hoort_erin)}."
     )
