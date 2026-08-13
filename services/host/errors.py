@@ -281,6 +281,13 @@ FOUTEN: dict[str, FoutMelding] = {
         bericht="Het AI-model gaf een onverwachte reactie.",
         actie="Probeer het opnieuw. Blijft het misgaan, meld het bij de beheerder.",
     ),
+    "ANTWOORD_ONVOLLEDIG": FoutMelding(
+        code="ANTWOORD_ONVOLLEDIG",
+        bericht="De assistent kon een gegeven niet ophalen bij de bron.",
+        actie="Stel uw vraag opnieuw. Blijft het misgaan, meld dit dan bij de "
+        "beheerder van deze omgeving.",
+        http_status=502,
+    ),
     "HOST_FOUT": FoutMelding(
         code="HOST_FOUT",
         # Apart van LLM_ONBEKEND: een fout in de assistent zelf toeschrijven aan

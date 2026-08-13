@@ -43,6 +43,7 @@ from errors import (
 from feiten import feiten_uit_tool
 from log_redaction import redact_always, redact_temporarily
 from mcp_client import MCPToolRegistry
+from slots import vul_slots
 
 logger = logging.getLogger("vlam.host")
 
@@ -187,18 +188,29 @@ def _geen_sleutel_fout(backend: str = ""):
     return maak_fout("LLM_NIET_INGESTELD")
 
 
-def _antwoord_events(tekst: str, afgekapt: bool = False) -> list[dict]:
+def _antwoord_events(
+    tekst: str, afgekapt: bool = False, feiten: dict | None = None
+) -> list[dict]:
     """De events die bij dit antwoord horen.
 
     Een lege antwoordbel is voor de gebruiker niet te onderscheiden van een
     vastgelopen assistent (een OpenAI-compatibele proxy die content-filtert
     levert `content=None`); dan alleen een melding.
 
+    De slots worden hier ingevuld, op de laatste plek voordat de tekst de deur
+    uit gaat. Blijft er een slot onopgelost, dan gaat het antwoord niet mee: een
+    zichtbare `{{…}}` is voor de respondent even verwarrend als een fout feit,
+    en een half ingevuld rapport is erger dan een foutmelding.
+
     Breekt het antwoord af op `max_tokens`, dan gaat de deeltekst wél mee: die
     is meestal grotendeels bruikbaar en weggooien is een grotere achteruitgang
     dan de afbreking zelf. De melding gaat eraan vooraf als niet-terminaal
     event, zodat de gebruiker weet dat er meer was.
     """
+    tekst, ontbrekend = vul_slots(tekst, feiten or {})
+    if ontbrekend:
+        logger.error("Onopgeloste slots in het antwoord: %s", sorted(set(ontbrekend)))
+        return [naar_event(maak_fout("ANTWOORD_ONVOLLEDIG"))]
     if not (tekst or "").strip():
         logger.error("Het model gaf een leeg antwoord terug")
         return [naar_event(maak_fout("LLM_LEEG_ANTWOORD"))]
@@ -211,13 +223,22 @@ def _antwoord_events(tekst: str, afgekapt: bool = False) -> list[dict]:
     return [{"type": "answer", "message": tekst}]
 
 
-def _antwoord_tekst(tekst: str, afgekapt: bool = False) -> str:
+def _antwoord_tekst(tekst: str, afgekapt: bool = False, feiten: dict | None = None) -> str:
     """Hetzelfde als `_antwoord_events`, maar voor de niet-streamende paden.
 
     Daar is er maar één veld (`reply`), dus de melding gaat vóór de deeltekst
     in plaats van als apart event. Zonder dit zag een `/chat`-client een leeg
     antwoord of een halve zin zonder enige aanwijzing.
+
+    De slots worden hier ingevuld, op de laatste plek voordat de tekst de deur
+    uit gaat. Blijft er een slot onopgelost, dan gaat het antwoord niet mee: een
+    zichtbare `{{…}}` is voor de respondent even verwarrend als een fout feit,
+    en een half ingevuld rapport is erger dan een foutmelding.
     """
+    tekst, ontbrekend = vul_slots(tekst, feiten or {})
+    if ontbrekend:
+        logger.error("Onopgeloste slots in het antwoord: %s", sorted(set(ontbrekend)))
+        return maak_fout("ANTWOORD_ONVOLLEDIG").tekst
     if not (tekst or "").strip():
         logger.error("Het model gaf een leeg antwoord terug")
         return maak_fout("LLM_LEEG_ANTWOORD").tekst
@@ -924,7 +945,7 @@ class VLAMHost:
                 text = "\n".join(
                     b.text for b in assistant_content if hasattr(b, "text")
                 )
-                for event in _antwoord_events(text, _is_afgekapt(response)):
+                for event in _antwoord_events(text, _is_afgekapt(response), feiten):
                     yield event
                 return
 
@@ -1004,7 +1025,9 @@ class VLAMHost:
 
             tool_calls = assistant_msg.tool_calls
             if not tool_calls:
-                for event in _antwoord_events(assistant_msg.content or "", _is_afgekapt(choice)):
+                for event in _antwoord_events(
+                    assistant_msg.content or "", _is_afgekapt(choice), feiten
+                ):
                     yield event
                 return
 
@@ -1098,7 +1121,7 @@ class VLAMHost:
                 text = "\n".join(
                     b.text for b in assistant_content if hasattr(b, "text")
                 )
-                for event in _antwoord_events(text, _is_afgekapt(response)):
+                for event in _antwoord_events(text, _is_afgekapt(response), feiten):
                     yield event
                 return
 
@@ -1188,7 +1211,9 @@ class VLAMHost:
 
             tool_calls = assistant_msg.tool_calls
             if not tool_calls:
-                for event in _antwoord_events(assistant_msg.content or "", _is_afgekapt(choice)):
+                for event in _antwoord_events(
+                    assistant_msg.content or "", _is_afgekapt(choice), feiten
+                ):
                     yield event
                 return
 
@@ -1276,7 +1301,7 @@ class VLAMHost:
             tool_uses = [b for b in assistant_content if b.type == "tool_use"]
             if not tool_uses:
                 text = "\n".join(b.text for b in assistant_content if hasattr(b, "text"))
-                return _antwoord_tekst(text, _is_afgekapt(response))
+                return _antwoord_tekst(text, _is_afgekapt(response), feiten)
 
             tool_results, _ = await self._execute_tools(tool_uses, session_kvk)
             for tu, tr in zip(tool_uses, tool_results, strict=True):
@@ -1339,7 +1364,7 @@ class VLAMHost:
 
             tool_calls = assistant_msg.tool_calls
             if not tool_calls:
-                return _antwoord_tekst(assistant_msg.content or "", _is_afgekapt(choice))
+                return _antwoord_tekst(assistant_msg.content or "", _is_afgekapt(choice), feiten)
 
             for tc in tool_calls:
                 tool_key = tc.function.name
