@@ -26,6 +26,16 @@ _OORDEELSLOTS = frozenset(
     }
 )
 
+# Slots die een jaartal(-achtige waarde) dragen, geen bedrag: een duizendtal-
+# scheider maakt "2025" tot het onleesbare "2.025". Vast opgesomd i.p.v. een
+# drempel op de waarde (bv. "< 10.000"): een jaartal test toevallig onder elke
+# zinnige drempel, dus alleen de slotnaam is een betrouwbaar signaal.
+# PEILJAAR is een kalenderjaar. RAPPORTAGE_FREQUENTIE_JAREN drukt een aantal
+# jaren uit ("eens per 4 jaar") en blijft altijd klein - maar is qua soort
+# hetzelfde als een jaartal en geen hoeveelheid, dus hoort hij in dezelfde lijst
+# in plaats van toevallig goed te gaan omdat hij nooit de duizend haalt.
+_GEEN_DUIZENDTAL = frozenset({"PEILJAAR", "RAPPORTAGE_FREQUENTIE_JAREN"})
+
 
 def _als_datum(waarde: str) -> str | None:
     """ISO-datum naar '1 december 2027'. Geen (geldige) ISO-datum? Dan None.
@@ -52,6 +62,8 @@ def _weergave(naam: str, waarde: object) -> str:
             return "wel" if waarde else "niet"
         return "ja" if waarde else "nee"
     if isinstance(waarde, int):
+        if naam in _GEEN_DUIZENDTAL:
+            return str(waarde)
         return f"{waarde:,}".replace(",", ".")
     if isinstance(waarde, float):
         return f"{waarde:,.2f}".replace(",", "~").replace(".", ",").replace("~", ".")

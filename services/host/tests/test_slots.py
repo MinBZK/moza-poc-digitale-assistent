@@ -22,6 +22,26 @@ def test_getallen_krijgen_nederlandse_duizendtallen():
     assert tekst == "420.000 kWh"
 
 
+def test_peiljaar_krijgt_geen_duizendtalscheiding():
+    """Een jaartal is geen bedrag: 2025 hoort 2025 te blijven, niet '2.025'.
+
+    Stond in het vlaggenschipvoorbeeld (informatieplicht_flow.md) en werd door
+    geen enkele controle gezien.
+    """
+    tekst, _ = vul_slots("Uw verbruik in {{PEILJAAR}}.", {"PEILJAAR": 2025})
+    assert tekst == "Uw verbruik in 2025."
+
+
+def test_rapportage_frequentie_jaren_krijgt_geen_duizendtalscheiding():
+    """Klein getal, dus toevallig ook goed zonder de uitzondering - deze test
+    legt vast dat het om de slotnaam gaat, niet om de grootte van de waarde."""
+    tekst, _ = vul_slots(
+        "Rapporteer elke {{RAPPORTAGE_FREQUENTIE_JAREN}} jaar.",
+        {"RAPPORTAGE_FREQUENTIE_JAREN": 4},
+    )
+    assert tekst == "Rapporteer elke 4 jaar."
+
+
 def test_booleans_worden_ja_of_nee():
     tekst, _ = vul_slots("Woonfunctie: {{WOONFUNCTIE}}", {"WOONFUNCTIE": False})
     assert tekst == "Woonfunctie: nee"
