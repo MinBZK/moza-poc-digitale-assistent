@@ -35,7 +35,8 @@ Handmatige integratie-scripts (vereisen een `.env` met echte API-keys) staan in
 - **`services/host/`** — FastAPI-host (één proces). `api.py` (endpoints),
   `vlam_host.py` (orkestratie / agentic loops), `mcp_client.py` (MCP-verbindingen),
   `cli_executor.py` (CLI-transport), `config.py` (env/CORS/timeouts),
-  `prompts/` (modulaire systeemprompts, samengesteld door `composer.py`).
+  `errors.py` (foutcatalogus), `prompts/` (modulaire systeemprompts, samengesteld
+  door `composer.py`).
 - **`services/mcp/{kvk,koop,regelrecht,rvo,netbeheerder}/server.py`** — vijf
   MCP-servers (Python, als stdio-subprocessen gestart door de host).
 - **`services/cli/`** — Bash CLI-wrappers (alternatief transport, on-demand).
@@ -44,8 +45,9 @@ Handmatige integratie-scripts (vereisen een `.env` met echte API-keys) staan in
   `ai-verantwoording.md`.
 
 Vier `mode`-waarden op `/chat`: `vlam`, `claude` (MCP-transport) en `cli:vlam`,
-`cli:claude` (CLI-transport). Default `vlam`. De host werkt ook zónder
-MCP-servers/CLI-tools (antwoordt dan op eigen kennis).
+`cli:claude` (CLI-transport). Default `vlam`. De host werkt ook zónder MCP-servers/CLI-tools; zijn er bronnen
+geconfigureerd die niet opkwamen, dan meldt de assistent dat en verzint hij geen
+gegevens ter vervanging (PDR-011).
 
 Volledig overzicht en de routerings-beslisboom: [`docs/architecture.md`](docs/architecture.md).
 
@@ -63,6 +65,12 @@ Volledig overzicht en de routerings-beslisboom: [`docs/architecture.md`](docs/ar
   tool (`readOnlyHint=False`); bevestiging wordt afgedwongen via `ToolAnnotations`
   én de systeemprompt.
 - **Dataminimalisatie** loopt via de optionele `fields`-parameter op read-tools.
+- **Foutmeldingen komen uit `errors.py`, niet uit een f-string ter plekke.** Elke
+  melding heeft een `bericht` (wat er gebeurde) én een `actie` (wat de gebruiker
+  kan doen); exception-teksten, paden en URL's blijven in de log en gaan nooit
+  naar de gebruiker of het LLM. Stuurt een MCP-server een nieuwe foutcode uit,
+  voeg die dan toe aan `FOUTEN` — `tests/test_foutmeldingen_catalogus.py` scant
+  de broncode van de servers en faalt anders. Zie PDR-011.
 - **Security-defaults zijn streng.** `ALLOWED_ORIGINS` is leeg → geen CORS tenzij
   expliciet gezet (bij `*` waarschuwt de host bij het opstarten). Zie `config.py`.
 - **De LLM-sleutel komt van de gebruiker** (`ALLOW_API_KEY_OVERRIDE` default

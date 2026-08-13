@@ -18,6 +18,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # De frontend is leidend voor de persona-gegevens die de deelnemer op zijn
+      # scherm leest. Zonder deze checkout slaat de pariteitssuite over en komt
+      # een persona die uit de pas loopt groen door CI — het gat waarvoor die
+      # suite bestaat. Alleen `_data/` is nodig, vandaar de sparse checkout.
+      - name: Frontend-persona's ophalen (MinBZK/moza-poc)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: MinBZK/moza-poc
+          path: frontend
+          sparse-checkout: _data
+          sparse-checkout-cone-mode: false
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v6.0.1
         with:
           enable-cache: true
@@ -26,4 +37,6 @@ jobs:
       - name: Lint (ruff)
         run: uv run ruff check .
       - name: Test
+        env:
+          MOZA_POC_PERSONAS: ${{ github.workspace }}/frontend/_data/personas.json
         run: uv run pytest --cov=services/host --cov-report=term-missing

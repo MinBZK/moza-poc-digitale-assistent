@@ -20,10 +20,28 @@ def _executor_tool_keys() -> set[str]:
     return set(re.findall(r'tool_key == "([^"]+)"', src))
 
 
-def test_cli_tooldefinities_en_executor_zijn_synchroon():
+def test_tools_uit_de_prompt_die_cli_niet_heeft_zijn_benoemd():
+    """De routeringstabel is gedeeld; CLI kent niet alles wat erin staat.
+
+    Die tools horen een eerlijke melding te geven ("niet in deze instelling"),
+    niet het advies het opnieuw te proberen — dat kan per definitie niet slagen.
+    """
+    from cli_executor import _NIET_IN_CLI
+
+    aangeboden = {t["name"] for t in _cli_definities()}
+    assert not (_NIET_IN_CLI & aangeboden), (
+        "een tool kan niet tegelijk aangeboden worden en 'niet in dit transport' zijn"
+    )
+
+
+def _cli_definities():
     from vlam_host import CLI_TOOL_DEFINITIONS_ANTHROPIC
 
-    aangeboden = {t["name"] for t in CLI_TOOL_DEFINITIONS_ANTHROPIC}
+    return CLI_TOOL_DEFINITIONS_ANTHROPIC
+
+
+def test_cli_tooldefinities_en_executor_zijn_synchroon():
+    aangeboden = {t["name"] for t in _cli_definities()}
     afgehandeld = _executor_tool_keys()
 
     assert aangeboden == afgehandeld, (

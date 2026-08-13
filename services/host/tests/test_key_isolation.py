@@ -393,6 +393,11 @@ async def test_falende_constructor_laat_de_sleutel_niet_achter(host, monkeypatch
     De registratie gebeurt vóór de constructie — juist zodat een fout tijdens
     het opbouwen geredigeerd de logs in gaat — dus moet ze ook opruimen als die
     constructie gooit.
+
+    Sinds PDR-011 ontsnapt zo'n fout niet meer uit de generator maar wordt hij
+    een `HOST_FOUT`-event. Dat is de betere afloop: de client krijgt een nette
+    melding plus `done` in plaats van een afgekapte stream. De eis die hier
+    getoetst wordt is ongewijzigd — de sleutel mag niet blijven hangen.
     """
 
     def _kapot(**kwargs):
@@ -400,13 +405,17 @@ async def test_falende_constructor_laat_de_sleutel_niet_achter(host, monkeypatch
 
     monkeypatch.setattr(vlam_host.anthropic, "AsyncAnthropic", _kapot)
 
-    with pytest.raises(RuntimeError):
-        await _drain(
-            host.chat_stream(
-                "s1", "hoi", mode="claude", session_kvk=KVK_A,
-                claude_api_key_override=KEY_A,
-            )
+    events = [
+        e
+        async for e in host.chat_stream(
+            "s1", "hoi", mode="claude", session_kvk=KVK_A,
+            claude_api_key_override=KEY_A,
         )
+    ]
+    assert any(e.get("code") == "HOST_FOUT" for e in events), (
+        f"geen nette melding bij een falende clientconstructie: "
+        f"{[e.get('code') or e.get('type') for e in events]}"
+    )
 
     assert KEY_A in log_redaction.redact(f"fout met {KEY_A}"), (
         "de sleutel bleef geregistreerd nadat de clientconstructie faalde"

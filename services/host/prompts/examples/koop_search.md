@@ -1,3 +1,4 @@
+<!-- bronnen: koop -->
 Voorbeeld: regelgeving zoeken (KOOP)
 
 Gebruiker: Welke regels gelden er voor energiebesparing?
