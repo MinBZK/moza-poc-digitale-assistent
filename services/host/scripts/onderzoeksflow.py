@@ -213,7 +213,16 @@ def _controleer_adres(loop: Loop, stap: str, antwoord: str, persona: Persona) ->
     )
 
 
-_BRONTOOLS = {"kvk__mijn_bedrijf", "netbeheerder__verbruik", "regelrecht__execute_law"}
+# Tools die daadwerkelijk één van de vier persona-feiten opleveren die
+# `_controleer_slots` letterlijk terugzoekt (naam, straat, elektriciteit, gas) -
+# zie `feiten.py:_uit_kvk` / `_uit_netbeheerder`. `regelrecht__execute_law` hoort
+# hier bewust NIET bij: sinds de orkestratielus (taak 4, `regelloop.volg_regel`)
+# draait die op élke beurt opnieuw, ook een kale bevestiging als stap 6, en
+# levert zelf geen bedrijfsfeit terug - alleen een regel-oordeel
+# (`voldoet_aan_voorwaarden`/`ontbrekende_gegevens`). Stond hij toch in de
+# verzameling, dan telt elke beurt als "er draaide een feiten-tool", ook een
+# beurt die terecht geen enkel feit herhaalt.
+_FEITENTOOLS = {"kvk__mijn_bedrijf", "netbeheerder__verbruik"}
 
 # Uit de routeringstabel afgeleid, niet hardgecodeerd: welke bronnen de
 # orkestratielus zelf mag raadplegen (elk veld met een `tool`), en welke
@@ -301,10 +310,23 @@ def _controleer_slots(
     bron-waarden betekenen dat de substitutie niet gedraaid heeft.
 
     De tweede controle draait alleen op een beurt die zelf een feiten-tool
-    aanriep. Op stap 6 ("Ja, dien maar in.") is de enige tool `rvo__indienen`,
-    dat geen bedrijfsfeiten teruggeeft; de assistent bevestigt daar terecht
-    zonder de feiten te herhalen, en die beurt heeft niets nieuws om te
-    substitueren.
+    aanriep (`_FEITENTOOLS`: `kvk__mijn_bedrijf` of `netbeheerder__verbruik`).
+    Op stap 6 ("Ja, dien maar in.") is `rvo__indienen` de enige tool die iets
+    nieuws doet; de assistent bevestigt daar terecht zonder de feiten te
+    herhalen, en die beurt heeft niets nieuws om te substitueren.
+
+    Let op: `regelrecht__execute_law` telt hier expliciet niet mee, ook al
+    raadpleegt de host die op elke beurt (zie `_FEITENTOOLS`-docstring
+    hierboven). Een eerdere versie van deze controle gebruikte wél de volle
+    `_BRONTOOLS`-verzameling (mét de wet) als poort, en die vuurde daardoor op
+    stap 6: de host draait de regelloop nu op elke beurt, dus
+    `regelrecht__execute_law` stond altijd in `tools`, en de controle eiste
+    dan een letterlijk bedrijfsfeit in een beurt die alleen een indien-
+    bevestiging is. Dat is geen verzonnen feit of gefaalde substitutie, maar
+    een meetfout: de poort testte "raadpleegde deze beurt een bron uit
+    `_BRONTOOLS`" terwijl hij "noemde deze beurt een feit dat een bron moest
+    leveren" bedoelde te testen. Met `_FEITENTOOLS` vuurt de controle alleen
+    nog op een beurt die de KvK of de Business Wallet zelf raadpleegde.
     """
     loop.controleer(
         stap,
@@ -312,7 +334,7 @@ def _controleer_slots(
         "geen onopgelost slot in het antwoord",
         antwoord[:400],
     )
-    if not any(t in _BRONTOOLS for t in tools):
+    if not any(t in _FEITENTOOLS for t in tools):
         return
     letterlijk = [
         waarde
@@ -481,13 +503,34 @@ def draai(loop: Loop, persona: Persona) -> None:
         "de assistent vraagt om toestemming",
         antwoord[:300],
     )
+    # `kvk__mijn_bedrijf` is toestemmingsvrij (regelrouting.HERKOMST:
+    # IS_WOONFUNCTIE heeft toestemming=False), dus de orkestratielus
+    # (regelloop.volg_regel) haalt hem al op in DEZE beurt, vóórdat het model
+    # om toestemming vraagt - niet meer pas nadat het model erom vraagt in
+    # stap 2. Deze controle stond tot en met de eindmeting op stap 2 en
+    # verwachtte dat het model de aanroep zelf startte; sinds de
+    # regelgestuurde flow (taak 4) doet de host dat hier, in stap 1, en het
+    # feit blijft daarna in de feitenkaart van het gesprek staan, dus stap 2
+    # roept `kvk__mijn_bedrijf` niet nogmaals aan. Verplaatst in plaats van
+    # verwijderd: dat de KvK ook echt geraadpleegd wordt staat verder alleen
+    # nog indirect vast via "regelrecht__execute_law vóór elke andere bron"
+    # (die impliceert een andere bron, maar noemt hem niet bij naam).
+    loop.controleer(
+        "stap1",
+        "kvk__mijn_bedrijf" in tools,
+        "kvk__mijn_bedrijf is aangeroepen (door de host, vóór toestemming)",
+        f"aangeroepen: {tools}",
+    )
     _controleer_wet_eerst(loop, "stap1", tools)
     _b1(loop, "stap1", antwoord)
 
     print("\n=== 2. toestemming geven ===")
     antwoord, tools, events = loop.beurt("Ja, ga je gang.", toestemming=True)
     loop.controleer("stap2", not _fouten(events), "geen foutmelding", "\n".join(_fouten(events)))
-    for verwacht in ("kvk__mijn_bedrijf", "netbeheerder__verbruik", "regelrecht__execute_law"):
+    # `kvk__mijn_bedrijf` staat hier bewust niet meer bij: die is al in stap 1
+    # opgehaald (zie hierboven) en zit dan al in de feitenkaart van het
+    # gesprek, dus de orkestratielus haalt hem in deze beurt niet nogmaals op.
+    for verwacht in ("netbeheerder__verbruik", "regelrecht__execute_law"):
         loop.controleer(
             "stap2", verwacht in tools, f"{verwacht} is aangeroepen", f"aangeroepen: {tools}"
         )
