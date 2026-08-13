@@ -140,8 +140,8 @@ PERSONAS = {
         "Roots & Locks",
         "Rotterdam",
         "Witte de Withstraat 18",
-        "8.400",
-        "1.200",
+        "14.800",
+        "1.900",
         False,
     ),
 }

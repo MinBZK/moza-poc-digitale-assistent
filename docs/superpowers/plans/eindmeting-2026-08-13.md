@@ -96,8 +96,11 @@ opgenomen, dit document is het geconsolideerde verslag).
    (taak 8, dit script) vangt een deel daarvan: **10/10** op "geen onopgelost
    slot" en **5/5** op "de bron-waarden staan na substitutie in het antwoord"
    (stap 2). Geen enkel onopgelost `{{...}}`-slot in 10 beurten waarin de
-   controle draaide, en de vier bronwaarden (naam, straat, elektriciteit, gas)
-   stonden in alle 5 runs letterlijk in de toestemmingsbeurt.
+   controle draaide, en in alle 5 runs stond minstens één van de vier
+   bronwaarden (naam, straat, elektriciteit, gas) letterlijk in de
+   toestemmingsbeurt - de controle (`bool(letterlijk)`) eist niet dat alle
+   vier verschijnen, dus dit toont aan dat de substitutie draaide, niet dat
+   elk feit apart genoemd werd.
 
    **Wat dit niet meet — en waarom dat buiten bereik van dit script valt.**
    De spec vraagt ook om "geen letterlijk feit waar een slot hoort" op de

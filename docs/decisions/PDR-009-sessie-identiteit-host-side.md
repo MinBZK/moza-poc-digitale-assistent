@@ -130,7 +130,7 @@ op zichzelf:
 | KvK | Bedrijf | Persona | Uitkomst informatieplicht |
 |---|---|---|---|
 | 85234567 | Koffiezaak Noon | `koffiezaak` | geldt, via elektriciteit |
-| 62345681 | Kwekerij De Bloesem | `bloemenkweker` | geldt, via gas + onderzoeksdrempel |
+| 62345681 | Kwekerij De Bloesem | `bloemenkweker` | geldt, via gas + elektriciteit |
 | 56789012 | Roots & Locks | `haarstylist` | geldt niet, onder beide drempels |
 | 61234570 | Vogel Bouwregie B.V. | `bouwmanagement` | geldt, via elektriciteit |
 

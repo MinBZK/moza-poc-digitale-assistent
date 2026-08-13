@@ -56,7 +56,7 @@ De gesloten testgroep telt vier profielen. Ze zijn zo gekozen dat dezelfde vraag
 | KvK | Bedrijf | Persona (frontend) | Verbruik | Uitkomst informatieplicht |
 |---|---|---|---|---|
 | 85234567 | Koffiezaak Noon | `koffiezaak` | 61.250 kWh / 9.800 m³ | geldt, elektriciteit boven de drempel |
-| 62345681 | Kwekerij De Bloesem | `bloemenkweker` | 420.000 kWh / 198.000 m³ | geldt, gas boven de drempel én boven de onderzoeksdrempel |
+| 62345681 | Kwekerij De Bloesem | `bloemenkweker` | 420.000 kWh / 140.000 m³ | geldt, gas boven de drempel, onder de onderzoeksdrempel |
 | 56789012 | Roots & Locks | `haarstylist` | 14.800 kWh / 1.900 m³ | geldt niet, onder beide drempels |
 | 61234570 | Vogel Bouwregie B.V. | `bouwmanagement` | 88.400 kWh / 12.600 m³ | geldt, elektriciteit boven de drempel |
 
