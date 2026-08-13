@@ -32,7 +32,7 @@ VOORBEELDEN = sorted((PROMPTS / "examples").glob("*.md"))
 # een verbetering die vastgelegd hoort te worden.
 BASISSCORE = {
     "buiten_scope_met_brug.md": 58.1,
-    "informatieplicht_flow.md": 50.8,
+    "informatieplicht_flow.md": 50.4,
     "koop_regelrecht_combined.md": 64.7,
     "koop_search.md": 25.5,
     "koop_specific_law.md": 38.9,
@@ -162,6 +162,38 @@ def test_de_voorbeelden_demonstreren_de_voorgeschreven_zinnen_letterlijk():
         assert zin in voorbeelden, (
             f"guardrails.md schrijft deze zin letterlijk voor, maar geen enkel "
             f"voorbeeld demonstreert hem:\n  {zin}"
+        )
+
+
+# De twee NOOIT-regels uit format.md die machinaal te controleren zijn. Beide
+# gaan over wat de assistent zégt, dus ze worden op de assistent-tekst getoetst
+# en niet op het hele bestand: een tool-resultaat mag "BAG: is_woonfunctie" wel
+# bevatten, want zo levert de bron het aan.
+_VERBODEN_IN_ANTWOORD = {
+    "—": "format.md verbiedt de em-dash als HARDE regel",
+    "BAG": "format.md verbiedt BAG als bronvermelding; het hoort onder "
+    "'KvK Handelsregister'",
+    "Kadaster": "format.md verbiedt Kadaster als bronvermelding",
+}
+
+
+@pytest.mark.parametrize("pad", VOORBEELDEN, ids=lambda p: p.name)
+def test_voorbeelden_overtreden_de_nooit_regels_van_format_md_niet(pad):
+    """Een voorbeeld dat een verbod overtreedt, leert het model dat verbod weg.
+
+    Dit is dezelfde fout als de vaste zin hierboven, maar dan de andere kant op:
+    daar liep het blok uit de pas met het voorbeeld, hier het voorbeeld met het
+    blok. `informatieplicht_flow.md` schreef "geen woonfunctie (via BAG)" terwijl
+    format.md die bronvermelding letterlijk verbiedt - en de regel er meteen bij
+    zet dat BAG-gegevens onder "KvK Handelsregister" vallen, wat op dezelfde
+    regel al gebeurde.
+    """
+    antwoord = _assistent_tekst(pad.read_text())
+    for term, reden in _VERBODEN_IN_ANTWOORD.items():
+        overtreding = [r.strip() for r in antwoord.splitlines() if term in r]
+        assert not overtreding, (
+            f"{pad.name}: {term!r} in wat de assistent zegt - {reden}:\n  "
+            + "\n  ".join(overtreding)
         )
 
 
