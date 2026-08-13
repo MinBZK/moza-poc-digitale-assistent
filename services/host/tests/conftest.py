@@ -7,11 +7,17 @@ afhankelijk maakt van de ontwikkelomgeving.
 
 De LLM-keys gaan leeg: geen echte credentials nodig, geen netwerk.
 
-De KvK-allowlist krijgt juist wél de drie testprofielen. Die stand hoort bij de
+De KvK-allowlist krijgt juist wél alle testprofielen. Die stand hoort bij de
 tests die "een gebruiker buiten de allowlist" beproeven: dat scenario bestaat
 alleen als er een allowlist ís. Zonder deze regel hing de uitkomst af van de
 aan- of afwezigheid van een (gitignored) `.env`, waardoor de suite lokaal groen
 kon zijn en in CI niet.
+
+Komt er een profiel bij, dan hoort het hier óók bij. Staat het alleen in
+`.env.example`, dan weigert `config.kvk_uit_header` het onder pytest en valt
+elke test die als die persona rijdt om op "log eerst in" — de blokkade die de
+allowlist juist moest voorkomen. `test_personas_frontend_pariteit.py` bewaakt
+dat de twee lijsten gelijk lopen.
 """
 
 import logging
@@ -20,7 +26,7 @@ import os
 for _key in ("ANTHROPIC_API_KEY", "VLAM_API_KEY"):
     os.environ[_key] = ""
 
-os.environ["TEST_KVK_NUMMERS"] = "85234567,62345681,56789012"
+os.environ["TEST_KVK_NUMMERS"] = "85234567,62345681,56789012,61234570"
 
 import pytest  # noqa: E402  — pas ná het leegzetten van de credentials
 

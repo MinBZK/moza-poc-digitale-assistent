@@ -64,7 +64,7 @@ MOCK_VERBRUIK: dict[str, dict] = {
         "aansluitingen": [
             {
                 "ean": "871685900012345678",
-                "adres": "Witte de Withstraat 27, 3012BL Rotterdam",
+                "adres": "Meent 88, 3011JM Rotterdam",
                 "jaarlijks_elektriciteitsverbruik_kwh": 61250,
                 "jaarlijks_gasverbruik_m3": 9800,
             }
@@ -119,6 +119,30 @@ MOCK_VERBRUIK: dict[str, dict] = {
         "totaal": {
             "jaarlijks_elektriciteitsverbruik_kwh": 14800,
             "jaarlijks_gasverbruik_m3": 1900,
+        },
+        "toelichting": (
+            "Verbruiksgegevens van de netbeheerder over het laatste volledige "
+            "kalenderjaar. Gedeeld met machtiging van de ondernemer."
+        ),
+    },
+    # Vogel Bouwregie B.V. (bouwmanagement) — bedrijfsloods met kantoor. De
+    # elektriciteit ligt boven de drempel van 50.000 kWh, het gas eronder: nog
+    # een derde pad door dezelfde regel, en dus een bruikbaar onderzoekscenario.
+    "61234570": {
+        "kvk_nummer": "61234570",
+        "netbeheerder": "Stedin (mock)",
+        "peiljaar": 2025,
+        "aansluitingen": [
+            {
+                "ean": "871685900045678901",
+                "adres": "Waalhaven 120, 3089JJ Rotterdam",
+                "jaarlijks_elektriciteitsverbruik_kwh": 88400,
+                "jaarlijks_gasverbruik_m3": 12600,
+            }
+        ],
+        "totaal": {
+            "jaarlijks_elektriciteitsverbruik_kwh": 88400,
+            "jaarlijks_gasverbruik_m3": 12600,
         },
         "toelichting": (
             "Verbruiksgegevens van de netbeheerder over het laatste volledige "

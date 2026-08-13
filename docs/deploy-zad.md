@@ -28,7 +28,12 @@ staat los daarvan in de component-config.
 
 **Component-config (staat niet in deze repo):**
 
-- `TEST_KVK_NUMMERS=85234567,62345681,56789012` — de gesloten testgroep (PDR-009).
+- `TEST_KVK_NUMMERS=85234567,62345681,56789012,61234570` — de gesloten testgroep
+  (PDR-009). Deze lijst moet elke persona dekken die `MinBZK/moza-poc` op
+  `actief` zet; ontbreekt er één, dan ziet de deelnemer zijn bedrijf op het
+  scherm en antwoordt de assistent "log eerst in". Wijzigt de lijst, dan ook
+  `services/host/.env.example` en `services/host/tests/conftest.py` bijwerken —
+  die drie lopen niet automatisch gelijk.
 - `ALLOWED_ORIGINS` is **niet gezet**, en dat is bewust. Leeg betekent geen
   enkele cross-origin toegang; de frontend praat via een same-origin reverse
   proxy, dus CORS komt er niet aan te pas. Zet hier niets in "voor de zekerheid" —

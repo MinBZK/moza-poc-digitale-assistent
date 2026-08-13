@@ -51,15 +51,20 @@ De identiteit wordt server-side vastgesteld en afgedwongen ([PDR-009](decisions/
 
 De allowlist is geen geheim — de KvK-nummers van de persona's staan al publiek in `_data/personas.json` van de frontend. Ze is wél een harde grens: zonder die grens zou de KvK-server voor een willekeurig meegestuurd nummer de echte KvK Test API gaan bevragen. De garantie die er wél toe doet staat hier los van: het LLM ziet `kvk_nummer` niet (het is uit alle tool-schema's gestript) en kan de identiteit dus niet kiezen, ook niet als de gebruiker in het gesprek een ander nummer noemt.
 
-De gesloten testgroep telt drie profielen. Ze zijn zo gekozen dat dezelfde vraag over de informatieplicht energiebesparing drie verschillende kanten op loopt, zodat een gebruikerstest niet één tak van de regel test:
+De gesloten testgroep telt vier profielen. Ze zijn zo gekozen dat dezelfde vraag over de informatieplicht energiebesparing verschillende kanten op loopt, zodat een gebruikerstest niet één tak van de regel test:
 
 | KvK | Bedrijf | Persona (frontend) | Verbruik | Uitkomst informatieplicht |
 |---|---|---|---|---|
 | 85234567 | Koffiezaak Noon | `koffiezaak` | 61.250 kWh / 9.800 m³ | geldt, elektriciteit boven de drempel |
 | 62345681 | Kwekerij De Bloesem | `bloemenkweker` | 420.000 kWh / 198.000 m³ | geldt, gas boven de drempel én boven de onderzoeksdrempel |
 | 56789012 | Roots & Locks | `haarstylist` | 14.800 kWh / 1.900 m³ | geldt niet, onder beide drempels |
+| 61234570 | Vogel Bouwregie B.V. | `bouwmanagement` | 88.400 kWh / 12.600 m³ | geldt, elektriciteit boven de drempel |
 
-Alle drie zijn volledig mock-bediend in de KvK-server (`MOCK_PROFIELEN`, `MOCK_VESTIGINGEN`, `MOCK_EIGENAREN`, `_BAG_DEMO_FALLBACK`) en de netbeheerder-server (`MOCK_VERBRUIK`), dus ze werken zonder netwerk of API-key. De persona-id's corresponderen met `_data/personas.json` in `MinBZK/moza-poc`. De overige persona's daar hebben bewust géén token: de assistent antwoordt dan "log eerst in" in plaats van gegevens van een bedrijf te tonen dat de backend niet kent. Wil je een profiel toevoegen, dan zijn mockdata in beide servers nodig — `services/host/tests/test_testprofielen.py` bewaakt dat.
+Alle vier zijn volledig mock-bediend in de KvK-server (`MOCK_PROFIELEN`, `MOCK_VESTIGINGEN`, `MOCK_VESTIGINGSPROFIELEN`, `MOCK_EIGENAREN`, `_BAG_DEMO_FALLBACK`) en de netbeheerder-server (`MOCK_VERBRUIK`), dus ze werken zonder netwerk of API-key. De persona-id's corresponderen met `_data/personas.json` in `MinBZK/moza-poc`. De overige persona's daar staan bewust niet in de allowlist: de assistent antwoordt dan "log eerst in" in plaats van gegevens van een bedrijf te tonen dat de backend niet kent.
+
+**De frontend bepaalt welk profiel nodig is, niet deze repo.** Zet `MinBZK/moza-poc` een persona op `actief` die hier ontbreekt, dan leest de respondent zijn bedrijf op het scherm en krijgt hij van de assistent "log eerst in" — de sessie is voorbij voordat er één vraag is gesteld. `services/host/tests/test_personas_frontend_pariteit.py` leest `_data/personas.json` van een checkout naast deze repo (of via `MOZA_POC_PERSONAS`) en faalt op precies dat gat, en op elk veld dat uiteenloopt met het scherm. Staat die checkout er niet, dan slaat de test over met een luide reden: de pariteit is dan ongetoetst, niet in orde.
+
+Welk veld op welk niveau hoort, volgt de echte KvK-API en niet wat handig uitkomt. Het basisprofiel draagt `totaalWerkzamePersonen`; de uitsplitsing naar voltijd en deeltijd staat in het vestigingsprofiel (`/v1/vestigingsprofielen/<nr>`), dat `kvk__mijn_bedrijf` erbij haalt en in de hoofdvestiging mengt. Het RSIN komt van `kvk__eigenaar`. Zet je zulke velden op de profielwortel, dan werkt de mock wél en een echt KvK-nummer niet.
 
 ## Routering: welke bron bij welke vraag?
 
