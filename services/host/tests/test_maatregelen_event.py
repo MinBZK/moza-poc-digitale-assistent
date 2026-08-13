@@ -29,6 +29,46 @@ def test_alleen_geldende_maatregelen_gaan_mee():
     ]
 
 
+def test_meerdere_geldende_maatregelen_gaan_allemaal_mee():
+    """Eén overblijvende maatregel verbergt 'geeft de enige terug' i.p.v.
+    'kiest de juiste' (CLAUDE.md). Drie geldende, twee niet-geldende."""
+    resultaat = _envelope(
+        {
+            "maatregelen": [
+                {"code": "GC1", "naam": "Pas een klokregeling toe", "van_toepassing": True},
+                {"code": "GC3", "naam": "Pas een weersafhankelijke regeling toe", "van_toepassing": True},
+                {"code": "FE4", "naam": "Iets anders", "van_toepassing": False},
+                {"code": "FD3", "naam": "Pas nachtafdekking toe", "van_toepassing": True},
+                {"code": "GD1", "naam": "Nog iets anders", "van_toepassing": False},
+            ]
+        }
+    )
+    assert maatregelen_voor_event("regelrecht__execute_law", resultaat) == [
+        {"code": "GC1", "omschrijving": "Pas een klokregeling toe"},
+        {"code": "GC3", "omschrijving": "Pas een weersafhankelijke regeling toe"},
+        {"code": "FD3", "omschrijving": "Pas nachtafdekking toe"},
+    ]
+
+
+def test_malvormd_element_tussen_geldende_maatregelen_laat_de_hele_extractie_stuklopen():
+    """Vastleggen wat er nu gebeurt: één kapot element tussen twee geldende
+    maatregelen levert `None` op voor de hele lijst, niet de twee geldende.
+
+    `m.get("van_toepassing")` op een niet-dict gooit een AttributeError; de
+    `except (ValueError, AttributeError)` in `maatregelen_voor_event` vangt die
+    voor de hele oogst, niet per element."""
+    resultaat = _envelope(
+        {
+            "maatregelen": [
+                {"code": "GC1", "naam": "Pas een klokregeling toe", "van_toepassing": True},
+                "niet een dict",
+                {"code": "FD3", "naam": "Pas nachtafdekking toe", "van_toepassing": True},
+            ]
+        }
+    )
+    assert maatregelen_voor_event("regelrecht__execute_law", resultaat) is None
+
+
 def test_naam_wordt_omschrijving():
     """De frontend leest m.omschrijving; _eml_lijst produceert m.naam.
 

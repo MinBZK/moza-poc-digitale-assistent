@@ -4,12 +4,12 @@ Elk feit dat hier niet uit komt, moet het model uit het gesprek reconstrueren -
 en dat is precies waar 'Bloemenlaan 12' vandaan kwam terwijl de KvK-tool
 'Hoefweg 210' had geleverd.
 
-De kvk- en netbeheerder-testdata komt uit de echte MCP-servers (importlib,
-zoals `test_kvk_multitenant.py` en `test_rvo_indienen.py` dat doen) en niet uit
-een met de hand geschreven envelope. Een handgeschreven envelope toetst alleen
-de aanname van wie hem schreef: `_uit_netbeheerder` en `_uit_kvk` lazen ooit
-paden die de servers helemaal niet teruggeven (`data["totaal"]` i.p.v.
-`data["verbruik"]["totaal"]`, `data["bag"]["is_woonfunctie"]` i.p.v. het
+De kvk-, netbeheerder- en rvo-testdata komt uit de echte MCP-servers
+(importlib, zoals `test_kvk_multitenant.py` en `test_rvo_indienen.py` dat doen)
+en niet uit een met de hand geschreven envelope. Een handgeschreven envelope
+toetst alleen de aanname van wie hem schreef: `_uit_netbeheerder` en `_uit_kvk`
+lazen ooit paden die de servers helemaal niet teruggeven (`data["totaal"]`
+i.p.v. `data["verbruik"]["totaal"]`, `data["bag"]["is_woonfunctie"]` i.p.v. het
 top-level `data["is_woonfunctie"]`) en de suite bleef groen omdat de
 handgeschreven envelope toevallig wél de aangenomen vorm had. Door de servers
 zelf de payload te laten leveren, breekt deze test zodra hun vorm wijzigt.
@@ -49,6 +49,19 @@ def _netbeheerder_resultaat(kvk_nummer: str) -> str:
     """De envelope die de netbeheerder-server voor `verbruik` teruggeeft."""
     srv = _load("netbeheerder/server.py", "mcp_netbeheerder_server_feitenkaart")
     resultaten = srv._verbruik({"kvk_nummer": kvk_nummer})
+    return resultaten[0].text
+
+
+def _rvo_resultaat(kvk_nummer: str) -> str:
+    """De envelope die de RVO-server voor `indienen` teruggeeft."""
+    srv = _load("rvo/server.py", "mcp_rvo_server_feitenkaart")
+    resultaten = srv._indienen(
+        {
+            "kvk_nummer": kvk_nummer,
+            "regeling_id": "EBR-2026",
+            "maatregelen": ["GF4: uitgevoerd"],
+        }
+    )
     return resultaten[0].text
 
 
@@ -140,6 +153,49 @@ def test_regelrecht_levert_drempels_en_oordelen():
     assert feiten["OORDEEL_INFORMATIEPLICHT"] is True
     assert feiten["OORDEEL_ONDERZOEKSPLICHT"] is False
     assert feiten["VOLGENDE_DEADLINE"] == "2027-12-01"
+
+
+def test_rvo_levert_referentienummer():
+    """`_uit_rvo` was nergens tegen de echte server getoetst.
+
+    Dezelfde klasse fout als de kvk/netbeheerder-regressie hierboven:
+    REFERENTIENUMMER ging in een gemeten run al eens mis, en handgeschreven
+    testdata bevestigt alleen de aanname van wie hem schreef.
+    """
+    resultaat = _rvo_resultaat("62345681")
+    feiten = feiten_uit_tool("rvo__indienen", resultaat)
+    assert feiten["REFERENTIENUMMER"] == "RVO-EBR-2026-62345681-001"
+
+
+def test_regelrecht_levert_de_uitkomstvelden_die_slots_md_aanbiedt():
+    """RAPPORTAGE_METHODE, BEVOEGD_GEZAG en RAPPORTAGE_FREQUENTIE_JAREN staan in
+    `slots.md` maar werden nergens tegen de echte engine gelegd.
+
+    Geverifieerd op 2026-08-13 tegen de live RegelRecht-engine
+    (https://ui.lac.projects.digilab.network/mcp/rpc, KvK 62345681): het
+    `structuredContent.output` van de engine gaf exact deze sleutels terug, en
+    `_simplify_result` in `services/mcp/regelrecht/server.py` zet dat ongewijzigd
+    door naar `uitkomsten`. Dit is dus de vorm zoals de engine hem echt levert,
+    niet een aanname.
+    """
+    resultaat = _envelope(
+        {
+            "uitkomsten": {
+                "heeft_energiebesparingsplicht": True,
+                "heeft_informatieplicht": True,
+                "heeft_onderzoeksplicht": False,
+                "rapportage_frequentie_jaren": 4,
+                "volgende_rapportage_deadline": "2027-12-01",
+                "rapportage_methode": "RVO eLoket (mijn.rvo.nl) met eHerkenning niveau 2+",
+                "bevoegd_gezag": "gemeente",
+            }
+        }
+    )
+    feiten = feiten_uit_tool("regelrecht__execute_law", resultaat)
+    assert feiten["OORDEEL_ENERGIEBESPARINGSPLICHT"] is True
+    assert feiten["RAPPORTAGE_FREQUENTIE_JAREN"] == 4
+    assert feiten["RAPPORTAGE_METHODE"] == "RVO eLoket (mijn.rvo.nl) met eHerkenning niveau 2+"
+    assert feiten["BEVOEGD_GEZAG"] == "gemeente"
 
 
 def test_onbekende_tool_levert_niets():
