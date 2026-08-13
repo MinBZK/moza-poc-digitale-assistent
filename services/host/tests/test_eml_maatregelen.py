@@ -231,12 +231,16 @@ def test_execute_law_generieke_wet_gaat_rechtstreeks_naar_engine(monkeypatch):
 
     parameters en overrides worden ongewijzigd doorgegeven; de structured
     response wordt vereenvoudigd. Geen fallback voor deze wetten.
+
+    Naast de hoofdaanroep volgt een tweede aanroep met lege parameters
+    (_definities_voor, voor de drempelwaarden) - vandaar de lijst met calls
+    in plaats van één dict.
     """
     regelrecht = _load_regelrecht()
-    gezien = {}
+    calls = []
 
     async def nep_rpc(method, params):
-        gezien.update(params["arguments"])
+        calls.append(params["arguments"])
         return {
             "structuredContent": {
                 "requirements_met": True,
@@ -256,9 +260,10 @@ def test_execute_law_generieke_wet_gaat_rechtstreeks_naar_engine(monkeypatch):
         )
     )
     assert fallback is False
-    assert gezien["law"] == "omgevingswet/energiebesparing/informatieplicht"
-    assert gezien["parameters"] == {"KVK_NUMMER": "85234567"}
-    assert gezien["overrides"] == {"RVO": {"JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": 61250}}
+    hoofdaanroep = calls[0]
+    assert hoofdaanroep["law"] == "omgevingswet/energiebesparing/informatieplicht"
+    assert hoofdaanroep["parameters"] == {"KVK_NUMMER": "85234567"}
+    assert hoofdaanroep["overrides"] == {"RVO": {"JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": 61250}}
     assert data["voldoet_aan_voorwaarden"] is True
     assert data["uitkomsten"] == {"informatieplicht": True}
 

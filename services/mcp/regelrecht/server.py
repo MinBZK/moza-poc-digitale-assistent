@@ -184,13 +184,55 @@ async def _rpc_call(method: str, params: dict) -> dict:
     return data.get("result", {})
 
 
+# Constanten per wet. De engine geeft ze alleen bij een aanroep met lege
+# parameters, dus die aanroep is een extra RPC per toets. Binnen een sessie
+# veranderen wetsconstanten niet, dus cachen we ze procesbreed.
+_definities_cache: dict[str, dict] = {}
+
+
+async def _definities_voor(law: str, service: str) -> dict:
+    """Constanten (drempelwaarden) van een wet, uit de engine.
+
+    Faalt de aanroep, dan geven we een leeg dict terug in plaats van de toets te
+    laten klappen: zonder drempels is het antwoord onvolledig, met een exception
+    is er geen antwoord.
+    """
+    sleutel = f"{service}/{law}"
+    if sleutel in _definities_cache:
+        return _definities_cache[sleutel]
+    try:
+        rpc = await _rpc_call(
+            "tools/call",
+            {
+                "name": "execute_law",
+                "arguments": {"service": service, "law": law, "parameters": {}},
+            },
+        )
+        structured = rpc.get("structuredContent", {})
+        definities = (
+            structured.get("rule_spec", {}).get("properties", {}).get("definitions", {})
+            or {}
+        )
+    except Exception as e:
+        logger.warning("Definities ophalen mislukt (%s): %s", law, e)
+        definities = {}
+    _definities_cache[sleutel] = definities
+    return definities
+
+
 # ---------------------------------------------------------------------------
 # Response helpers
 # ---------------------------------------------------------------------------
 
 
-def _simplify_result(structured: dict) -> dict:
-    """Extraheer de relevante velden uit de uitgebreide RegelRecht response."""
+def _simplify_result(structured: dict, definities: dict | None = None) -> dict:
+    """Extraheer de relevante velden uit de uitgebreide RegelRecht response.
+
+    `definities` komt van `_definities_voor`, omdat de engine
+    `rule_spec.properties.definitions` alleen vult bij een aanroep met lege
+    parameters. Het model roept altijd met gevulde parameters aan; zonder dit
+    argument heeft het dus nooit de drempels waar de prompt om vraagt.
+    """
     result = {}
 
     # Metadata van de wet
@@ -204,6 +246,15 @@ def _simplify_result(structured: dict) -> dict:
     result["voldoet_aan_voorwaarden"] = structured.get("requirements_met", False)
     result["uitkomsten"] = structured.get("output", {})
 
+    # De waarden waarop de regel feitelijk rekende. Zonder deze moet het model
+    # de getallen uit het gesprek reconstrueren of verzinnen.
+    gebruikt = {
+        naam.lstrip("$"): waarde
+        for naam, waarde in (structured.get("input") or {}).items()
+    }
+    if gebruikt:
+        result["gebruikte_waarden"] = gebruikt
+
     # Ontbrekende parameters
     missing = structured.get("missing_parameters", [])
     if missing:
@@ -216,11 +267,13 @@ def _simplify_result(structured: dict) -> dict:
             for field in entry.get("missing_fields", [])
         ]
 
-    # Regelspecificatie: definities (drempelwaarden etc.)
+    # Constanten van de regel. Meegegeven wint van wat er in deze respons zit:
+    # bij gevulde parameters geeft de engine hier niets terug.
     rule_spec = structured.get("rule_spec", {})
-    definitions = rule_spec.get("properties", {}).get("definitions", {})
-    if definitions:
-        result["drempelwaarden"] = definitions
+    uit_respons = rule_spec.get("properties", {}).get("definitions", {})
+    drempels = definities or uit_respons
+    if drempels:
+        result["drempelwaarden"] = drempels
 
     # Wettelijke grondslag uit actions
     actions = rule_spec.get("actions", [])
@@ -461,7 +514,9 @@ async def _engine_execute(
         text = " ".join(c.get("text", "") for c in content if c.get("type") == "text")
         return {"resultaat": text}
 
-    return _simplify_result(structured)
+    definities = await _definities_voor(law, service)
+    data = _simplify_result(structured, definities)
+    return data
 
 
 async def _maatregelen(arguments: dict) -> tuple[dict, bool]:
