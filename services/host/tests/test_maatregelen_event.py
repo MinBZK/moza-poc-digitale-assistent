@@ -52,3 +52,15 @@ def test_andere_tool_levert_niets():
 
 def test_kapot_resultaat_gooit_niet():
     assert maatregelen_voor_event("regelrecht__execute_law", "geen json") is None
+
+
+def test_data_geen_dict_gooit_niet():
+    """`data` kan een lijst of string zijn; `.get()` daarop gooit een AttributeError."""
+    resultaat = json.dumps({"data": ["niet een dict"]})
+    assert maatregelen_voor_event("regelrecht__execute_law", resultaat) is None
+
+
+def test_maatregel_geen_dict_gooit_niet():
+    """Eén malvormd element in de lijst mag de hele extractie niet laten crashen."""
+    resultaat = _envelope({"maatregelen": ["niet een dict"]})
+    assert maatregelen_voor_event("regelrecht__execute_law", resultaat) is None

@@ -349,13 +349,13 @@ def maatregelen_voor_event(tool_naam: str, resultaat: str) -> list[dict] | None:
         return None
     try:
         data = json.loads(resultaat).get("data") or {}
+        geldend = [
+            {"code": m.get("code", ""), "omschrijving": m.get("naam", "")}
+            for m in (data.get("maatregelen") or [])
+            if m.get("van_toepassing")
+        ]
     except (ValueError, AttributeError):
         return None
-    geldend = [
-        {"code": m.get("code", ""), "omschrijving": m.get("naam", "")}
-        for m in (data.get("maatregelen") or [])
-        if m.get("van_toepassing")
-    ]
     return geldend or None
 
 
