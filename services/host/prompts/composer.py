@@ -147,11 +147,55 @@ def _compose_bronnen_status(bronnen_offline: list[str], has_tools: bool) -> str 
     return _load(bestand).replace("{bronnen}", "\n".join(regels))
 
 
+def _compose_regel_status(regel_status: dict | None) -> str | None:
+    """Build the block that tells the model what the rule loop already decided.
+
+    `regelloop.volg_regel` runs before the model sees the turn and gathers
+    everything it can by itself; this is the only channel through which the
+    model learns what is left — ask for consent, ask the ondernemer a
+    question the engine needs, or report that RegelRecht already produced an
+    outcome. Modeled after `_compose_bronnen_status`: same precedent, same
+    "tell the model what the host already knows" reasoning.
+    """
+    if not regel_status:
+        return None
+    wacht_op = regel_status.get("wacht_op")
+    reden = regel_status.get("reden", "")
+    if wacht_op == "toestemming":
+        status = (
+            f"{reden} Vraag de ondernemer EXPLICIET om akkoord voordat u deze bron "
+            "raadpleegt of de resultaten ervan gebruikt voor de toetsing. Wacht op "
+            "een duidelijk antwoord; raadpleeg de bron niet zonder dat akkoord."
+        )
+    elif wacht_op == "opgave":
+        status = (
+            f"{reden} Stel deze vraag aan de ondernemer; dit is een gegeven dat "
+            "alleen hij weet en dat via het formulier binnenkomt, niet iets dat u "
+            "zelf kunt opzoeken of aannemen."
+        )
+    elif wacht_op == "onbekend":
+        status = (
+            f"{reden} De assistent kan dit op dit moment niet bepalen. Meld dat "
+            "eerlijk aan de ondernemer in plaats van te gokken of de vraag over te "
+            "slaan."
+        )
+    else:
+        resultaat = regel_status.get("resultaat") or {}
+        status = (
+            "RegelRecht heeft de toets afgerond (voldoet_aan_voorwaarden: "
+            f"{resultaat.get('voldoet_aan_voorwaarden')}). Formuleer uw antwoord op "
+            "basis van deze uitkomst en de feiten die al bekend zijn, en vermeld dat "
+            "de uitkomst uit RegelRecht komt."
+        )
+    return _load("shared/regel_status.md").replace("{status}", status)
+
+
 def compose_system_prompt(
     mode: str,
     has_tools: bool,
     bronnen_offline: list[str] | None = None,
     cli_transport: bool = False,
+    regel_status: dict | None = None,
 ) -> str:
     """Assemble the system prompt from modular blocks.
 
@@ -161,6 +205,8 @@ def compose_system_prompt(
         bronnen_offline: Sources that failed to start, by server name.
         cli_transport: True for the `cli:*` modes, which offer a smaller set of
             tools than the shared routing table describes.
+        regel_status: What the rule loop (`regelloop.volg_regel`) already
+            determined this turn, or None if it did not run (CLI transport).
 
     Returns:
         Complete system prompt string.
@@ -190,6 +236,9 @@ def compose_system_prompt(
             # storing, dus het hoort in een eigen blok en niet in de
             # beschikbaarheidslijst.
             blocks.append(_load("shared/cli_transport.md"))
+        regel = _compose_regel_status(regel_status)
+        if regel:
+            blocks.append(regel)  # wat de regelloop deze beurt al bepaalde
         if status:
             blocks.append(status)  # welke bronnen nu uitliggen
     elif status:
