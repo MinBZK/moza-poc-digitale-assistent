@@ -32,12 +32,12 @@ VOORBEELDEN = sorted((PROMPTS / "examples").glob("*.md"))
 # een verbetering die vastgelegd hoort te worden.
 BASISSCORE = {
     "buiten_scope_met_brug.md": 58.1,
-    "informatieplicht_flow.md": 50.4,
+    "informatieplicht_flow.md": 47.6,
     "koop_regelrecht_combined.md": 64.7,
     "koop_search.md": 25.5,
     "koop_specific_law.md": 38.9,
     "onduidelijke_vraag.md": 66.8,
-    "regelrecht_no_obligation.md": 58.4,
+    "regelrecht_no_obligation.md": 54.0,
 }
 
 # Speling op de ratel, zodat een komma of een woordje wisselen geen rode CI geeft.

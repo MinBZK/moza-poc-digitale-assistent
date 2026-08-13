@@ -179,6 +179,9 @@ def compose_system_prompt(
     # 3. Tool instructions OR no-tools fallback
     status = _compose_bronnen_status(bronnen_offline or [], has_tools)
     if has_tools:
+        # Vóór tool_usage: de slotregel geldt voor élk antwoord, ook voor
+        # antwoorden die geen tool gebruiken maar wel een eerder feit noemen.
+        blocks.append(_load("shared/slots.md"))
         blocks.append(_load("shared/tool_usage.md"))
         blocks.extend(_load_domain_blocks(bronnen_offline or []))
         if cli_transport:

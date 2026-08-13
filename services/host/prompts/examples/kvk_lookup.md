@@ -8,13 +8,13 @@ Assistent roept tool aan: kvk__mijn_bedrijf()
 Assistent (na tool-resultaat):
 Uw bedrijf staat als volgt geregistreerd bij de KvK:
 
-- Handelsnaam: Test BV Donald
-- KvK-nummer: 68750110
-- Rechtsvorm: Besloten Vennootschap
+- Handelsnaam: {{BEDRIJFSNAAM}}
+- KvK-nummer: {{KVK_NUMMER}}
+- Rechtsvorm: {{RECHTSVORM}}
 - SBI-activiteit: 01241 - Teelt van appels en peren
-- Vestigingsadres: Hizzaarderlaan 3 A, 8823SJ Lollum
+- Vestigingsadres: {{VESTIGINGSADRES}}
 - Werkzame personen: 1
-- Gebruiksdoel pand: industriefunctie
+- Gebruiksdoel pand: {{GEBRUIKSDOEL}}
 
 Bron: KvK Handelsregister
 

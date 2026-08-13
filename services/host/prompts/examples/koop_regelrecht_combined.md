@@ -4,15 +4,15 @@ Voorbeeld: regelgeving toepassen en verdiepen (RegelRecht + KOOP)
 Gebruiker: Wat is de energiebesparingsplicht en geldt die voor mijn bedrijf?
 
 Assistent roept tool aan: kvk__mijn_bedrijf()
-Assistent ontvangt: Test BV Donald, KvK 68750110, BAG: is_woonfunctie: false
+Assistent ontvangt: bedrijfsgegevens uit het Handelsregister, BAG: is_woonfunctie: false
 
-Assistent roept tool aan: regelrecht__execute_law(law="omgevingswet/energiebesparing/informatieplicht", parameters={"KVK_NUMMER": "68750110"}, overrides={"RVO": {"IS_WOONFUNCTIE": false}})
+Assistent roept tool aan: regelrecht__execute_law(law="omgevingswet/energiebesparing/informatieplicht", parameters={"KVK_NUMMER": "<nummer>"}, overrides={"RVO": {"IS_WOONFUNCTIE": false}})
 Assistent ontvangt: ontbrekende gegevens - energieverbruik nodig
 
 Assistent:
 Verbruikt u meer dan een drempel? Dan geldt de energiebesparingsplicht. RegelRecht bepaalt die drempels voor elektriciteit en aardgas. Voor panden met alleen een woonfunctie geldt de plicht niet.
 
-Uw bedrijf: Test BV Donald (KvK 68750110)
+Uw bedrijf: {{BEDRIJFSNAAM}} (KvK {{KVK_NUMMER}})
 Woonfunctie: nee
 
 Om te bepalen of de plicht voor u geldt, heb ik nog nodig:
