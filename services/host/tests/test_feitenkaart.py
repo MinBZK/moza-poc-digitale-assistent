@@ -3,78 +3,124 @@
 Elk feit dat hier niet uit komt, moet het model uit het gesprek reconstrueren -
 en dat is precies waar 'Bloemenlaan 12' vandaan kwam terwijl de KvK-tool
 'Hoefweg 210' had geleverd.
+
+De kvk- en netbeheerder-testdata komt uit de echte MCP-servers (importlib,
+zoals `test_kvk_multitenant.py` en `test_rvo_indienen.py` dat doen) en niet uit
+een met de hand geschreven envelope. Een handgeschreven envelope toetst alleen
+de aanname van wie hem schreef: `_uit_netbeheerder` en `_uit_kvk` lazen ooit
+paden die de servers helemaal niet teruggeven (`data["totaal"]` i.p.v.
+`data["verbruik"]["totaal"]`, `data["bag"]["is_woonfunctie"]` i.p.v. het
+top-level `data["is_woonfunctie"]`) en de suite bleef groen omdat de
+handgeschreven envelope toevallig wél de aangenomen vorm had. Door de servers
+zelf de payload te laten leveren, breekt deze test zodra hun vorm wijzigt.
 """
 
+import importlib.util
 import json
+from pathlib import Path
 
 from feiten import feiten_uit_tool
+
+MCP_DIR = Path(__file__).resolve().parent.parent.parent / "mcp"
+
+
+def _load(pad_relatief: str, modulenaam: str):
+    """Laad een MCP-servermodule vanaf schijf, los van sys.path/packaging."""
+    pad = MCP_DIR / pad_relatief
+    spec = importlib.util.spec_from_file_location(modulenaam, pad)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+async def _kvk_resultaat(kvk_nummer: str) -> str:
+    """De envelope die de KvK-server voor `mijn_bedrijf` teruggeeft (BAG incl.).
+
+    Draait netwerkloos: het KvK-nummer zit in `MOCK_PROFIELEN` en het adres in
+    `_BAG_DEMO_FALLBACK`, dus geen `BAG_API_KEY` nodig (niet gezet in deze
+    omgeving).
+    """
+    srv = _load("kvk/server.py", "mcp_kvk_server_feitenkaart")
+    resultaten = await srv.call_tool("mijn_bedrijf", {"kvk_nummer": kvk_nummer})
+    return resultaten[0].text
+
+
+def _netbeheerder_resultaat(kvk_nummer: str) -> str:
+    """De envelope die de netbeheerder-server voor `verbruik` teruggeeft."""
+    srv = _load("netbeheerder/server.py", "mcp_netbeheerder_server_feitenkaart")
+    resultaten = srv._verbruik({"kvk_nummer": kvk_nummer})
+    return resultaten[0].text
 
 
 def _envelope(data: dict) -> str:
     return json.dumps({"data": data, "provenance": {"source": "test"}})
 
 
-def test_kvk_levert_naam_nummer_en_bezoekadres():
-    resultaat = _envelope(
-        {
-            "naam": "Kwekerij De Bloesem",
-            "kvkNummer": "62345681",
-            "rechtsvorm": "Vennootschap onder firma",
-            "_embedded": {
-                "hoofdvestiging": {
-                    "vestigingsnummer": "000062345681",
-                    "adressen": [
-                        {"type": "correspondentieadres", "volledigAdres": "Postbus 1, 2665AA Bleiswijk"},
-                        {"type": "bezoekadres", "volledigAdres": "Hoefweg 210, 2665KG Bleiswijk"},
-                    ],
-                }
-            },
-        }
-    )
+async def test_kvk_levert_naam_nummer_en_bezoekadres():
+    """Kwekerij De Bloesem is de persona uit de regressie: 'Hoefweg 210'."""
+    resultaat = await _kvk_resultaat("62345681")
     feiten = feiten_uit_tool("kvk__mijn_bedrijf", resultaat)
     assert feiten["BEDRIJFSNAAM"] == "Kwekerij De Bloesem"
     assert feiten["KVK_NUMMER"] == "62345681"
+    assert feiten["RECHTSVORM"] == "Vennootschap onder firma"
     assert feiten["VESTIGINGSNUMMER"] == "000062345681"
     assert feiten["VESTIGINGSADRES"] == "Hoefweg 210, 2665KG Bleiswijk"
 
 
-def test_adres_wordt_op_type_gekozen_niet_op_positie():
-    """Een postbus als eerste adres is het geval dat positie-kiezen sloopt."""
-    resultaat = _envelope(
-        {
-            "naam": "Vogel Bouwregie B.V.",
-            "kvkNummer": "61234570",
-            "_embedded": {
-                "hoofdvestiging": {
-                    "adressen": [
-                        {"type": "correspondentieadres", "volledigAdres": "Postbus 44, 3000AA Rotterdam"},
-                        {"type": "bezoekadres", "volledigAdres": "Coolsingel 1, 3011AD Rotterdam"},
-                    ]
-                }
-            },
-        }
-    )
-    assert feiten_uit_tool("kvk__mijn_bedrijf", resultaat)["VESTIGINGSADRES"] == (
-        "Coolsingel 1, 3011AD Rotterdam"
-    )
+async def test_adres_wordt_op_type_gekozen_niet_op_positie():
+    """Vogel Bouwregie B.V. heeft een postbus als correspondentieadres.
+
+    Dat is precies het geval waarin adres-op-positie kiezen het postbusadres
+    zou opleveren i.p.v. het bezoekadres.
+    """
+    resultaat = await _kvk_resultaat("61234570")
+    feiten = feiten_uit_tool("kvk__mijn_bedrijf", resultaat)
+    assert feiten["VESTIGINGSADRES"] == "Waalhaven 120, 3089JJ Rotterdam"
+
+
+async def test_gebruiksdoel_met_één_waarde_wordt_leesbare_tekst():
+    """`bag.gebruiksdoelen` is een lijst; met één waarde blijft dat leesbaar."""
+    resultaat = await _kvk_resultaat("62345681")
+    feiten = feiten_uit_tool("kvk__mijn_bedrijf", resultaat)
+    assert feiten["GEBRUIKSDOEL"] == "industriefunctie"
+    assert feiten["WOONFUNCTIE"] is False
+
+
+async def test_gebruiksdoel_met_meerdere_waarden_wordt_leesbare_tekst():
+    """Vogel Bouwregie B.V. heeft een pand met twee gebruiksdoelen.
+
+    Een Python-lijstrepresentatie ("['kantoorfunctie', 'industriefunctie']")
+    hoort niet in de tekst van een rapport voor de ondernemer.
+    """
+    resultaat = await _kvk_resultaat("61234570")
+    feiten = feiten_uit_tool("kvk__mijn_bedrijf", resultaat)
+    assert feiten["GEBRUIKSDOEL"] == "kantoorfunctie, industriefunctie"
+    assert "[" not in feiten["GEBRUIKSDOEL"]
+    assert feiten["WOONFUNCTIE"] is False
 
 
 def test_netbeheerder_levert_verbruik_en_peiljaar():
-    resultaat = _envelope(
-        {
-            "peiljaar": 2025,
-            "netbeheerder": "Stedin (mock)",
-            "totaal": {
-                "jaarlijks_elektriciteitsverbruik_kwh": 420000,
-                "jaarlijks_gasverbruik_m3": 140000,
-            },
-        }
-    )
+    """Verbruik zit onder `verbruik.totaal`, peiljaar/uitgever onder `credential`.
+
+    Niet op het hoogste niveau van `data` (PDR-008: de respons modelleert een
+    Business Wallet-credential, geen platte verbruiksrespons).
+    """
+    resultaat = _netbeheerder_resultaat("62345681")
     feiten = feiten_uit_tool("netbeheerder__verbruik", resultaat)
     assert feiten["ELEKTRICITEIT_KWH"] == 420000
     assert feiten["GAS_M3"] == 140000
     assert feiten["PEILJAAR"] == 2025
     assert feiten["NETBEHEERDER"] == "Stedin (mock)"
+
+
+def test_netbeheerder_zonder_attestatie_levert_niets():
+    """Geen Business Wallet-attestatie (`beschikbaar: False`) → geen feiten.
+
+    Niet nul-waarden of een gedeeltelijk gevulde dict: de host mag hier niet op
+    gokken, en de assistent moet de gebruiker om het verbruik vragen.
+    """
+    resultaat = _netbeheerder_resultaat("00000000")
+    assert feiten_uit_tool("netbeheerder__verbruik", resultaat) == {}
 
 
 def test_regelrecht_levert_drempels_en_oordelen():

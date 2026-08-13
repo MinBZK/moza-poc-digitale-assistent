@@ -29,27 +29,48 @@ def _bezoekadres(vestiging: dict) -> str | None:
     return None
 
 
+def _gebruiksdoel(bag: dict) -> str | None:
+    """Het gebruiksdoel als leesbare tekst.
+
+    De BAG geeft `gebruiksdoelen` als lijst - een pand kan er meerdere hebben
+    (bv. kantoor- én industriefunctie). Een Python-lijstrepresentatie hoort niet
+    in een rapporttekst voor de ondernemer, dus komma-gescheiden platgeslagen.
+    """
+    doelen = bag.get("gebruiksdoelen") or []
+    return ", ".join(doelen) if doelen else None
+
+
 def _uit_kvk(data: dict) -> dict:
     vestiging = (data.get("_embedded") or {}).get("hoofdvestiging") or {}
+    # `is_woonfunctie` zet de KvK-server naast `bag`, niet erin (server.py).
     feiten = {
         "BEDRIJFSNAAM": data.get("naam"),
         "KVK_NUMMER": data.get("kvkNummer"),
         "RECHTSVORM": data.get("rechtsvorm"),
         "VESTIGINGSNUMMER": vestiging.get("vestigingsnummer"),
         "VESTIGINGSADRES": _bezoekadres(vestiging),
-        "WOONFUNCTIE": (data.get("bag") or {}).get("is_woonfunctie"),
-        "GEBRUIKSDOEL": (data.get("bag") or {}).get("gebruiksdoel"),
+        "WOONFUNCTIE": data.get("is_woonfunctie"),
+        "GEBRUIKSDOEL": _gebruiksdoel(data.get("bag") or {}),
     }
     return {k: v for k, v in feiten.items() if v is not None}
 
 
 def _uit_netbeheerder(data: dict) -> dict:
-    totaal = data.get("totaal") or {}
+    """Feiten uit de Business Wallet-credential (server.py: PDR-008).
+
+    Zonder attestatie (`beschikbaar: False`) heeft de respons geen `verbruik`/
+    `credential` - expliciet niets opleveren in plaats van op toeval te
+    vertrouwen dat die sleutels dan wel ontbreken.
+    """
+    if not data.get("beschikbaar"):
+        return {}
+    totaal = (data.get("verbruik") or {}).get("totaal") or {}
+    credential = data.get("credential") or {}
     feiten = {
         "ELEKTRICITEIT_KWH": totaal.get("jaarlijks_elektriciteitsverbruik_kwh"),
         "GAS_M3": totaal.get("jaarlijks_gasverbruik_m3"),
-        "PEILJAAR": data.get("peiljaar"),
-        "NETBEHEERDER": data.get("netbeheerder"),
+        "PEILJAAR": credential.get("peiljaar"),
+        "NETBEHEERDER": credential.get("uitgegeven_door"),
     }
     return {k: v for k, v in feiten.items() if v is not None}
 
