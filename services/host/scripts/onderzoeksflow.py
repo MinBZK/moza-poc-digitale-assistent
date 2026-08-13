@@ -17,6 +17,41 @@ te begrijpen is.
 
 LET OP: dit kost echte LLM-calls. Het is geen CI-test en hoort niet in de
 pytest-suite; draai het bewust, vóór een sessie en na een promptwijziging.
+
+Taak 8 vroeg om drie extra controles op de regelgestuurde flow (taak 1 t/m 7):
+elk feit draagt bron en soort, de wet is aangeroepen vóór elke andere bron, en
+geen veld aan de wet meegegeven dat niet uit de routeringstabel komt. Van die
+drie staat er hier maar één (`_controleer_wet_eerst`) - de andere twee kunnen
+niet, en dat is hieronder verantwoord in plaats van ze weg te laten.
+
+- **Wél gemeten: de wet vóór elke andere bron.** `_regel_status` in
+  vlam_host.py yieldt een `tool`-event voor élke aanroep die de
+  orkestratielus zelf doet, óók herhaalde rondes van `regelrecht__execute_law`
+  zelf - niet alleen aanroepen die het model start. Die events komen al over
+  de SSE-stream die dit script toch al leest; er is geen hostlog of
+  debug-endpoint voor nodig.
+- **Niet gemeten: elk feit heeft een bron en een soort.** De feitenkaart
+  (`vlam_host.py: self.feiten`) verlaat het hostproces nooit: geen SSE-event
+  draagt hem, geen endpoint geeft hem terug, en geen bestaande logregel dumpt
+  hem (`slots.py:vul_slots` gebruikt alleen `feit["waarde"]`, nooit `bron`/
+  `soort`). Dat toevoegen is een wijziging aan de host, en die mag deze taak
+  niet maken. Wat wél met code lezen is vast te stellen: elke plek die iets in
+  de feitenkaart schrijft - `feiten.py:_met_herkomst`,
+  `feiten.py:_herkomst_gebruikte_waarden`, `vlam_host.py:_opgaven_als_feiten`
+  - zet bron én soort onvoorwaardelijk. Dat is een aanwijzing dat de eis
+  klopt, geen meting dat hij dat ook echt doet op een draaiende host.
+- **Niet gemeten: geen veld aan de wet meegegeven buiten de routeringstabel.**
+  De parameters die `regelrecht__execute_law` binnenkrijgen zijn nergens
+  zichtbaar: het `tool`-event op de SSE-stream draagt geen argumenten, en
+  zowel `vlam_host.py:_arg_keys` als `server.py:_audit_log` in de
+  regelrecht-server loggen bewust alleen de bovenste sleutelnamen
+  (`law, parameters, service`), nooit wat er ín `parameters` zit - dat is
+  privacy-by-design (PDR-009: geen waarden in de log). Voor de
+  orkestratielus zelf is dit een garantie van de code
+  (`regelloop.py:_parameters_uit_feiten` loopt alleen over
+  `regelrouting.HERKOMST`), maar het model kan `regelrecht__execute_law` ook
+  zelf rechtstreeks aanroepen (zie de bevinding hieronder) en dáár is met de
+  huidige logging niets van te zien.
 """
 
 from __future__ import annotations
@@ -33,6 +68,8 @@ import httpx
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from taalniveau import MAX_WOORDEN_PER_ZIN, meet  # noqa: E402
+
+import regelrouting  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # De frontend-parser, nagebouwd
@@ -177,6 +214,49 @@ def _controleer_adres(loop: Loop, stap: str, antwoord: str, persona: Persona) ->
 
 _BRONTOOLS = {"kvk__mijn_bedrijf", "netbeheerder__verbruik", "regelrecht__execute_law"}
 
+# Uit de routeringstabel afgeleid, niet hardgecodeerd: welke bronnen de
+# orkestratielus zelf mag raadplegen (elk veld met een `tool`), en welke
+# daarvan toestemming vergen (PDR-008). Loopt de tabel uit met een tweede wet,
+# dan lopen deze verzamelingen vanzelf mee.
+_ROUTETOOLS = {veld.tool for veld in regelrouting.HERKOMST.values() if veld.tool}
+_TOESTEMMINGSTOOLS = {
+    veld.tool for veld in regelrouting.HERKOMST.values() if veld.tool and veld.toestemming
+}
+
+
+def _controleer_wet_eerst(loop: Loop, stap: str, tools: list[str]) -> None:
+    """De wet is aangeroepen vóór elke andere bron uit de routeringstabel.
+
+    Zichtbaar zonder hostlog: `_regel_status` in vlam_host.py yieldt een
+    `tool`-event voor élke aanroep die de orkestratielus zelf doet — ook
+    `regelrecht__execute_law` zelf, en ook herhaalde rondes — niet alleen voor
+    aanroepen die het model via zijn eigen tool-dispatch start. De volgorde in
+    `tools` (zoals deze module die al uit de SSE-stream opbouwt) weerspiegelt
+    dus de werkelijke aanroepvolgorde van de host, inclusief de lus. Dat is
+    waarom deze controle geen hostlog of debug-endpoint nodig heeft, in
+    tegenstelling tot de twee controles die dat wel doen (zie de toelichting
+    bovenaan dit bestand).
+
+    Draait alleen als er in deze beurt daadwerkelijk een andere bron uit de
+    routeringstabel is aangeroepen (`_ROUTETOOLS` minus de wet zelf) - anders
+    is er niets om de volgorde tegen af te zetten.
+    """
+    andere_bron = [t for t in _ROUTETOOLS if t != "regelrecht__execute_law"]
+    eerste_andere = min(
+        (i for i, t in enumerate(tools) if t in andere_bron), default=None
+    )
+    if eerste_andere is None:
+        return
+    eerste_wet = min(
+        (i for i, t in enumerate(tools) if t == "regelrecht__execute_law"), default=None
+    )
+    loop.controleer(
+        stap,
+        eerste_wet is not None and eerste_wet < eerste_andere,
+        "regelrecht__execute_law is aangeroepen vóór elke andere bron uit de routeringstabel",
+        f"volgorde: {tools}",
+    )
+
 
 def _controleer_slots(
     loop: Loop, stap: str, antwoord: str, persona: Persona, tools: list[str]
@@ -275,19 +355,33 @@ class Loop:
             for regel in detail.splitlines():
                 print(f"         {regel}")
 
-    def beurt(self, bericht: str) -> tuple[str, list[str], list[dict]]:
-        """Eén beurt zoals de frontend hem stuurt. Geeft (antwoord, tools, events)."""
+    def beurt(
+        self, bericht: str, *, toestemming: bool | None = None
+    ) -> tuple[str, list[str], list[dict]]:
+        """Eén beurt zoals de frontend hem stuurt. Geeft (antwoord, tools, events).
+
+        `toestemming` gaat alleen mee als hij expliciet is meegegeven — precies
+        zoals de "Delen"-knop het `toestemming`-veld op het chat-contract vult
+        (PDR-008). Zonder deze parameter kan dit script het akkoord van de
+        respondent niet meer nabootsen: sinds de PDR-008-poort in de host
+        (`vlam_host._bron_aanroep_gated`) stelt platte tekst als "Ja, ga je
+        gang." de Business Wallet niet meer open.
+        """
+        payload: dict = {
+            "message": bericht,
+            "session_id": self.session_id,
+            "mode": self.mode,
+        }
+        if toestemming is not None:
+            payload["toestemming"] = toestemming
+
         events: list[dict] = []
         with httpx.Client(timeout=300.0) as client:
             with client.stream(
                 "POST",
                 f"{self.host}/chat/stream",
                 headers={"X-Test-User": self.kvk},
-                json={
-                    "message": bericht,
-                    "session_id": self.session_id,
-                    "mode": self.mode,
-                },
+                json=payload,
             ) as respons:
                 respons.raise_for_status()
                 for regel in respons.iter_lines():
@@ -350,8 +444,8 @@ def draai(loop: Loop, persona: Persona) -> None:
     loop.controleer("stap1", not _fouten(events), "geen foutmelding", "\n".join(_fouten(events)))
     loop.controleer(
         "stap1",
-        not tools,
-        "geen bron geraadpleegd voor toestemming (PDR-008)",
+        not any(t in _TOESTEMMINGSTOOLS for t in tools),
+        "geen toestemmingsplichtige bron aangeroepen vóór toestemming (PDR-008)",
         f"wel aangeroepen: {tools}",
     )
     loop.controleer(
@@ -360,10 +454,11 @@ def draai(loop: Loop, persona: Persona) -> None:
         "de assistent vraagt om toestemming",
         antwoord[:300],
     )
+    _controleer_wet_eerst(loop, "stap1", tools)
     _b1(loop, "stap1", antwoord)
 
     print("\n=== 2. toestemming geven ===")
-    antwoord, tools, events = loop.beurt("Ja, ga je gang.")
+    antwoord, tools, events = loop.beurt("Ja, ga je gang.", toestemming=True)
     loop.controleer("stap2", not _fouten(events), "geen foutmelding", "\n".join(_fouten(events)))
     for verwacht in ("kvk__mijn_bedrijf", "netbeheerder__verbruik", "regelrecht__execute_law"):
         loop.controleer(
@@ -379,6 +474,7 @@ def draai(loop: Loop, persona: Persona) -> None:
         )
     _controleer_adres(loop, "stap2", antwoord, persona)
     _controleer_slots(loop, "stap2", antwoord, persona, tools)
+    _controleer_wet_eerst(loop, "stap2", tools)
     _b1(loop, "stap2", antwoord)
 
     print("\n=== 3. maatregelen opvragen: de twee feitelijke vragen ===")
@@ -396,6 +492,7 @@ def draai(loop: Loop, persona: Persona) -> None:
         loop.controleer(
             "stap3", len(spec.velden) == 2, f"twee vragen als velden ({len(spec.velden)})", str(spec.velden)
         )
+    _controleer_wet_eerst(loop, "stap3", tools)
     _b1(loop, "stap3", antwoord)
 
     print("\n=== 4. de twee vragen beantwoorden: het EML-formulier ===")
@@ -421,6 +518,7 @@ def draai(loop: Loop, persona: Persona) -> None:
             str(spec),
         )
     _controleer_maatregelen_event(loop, "stap4", events)
+    _controleer_wet_eerst(loop, "stap4", tools)
     _b1(loop, "stap4", antwoord)
 
     print("\n=== 5. maatregelen invullen: rapport, nog niet indienen ===")
@@ -451,6 +549,7 @@ def draai(loop: Loop, persona: Persona) -> None:
         loop.controleer(
             "stap5", waarde in antwoord, f"het rapport bevat {wat}", antwoord[:400]
         )
+    _controleer_wet_eerst(loop, "stap5", tools)
     _b1(loop, "stap5", antwoord)
 
     print("\n=== 6. bevestigen: rapportage indienen ===")
@@ -479,6 +578,7 @@ def draai(loop: Loop, persona: Persona) -> None:
     )
     _controleer_adres(loop, "stap6", antwoord, persona)
     _controleer_slots(loop, "stap6", antwoord, persona, tools)
+    _controleer_wet_eerst(loop, "stap6", tools)
     _b1(loop, "stap6", antwoord)
 
 

@@ -299,6 +299,21 @@ FOUTEN: dict[str, FoutMelding] = {
         ),
         http_status=500,
     ),
+    # --- Toestemming (PDR-008) ---
+    "TOESTEMMING_VEREIST": FoutMelding(
+        code="TOESTEMMING_VEREIST",
+        # De harde poort in `vlam_host._bron_aanroep_gated`: zonder vastgelegde
+        # toestemming (het `toestemming`-veld op het chat-contract, gevuld door
+        # de "Delen"-knop) komt `netbeheerder__verbruik` hier niet voorbij, wie
+        # de aanroep ook initieerde.
+        bericht="Voor {bron_label} is eerst akkoord van de ondernemer nodig.",
+        actie=(
+            "Vraag de ondernemer om toestemming te geven, bijvoorbeeld via de "
+            "'Delen'-knop, en verstuur uw vraag daarna opnieuw."
+        ),
+        bron="netbeheerder",
+        http_status=403,
+    ),
     # --- De bronnen ---
     "SOURCE_UNAVAILABLE": FoutMelding(
         code="SOURCE_UNAVAILABLE",

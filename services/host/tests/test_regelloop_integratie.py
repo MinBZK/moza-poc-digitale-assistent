@@ -17,11 +17,14 @@ zelf. Net als daar: alle zes de paden (vlam/claude x stream/blocking x mcp/cli),
 niet alleen de twee MCP-streampaden — anders dekt de suite de andere vier niet.
 """
 
+import ast
 import json
 import types
+from pathlib import Path
 
 import pytest
 
+import errors
 import vlam_host
 
 SESSIE = "85234567"
@@ -245,14 +248,16 @@ async def test_attestatieachtig_feit_in_de_kaart_ontsluit_de_wallet_niet():
     assert "netbeheerder__verbruik" not in host.registry.aanroepen
 
 
-async def test_geslaagde_modelgestuurde_netbeheerder_aanroep_legt_toestemming_vast():
-    """C1 ruling 2: het model blijft het pad naar toestemming (PDR-008 in
-    tool_usage.md) totdat de frontend `toestemming` stuurt. Slaagt die
-    modelgestuurde aanroep, dan moet de host dat onthouden voor de rest van
-    de sessie — dat is precies wat `_execute_tools` hier moet vastleggen."""
+async def test_netbeheerder_zonder_vastgelegde_toestemming_wordt_geweigerd():
+    """De harde poort (PDR-008): `_bron_aanroep_gated` weigert
+    `netbeheerder__verbruik` zolang `self.toestemming[conv_key]` niet is
+    vastgelegd — ook als het model zelf de aanroep initieert, buiten de
+    regelloop om. De registry hieronder raiset zodra hij toch wordt bereikt,
+    zodat deze test bewijst dat de poort vóór de bron staat, niet erna.
+    """
     host = vlam_host.VLAMHost()
 
-    class _NetbeheerderRegistry:
+    class _RegistryDieNooitBereiktMagWorden:
         tool_map = {"netbeheerder__verbruik": ("netbeheerder", {})}
 
         def get_openai_tools(self):
@@ -262,17 +267,167 @@ async def test_geslaagde_modelgestuurde_netbeheerder_aanroep_legt_toestemming_va
             return []
 
         async def call_tool(self, tool_key, arguments):
-            return json.dumps({"data": {"beschikbaar": False}})
+            raise AssertionError(
+                "netbeheerder__verbruik bereikte de registry zonder vastgelegde "
+                "toestemming — de PDR-008-poort had dit moeten tegenhouden"
+            )
 
-    host.registry = _NetbeheerderRegistry()
-    conv_key = "conv-1"
+    host.registry = _RegistryDieNooitBereiktMagWorden()
+    conv_key = "conv-geen-toestemming"
     tool_use = types.SimpleNamespace(
         type="tool_use", name="netbeheerder__verbruik", input={}, id="tu1"
     )
 
     assert host.toestemming.get(conv_key, False) is False
-    await host._execute_tools([tool_use], SESSIE, conv_key)
-    assert host.toestemming[conv_key] is True
+    tool_results, bronfouten = await host._execute_tools([tool_use], SESSIE, conv_key)
+
+    assert len(bronfouten) == 1
+    assert bronfouten[0].code == "TOESTEMMING_VEREIST"
+    payload = json.loads(tool_results[0]["content"])
+    assert payload["error"] == "TOESTEMMING_VEREIST"
+    # De catalogusmelding uit errors.py, niet een verzonnen tekst.
+    assert payload["gebruikersmelding"] == errors.maak_fout("TOESTEMMING_VEREIST", bron="netbeheerder").tekst
+    assert host.toestemming.get(conv_key, False) is False
+
+
+async def test_netbeheerder_met_vastgelegde_toestemming_bereikt_de_bron():
+    """Dezelfde aanroep als hierboven, nu mét toestemming: de poort laat 'm door."""
+    host = vlam_host.VLAMHost()
+
+    class _NetbeheerderRegistry:
+        tool_map = {"netbeheerder__verbruik": ("netbeheerder", {})}
+
+        def __init__(self):
+            self.aanroepen = 0
+
+        def get_openai_tools(self):
+            return []
+
+        def get_anthropic_tools(self):
+            return []
+
+        async def call_tool(self, tool_key, arguments):
+            self.aanroepen += 1
+            return json.dumps({"data": {"beschikbaar": True}})
+
+    registry = _NetbeheerderRegistry()
+    host.registry = registry
+    conv_key = "conv-met-toestemming"
+    host.toestemming[conv_key] = True
+    tool_use = types.SimpleNamespace(
+        type="tool_use", name="netbeheerder__verbruik", input={}, id="tu1"
+    )
+
+    tool_results, bronfouten = await host._execute_tools([tool_use], SESSIE, conv_key)
+
+    assert registry.aanroepen == 1
+    assert not bronfouten
+    assert json.loads(tool_results[0]["content"])["data"]["beschikbaar"] is True
+
+
+async def test_toestemming_op_het_verzoek_ontsluit_een_modelgestuurde_aanroep():
+    """End-to-end via het publieke contract: `toestemming: true` op het
+    verzoek (de "Delen"-knop) zet de vlag vóórdat het model aan zet is, en
+    laat een aanroep die het model zelf initieert — niet de regelloop —
+    daarna gewoon door de poort.
+    """
+    host = vlam_host.VLAMHost()
+
+    class _NetbeheerderRegistry:
+        tool_map = {"netbeheerder__verbruik": ("netbeheerder", {})}
+
+        def __init__(self):
+            self.aanroepen: list[str] = []
+
+        def get_openai_tools(self):
+            return []
+
+        def get_anthropic_tools(self):
+            return []
+
+        async def call_tool(self, tool_key, arguments):
+            self.aanroepen.append(tool_key)
+            return json.dumps({"data": {"beschikbaar": True}})
+
+    registry = _NetbeheerderRegistry()
+    host.registry = registry
+
+    # Het model roept eerst zelf `netbeheerder__verbruik` aan, en sluit de
+    # beurt daarna af met tekst — de exacte modelgestuurde beweging uit de
+    # bug: geen regelloop, geen wet, alleen het model dat de tool kiest.
+    beurten = iter(
+        [
+            types.SimpleNamespace(
+                content=[
+                    types.SimpleNamespace(
+                        type="tool_use", id="tu1", name="netbeheerder__verbruik", input={}
+                    )
+                ],
+                usage=None,
+            ),
+            types.SimpleNamespace(
+                content=[types.SimpleNamespace(type="text", text="Uw verbruik is opgehaald.")],
+                usage=None,
+            ),
+        ]
+    )
+
+    async def _create(**kwargs):
+        return next(beurten)
+
+    host.claude_client = types.SimpleNamespace(
+        api_key="x", messages=types.SimpleNamespace(create=_create)
+    )
+
+    await _drain(
+        host.chat_stream(
+            "sess",
+            "Wat is mijn energieverbruik?",
+            mode="claude",
+            session_kvk=SESSIE,
+            toestemming=True,
+        )
+    )
+
+    assert "netbeheerder__verbruik" in registry.aanroepen
+
+
+async def test_geslaagde_netbeheerder_aanroep_zet_de_toestemmingsvlag_niet_meer():
+    """Regressietest op de grondoorzaak: een geslaagde
+    `netbeheerder__verbruik`-aanroep autoriseerde zichzelf (de aanroep zette de
+    vlag die hij zelf nodig had om door de poort te komen). Toestemming komt nu
+    uitsluitend uit het `toestemming`-veld op het chat-contract (`chat`/
+    `chat_stream`) — nergens anders.
+
+    Functioneel is dit sinds de poort (taak 8) niet meer los te toetsen: een
+    aanroep die zonder toestemming zou moeten "slagen om zichzelf te
+    autoriseren" komt de poort al niet meer door, dus die situatie bestaat
+    domweg niet meer om tegen te toetsen (de twee tests hierboven bewijzen
+    dát). Wat wél blijft: de broncode mag `self.toestemming[...] = True` alleen
+    nog zetten op het contract-veld, niet als bijeffect van een tool-resultaat.
+    Deze test scant daarop, zodat hij faalt zodra iemand de oude regel (`if
+    tool_key == "netbeheerder__verbruik" and fout is None: ...`) ergens
+    terugzet.
+    """
+    bron = Path(vlam_host.__file__).read_text(encoding="utf-8")
+    plekken = [
+        i + 1
+        for i, regel in enumerate(bron.splitlines())
+        if "self.toestemming[conv_key] = True" in regel
+    ]
+    functies = ast.parse(bron)
+    toegestane_regels = {
+        regel
+        for node in ast.walk(functies)
+        if isinstance(node, ast.AsyncFunctionDef) and node.name in ("chat", "chat_stream")
+        for regel in range(node.lineno, (node.end_lineno or node.lineno) + 1)
+    }
+    buiten_contract = [r for r in plekken if r not in toegestane_regels]
+    assert not buiten_contract, (
+        f"self.toestemming wordt op regel(s) {buiten_contract} gezet buiten "
+        "chat/chat_stream om - dat is precies het pad waarmee een geslaagde "
+        "netbeheerder__verbruik-aanroep zichzelf autoriseerde (PDR-008)."
+    )
 
 
 async def test_regelloop_yieldt_tool_events_terwijl_hij_raadpleegt():

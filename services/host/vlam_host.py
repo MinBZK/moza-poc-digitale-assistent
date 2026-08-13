@@ -579,10 +579,13 @@ class VLAMHost:
         # geen van beide heeft nu een TTL.
         self.feiten: dict[str, dict] = {}
         # Toestemming voor de Business Wallet (PDR-008), per gesprek. Een
-        # vastgelegde vlag, geen afleiding: gezet zodra de frontend expliciet
-        # `toestemming: true` stuurt, of zodra een `netbeheerder__verbruik`-
-        # aanroep (van het model, of van de regelloop zelf) slaagt. Eenmaal
-        # `True` blijft `True` binnen de sessie — er is hier geen intrekking.
+        # vastgelegde vlag, geen afleiding: uitsluitend gezet zodra de frontend
+        # expliciet `toestemming: true` stuurt op het chat-contract (de
+        # "Delen"-knop). Een geslaagde `netbeheerder__verbruik`-aanroep zet 'm
+        # NIET (meer) — dat pad autoriseerde zichzelf: een aanroep die de vlag
+        # nodig heeft om door de poort te komen, kon 'm ook zelf zetten zodra
+        # hij eenmaal doorkwam. Eenmaal `True` blijft `True` binnen de sessie —
+        # er is hier geen intrekking.
         self.toestemming: dict[str, bool] = {}
         # Houdt bij welke servers gelukt/mislukt zijn
         self.server_status: dict[str, str] = {}
@@ -878,14 +881,15 @@ class VLAMHost:
             await queue.put(
                 {"type": "tool", "message": _tool_label(tool_key), "tool": tool_key}
             )
-            resultaat, fout = await _bron_aanroep(
-                partial(self.registry.call_tool, tool_key, arguments), tool_key, arguments
+            resultaat, fout = await self._bron_aanroep_gated(
+                partial(self.registry.call_tool, tool_key, arguments),
+                tool_key,
+                arguments,
+                conv_key,
             )
             if fout:
                 await queue.put(naar_event(fout, "bron_fout"))
             feiten.update(feiten_uit_tool(tool_key, resultaat))
-            if tool_key == "netbeheerder__verbruik" and fout is None:
-                self.toestemming[conv_key] = True
             return resultaat
 
         async def draai() -> None:
@@ -1157,8 +1161,9 @@ class VLAMHost:
         sessiekaart uit `self.feiten` (by reference) — alleen `.update()`en.
         `regel_status` is de uitkomst van de regelloop van vóór deze beurt
         (`_regel_status`); `None` als die niet gedraaid is (CLI-transport).
-        `conv_key` legt toestemming vast (PDR-008) als het model zelf
-        `netbeheerder__verbruik` aanroept — zie `_execute_tools`.
+        `conv_key` gaat naar `_bron_aanroep_gated` (PDR-008): roept het model
+        zelf `netbeheerder__verbruik` aan, dan weigert die poort de aanroep
+        zolang toestemming niet vastligt — zie `_execute_tools`.
         """
         tools = self.registry.get_anthropic_tools()
         system_prompt = self._system_prompt("claude", regel_status=regel_status)
@@ -1243,8 +1248,9 @@ class VLAMHost:
         `feiten` is de sessiekaart uit `self.feiten` (by reference) — alleen
         `.update()`en. `regel_status` is de uitkomst van de regelloop van vóór
         deze beurt (`_regel_status`); `None` als die niet gedraaid is
-        (CLI-transport). `conv_key` legt toestemming vast (PDR-008) als het
-        model zelf `netbeheerder__verbruik` aanroept.
+        (CLI-transport). `conv_key` gaat naar `_bron_aanroep_gated` (PDR-008):
+        roept het model zelf `netbeheerder__verbruik` aan, dan weigert die
+        poort de aanroep zolang toestemming niet vastligt.
         """
         tools_openai = self.registry.get_openai_tools()
         system_prompt = self._system_prompt("vlam", regel_status=regel_status)
@@ -1323,17 +1329,16 @@ class VLAMHost:
                     continue
                 arguments = _inject_session_kvk(tool_key, arguments, session_kvk)
                 logger.info("Tool-aanroep [vlam]: %s (velden: %s)", tool_key, _arg_keys(arguments))
-                result, fout = await _bron_aanroep(
+                result, fout = await self._bron_aanroep_gated(
                     partial(self.registry.call_tool, tool_key, arguments),
                     tool_key,
                     arguments,
+                    conv_key,
                 )
                 if fout:
                     yield naar_event(fout, "bron_fout")
 
                 feiten.update(feiten_uit_tool(tool_key, result))
-                if tool_key == "netbeheerder__verbruik" and fout is None:
-                    self.toestemming[conv_key] = True
                 maatregelen_deze_beurt = (
                     maatregelen_voor_event(tool_key, result) or maatregelen_deze_beurt
                 )
@@ -1550,8 +1555,8 @@ class VLAMHost:
 
         `feiten` is de sessiekaart uit `self.feiten` (by reference) — alleen
         `.update()`en. `regel_status` is de uitkomst van de regelloop van vóór
-        deze beurt (`_regel_status`). `conv_key` legt toestemming vast
-        (PDR-008) als het model zelf `netbeheerder__verbruik` aanroept.
+        deze beurt (`_regel_status`). `conv_key` gaat naar `_execute_tools`,
+        dat de PDR-008-poort toepast op elke tool-aanroep van het model.
         """
         if not claude.api_key:
             return _geen_sleutel_fout("claude").tekst
@@ -1612,8 +1617,9 @@ class VLAMHost:
 
         `feiten` is de sessiekaart uit `self.feiten` (by reference) — alleen
         `.update()`en. `regel_status` is de uitkomst van de regelloop van vóór
-        deze beurt (`_regel_status`). `conv_key` legt toestemming vast
-        (PDR-008) als het model zelf `netbeheerder__verbruik` aanroept.
+        deze beurt (`_regel_status`). `conv_key` gaat naar
+        `_bron_aanroep_gated`, dat de PDR-008-poort toepast op elke
+        tool-aanroep van het model.
         """
         tools_openai = self.registry.get_openai_tools()
         system_prompt = self._system_prompt("vlam", regel_status=regel_status)
@@ -1669,13 +1675,12 @@ class VLAMHost:
                     logger.info(
                         "Tool-aanroep [vlam]: %s (velden: %s)", tool_key, _arg_keys(arguments)
                     )
-                    result, fout = await _bron_aanroep(
+                    result, _ = await self._bron_aanroep_gated(
                         partial(self.registry.call_tool, tool_key, arguments),
                         tool_key,
                         arguments,
+                        conv_key,
                     )
-                    if tool_key == "netbeheerder__verbruik" and fout is None:
-                        self.toestemming[conv_key] = True
 
                 feiten.update(feiten_uit_tool(tool_key, result))
                 openai_messages.append(
@@ -1692,6 +1697,32 @@ class VLAMHost:
     # Helpers
     # ------------------------------------------------------------------
 
+    async def _bron_aanroep_gated(
+        self, aanroep, tool_key: str, arguments: dict, conv_key: str
+    ) -> tuple[str, object]:
+        """`_bron_aanroep`, met de PDR-008-poort voor de Business Wallet ervoor.
+
+        Dit is de enige plek waar een MCP-tool-aanroep de registry bereikt —
+        model én regelloop lopen hier allebei doorheen. Zolang
+        `self.toestemming[conv_key]` niet is vastgelegd, komt
+        `netbeheerder__verbruik` de poort niet door: geen bron-aanroep, maar
+        een tool-resultaat met de catalogusmelding, alsof de bron zelf weigerde.
+
+        Vóór deze poort kon een geslaagde aanroep de vlag zetten die hij zelf
+        nodig had om door te komen - een aanroep die zichzelf autoriseert.
+        Prompt-instructies alleen bleken dat niet te stoppen: het model riep de
+        tool zelf aan zodra de systeemprompt liet doorschemeren dat er verbruik
+        nodig was. Deze poort staat daarom in de host, niet in de prompt.
+        """
+        if tool_key == "netbeheerder__verbruik" and not self.toestemming.get(conv_key, False):
+            fout = maak_fout("TOESTEMMING_VEREIST", bron="netbeheerder")
+            logger.warning(
+                "Business Wallet geweigerd zonder vastgelegde toestemming [conv_key=%r]",
+                conv_key,
+            )
+            return naar_llm(fout), fout
+        return await _bron_aanroep(aanroep, tool_key, arguments)
+
     async def _execute_tools(
         self, tool_uses, session_kvk: str, conv_key: str = ""
     ) -> tuple[list[dict], list]:
@@ -1699,23 +1730,23 @@ class VLAMHost:
 
         Geeft de tool-resultaten terug plus de bronfouten die onderweg optraden,
         zodat de stream ze als `bron_fout`-event kan tonen terwijl het gesprek
-        gewoon doorloopt. `conv_key` legt toestemming vast (PDR-008) als het
-        model zelf `netbeheerder__verbruik` aanroept en die aanroep slaagt.
+        gewoon doorloopt. `conv_key` gaat naar `_bron_aanroep_gated`, dat de
+        PDR-008-poort toepast (netbeheerder__verbruik zonder vastgelegde
+        toestemming komt hier nooit door naar de registry).
         """
         tool_results = []
         bronfouten = []
         for tool_use in tool_uses:
             arguments = _inject_session_kvk(tool_use.name, tool_use.input, session_kvk)
             logger.info("Tool-aanroep [claude]: %s (velden: %s)", tool_use.name, _arg_keys(arguments))
-            result, fout = await _bron_aanroep(
+            result, fout = await self._bron_aanroep_gated(
                 partial(self.registry.call_tool, tool_use.name, arguments),
                 tool_use.name,
                 arguments,
+                conv_key,
             )
             if fout:
                 bronfouten.append(fout)
-            elif tool_use.name == "netbeheerder__verbruik":
-                self.toestemming[conv_key] = True
 
             tool_results.append(
                 {
