@@ -179,6 +179,10 @@ class ChatRequest(BaseModel):
     # niet gegeven in dit verzoek", niet "ingetrokken" - eenmaal gegeven blijft
     # gegeven voor de rest van de sessie (VLAMHost.toestemming).
     toestemming: bool | None = None
+    # Formulierantwoorden van de ondernemer (radioknoppen), gestructureerd door
+    # de frontend in plaats van platgeslagen tot een zin die het model weer
+    # moet interpreteren. De host filtert op wat de routeringstabel kent.
+    opgaven: dict[str, object] | None = None
 
 
 class ChatResponse(BaseModel):
@@ -443,6 +447,7 @@ async def chat(body: ChatRequest, request: Request):
         mode=mode,
         session_kvk=session_kvk,
         toestemming=body.toestemming,
+        opgaven=body.opgaven,
         **api_keys,
     )
     return ChatResponse(
@@ -508,6 +513,7 @@ async def chat_stream(body: ChatRequest, request: Request):
                 mode=mode,
                 session_kvk=session_kvk,
                 toestemming=body.toestemming,
+                opgaven=body.opgaven,
                 **api_keys,
             )
         ) as stream:

@@ -18,6 +18,7 @@ import anthropic
 import httpx
 import openai
 
+import regelrouting
 from cli_executor import CLI_DIR, execute_cli_tool
 from config import (
     ALLOW_API_KEY_OVERRIDE,
@@ -192,6 +193,24 @@ def _regel_status_dict(uitkomst: Uitkomst) -> dict:
         "reden": uitkomst.reden,
         "resultaat": uitkomst.resultaat,
     }
+
+
+def _opgaven_als_feiten(opgaven: dict[str, object] | None) -> dict[str, dict]:
+    """Verpak de formulierantwoorden van de frontend tot feiten met herkomst.
+
+    Alleen velden die `regelrouting.route()` kent mét `soort == "opgave"` komen
+    door: een frontend mag daarmee geen willekeurig feit de kaart in schrijven,
+    ook geen feit dat wél in de routeringstabel staat maar uit een andere bron
+    hoort te komen (bv. `IS_WOONFUNCTIE`, een registratie).
+    """
+    feiten: dict[str, dict] = {}
+    for naam, waarde in (opgaven or {}).items():
+        veld = regelrouting.route(str(naam))
+        if veld is None or veld.soort != "opgave":
+            continue
+        sleutel = veld.feitnaam or str(naam)
+        feiten[sleutel] = {"waarde": waarde, "bron": veld.bron, "soort": veld.soort}
+    return feiten
 
 
 def _geen_sleutel_fout(backend: str = ""):
@@ -920,6 +939,7 @@ class VLAMHost:
         mode: str = "vlam",
         session_kvk: str = "",
         toestemming: bool | None = None,
+        opgaven: dict[str, object] | None = None,
         vlam_api_key_override: str = "",
         claude_api_key_override: str = "",
     ) -> str:
@@ -933,6 +953,9 @@ class VLAMHost:
         van dít verzoek. `True` legt de vlag voor de rest van de sessie vast;
         `None`/`False` laat een eerder gegeven toestemming ongemoeid (geen
         intrekking via dit veld).
+        opgaven: formulierantwoorden van de ondernemer (bv. HEEFT_KOELINSTALLATIE),
+        vóór de regelloop in de feitenkaart gezet zodat de lus er niet opnieuw
+        naar vraagt.
         """
         conv_key = self._conv_key(session_kvk, session_id, mode)
         if conv_key not in self.conversations:
@@ -941,6 +964,7 @@ class VLAMHost:
         feiten = self.feiten.setdefault(conv_key, {})
         if toestemming:
             self.toestemming[conv_key] = True
+        feiten.update(_opgaven_als_feiten(opgaven))
         use_cli = mode.startswith("cli:")
         # Zie chat_stream: bij een leeg of onvolledig modelantwoord draaien we
         # de hele beurt terug (_HERSTEL_CODES), anders blokkeert een
@@ -994,6 +1018,7 @@ class VLAMHost:
         mode: str = "vlam",
         session_kvk: str = "",
         toestemming: bool | None = None,
+        opgaven: dict[str, object] | None = None,
         vlam_api_key_override: str = "",
         claude_api_key_override: str = "",
     ) -> AsyncGenerator[dict, None]:
@@ -1014,6 +1039,7 @@ class VLAMHost:
 
         toestemming: expliciete toestemming voor de Business Wallet (PDR-008)
         van dít verzoek. Zie `chat()`.
+        opgaven: formulierantwoorden van de ondernemer. Zie `chat()`.
         """
         use_cli = mode.startswith("cli:")
         llm = mode.split(":")[-1] if use_cli else mode
@@ -1034,6 +1060,7 @@ class VLAMHost:
                 feiten = self.feiten.setdefault(conv_key, {})
                 if toestemming:
                     self.toestemming[conv_key] = True
+                feiten.update(_opgaven_als_feiten(opgaven))
                 # Beginstand van deze beurt. Loopt de beurt stuk op een leeg of
                 # onvolledig modelantwoord (_HERSTEL_CODES), dan draaien we
                 # hierop terug: een assistent-bericht dat de respondent nooit zo
