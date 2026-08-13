@@ -275,6 +275,33 @@ def test_execute_law_zonder_law_geeft_nette_fout():
     assert data["error"] == "ONTBREKEND_VELD"
 
 
+def test_eml_fallback_draagt_herkomstlabel():
+    """De lokale kopie meldt zichzelf, in beide stappen van de flow."""
+    regelrecht = _load_regelrecht()
+    assert regelrecht._eml_fallback({})["herkomst"] == regelrecht.EML_FALLBACK_HERKOMST
+    volledig = regelrecht._eml_fallback(
+        {"HEEFT_KOELINSTALLATIE": True, "HEEFT_AFZUIGINSTALLATIE": True}
+    )
+    assert volledig["herkomst"] == regelrecht.EML_FALLBACK_HERKOMST
+
+
+def test_maatregelen_via_engine_heeft_geen_herkomstlabel(monkeypatch):
+    """Het engine-pad IS de regel; alleen de lokale kopie draagt het label."""
+    regelrecht = _load_regelrecht()
+
+    async def nep_rpc(method, params):
+        return ENGINE_RESULT_COMPLEET
+
+    monkeypatch.setattr(regelrecht, "_rpc_call", nep_rpc)
+    data, fallback = asyncio.run(
+        regelrecht._maatregelen(
+            {"feiten": {"HEEFT_KOELINSTALLATIE": True, "HEEFT_AFZUIGINSTALLATIE": False}}
+        )
+    )
+    assert fallback is False
+    assert "herkomst" not in data
+
+
 def test_maatregelen_normaliseert_feiten_keys_en_negeert_niet_boolse_waarden(
     monkeypatch,
 ):

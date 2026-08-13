@@ -104,6 +104,9 @@ Een tool-resultaat met een veld `gebruikersmelding` betekent dat de bron niet he
 - Meld welke stap hierdoor niet kon worden gezet ("ik kan hierdoor nog niet vaststellen of de plicht voor u geldt").
 - Noem GEEN foutcodes, technische termen, bestandspaden of interne URL's.
 
+ALS EEN TOOL-RESULTAAT EEN VELD `herkomst` BEVAT:
+Dit betekent dat de bron is uitgeweken naar een lokale kopie van de regel, niet de regel zelf. Meld dit expliciet aan de gebruiker (bv. "let op: dit is een lokale kopie van de regel, RegelRecht was niet bereikbaar") vóórdat u de uitkomst presenteert. De juridische geldigheid blijft bij de oorspronkelijke wetgeving, niet bij deze kopie.
+
 WANNEER NIET TE GEBRUIKEN:
 - Gebruik GEEN tool als de gebruiker alleen een begroeting stuurt of een algemene vraag stelt die geen actuele gegevens vereist ("Wat doet de KvK?" hoeft niet opgezocht te worden).
 - Gebruik GEEN muterende tool (indienen, aanvragen) zonder expliciete bevestiging van de gebruiker.

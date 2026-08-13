@@ -62,6 +62,12 @@ SERVER_VERSION = "0.1.0"
 EML_SOURCE_LABEL = "RegelRecht — EML-maatregelbepaling (lokale fallback)"
 EML_LAW = "omgevingswet/energiebesparing/maatregelen"
 
+# Provenance zit al op het MCP-envelope (fallback: True), maar het model leest
+# alleen `data`. Zonder een veld dáárin presenteert het de lokale kopie
+# onopgemerkt als de regel zelf (de juridische geldigheid blijft bij de
+# oorspronkelijke wetgeving, niet bij deze kopie).
+EML_FALLBACK_HERKOMST = "lokale kopie van de regel; RegelRecht was niet bereikbaar"
+
 EML_FALLBACK_VRAGEN = [
     {
         "naam": "HEEFT_KOELINSTALLATIE",
@@ -88,7 +94,7 @@ def _eml_fallback(feiten: dict) -> dict:
     """Lokale evaluatie van de demo-subset (zelfde flow als de engine)."""
     onbeantwoord = [v for v in EML_FALLBACK_VRAGEN if v["naam"] not in feiten]
     if onbeantwoord:
-        return {"benodigde_feiten": onbeantwoord}
+        return {"benodigde_feiten": onbeantwoord, "herkomst": EML_FALLBACK_HERKOMST}
     return {
         "maatregelen": [
             {
@@ -102,6 +108,7 @@ def _eml_fallback(feiten: dict) -> dict:
             for m in EML_FALLBACK_MAATREGELEN
         ],
         "feiten": feiten,
+        "herkomst": EML_FALLBACK_HERKOMST,
     }
 
 
