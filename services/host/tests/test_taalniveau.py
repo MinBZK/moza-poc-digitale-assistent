@@ -32,12 +32,12 @@ VOORBEELDEN = sorted((PROMPTS / "examples").glob("*.md"))
 # een verbetering die vastgelegd hoort te worden.
 BASISSCORE = {
     "buiten_scope_met_brug.md": 58.1,
-    "informatieplicht_flow.md": 47.6,
+    "informatieplicht_flow.md": 52.6,
     "koop_regelrecht_combined.md": 64.7,
     "koop_search.md": 25.5,
     "koop_specific_law.md": 38.9,
     "onduidelijke_vraag.md": 66.8,
-    "regelrecht_no_obligation.md": 54.0,
+    "regelrecht_no_obligation.md": 57.5,
 }
 
 # Speling op de ratel, zodat een komma of een woordje wisselen geen rode CI geeft.
@@ -206,6 +206,23 @@ def test_de_maat_ziet_een_lange_zin():
     )
     assert kort.aantal_te_lang == 0
     assert lang.aantal_te_lang == 1
+
+
+def test_een_slot_telt_als_een_woord():
+    """Bij verzending heeft `slots.py` er al één waarde van gemaakt - de
+    `{{...}}`-vorm bestaat alleen in de prompt en moet dus ook als één woord
+    meetellen, niet als evenveel woorden als er underscores in de slotnaam
+    staan.
+
+    Vóór de normalisatie in `taalniveau._zonder_slots` ging deze zin over de
+    grens: veertien gewone woorden plus `{{VOLGENDE_DEADLINE}}` (dat de
+    woordregex zonder normalisatie als twee woorden splitst) kwam op zestien.
+    """
+    veertien_woorden = " ".join(["woord"] * 14)
+    zin = f"{veertien_woorden} {{{{VOLGENDE_DEADLINE}}}}."
+    gemeten = meet(zin, alleen_proza=False)
+    assert gemeten is not None
+    assert gemeten.aantal_te_lang == 0
 
 
 def test_opsommingen_tellen_niet_als_zin():
