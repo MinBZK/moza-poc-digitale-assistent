@@ -64,6 +64,32 @@ def test_datum_wordt_nederlands_geschreven():
     assert tekst == "1 december 2027"
 
 
+def test_niet_bestaande_datum_blijft_onbewerkt():
+    """`2027-2-30` heeft de ISO-vorm, maar 30 februari bestaat niet.
+
+    `date.fromisoformat` valideert dat; zonder die validatie werd dit stil
+    "30 februari 2027" - een datum die niet bestaat, verzonnen door de laag die
+    juist geen feiten mag verzinnen.
+    """
+    tekst, _ = vul_slots("{{VOLGENDE_DEADLINE}}", {"VOLGENDE_DEADLINE": "2027-2-30"})
+    assert tekst == "2027-2-30"
+
+
+def test_datum_in_dag_maand_jaar_volgorde_blijft_onbewerkt():
+    """Dag-maand-jaar is geen ISO-datum en mag niet als zodanig gelezen worden.
+
+    Zonder validatie werd `31-12-2027` (jaar-maand-dag gelezen) stil
+    "2027 december 31" - onzin, zonder enige melding.
+    """
+    tekst, _ = vul_slots("{{VOLGENDE_DEADLINE}}", {"VOLGENDE_DEADLINE": "31-12-2027"})
+    assert tekst == "31-12-2027"
+
+
+def test_waarde_zonder_streepjes_blijft_ongewijzigd():
+    tekst, _ = vul_slots("{{VESTIGINGSPLAATS}}", {"VESTIGINGSPLAATS": "Utrecht"})
+    assert tekst == "Utrecht"
+
+
 def test_een_onopgelost_slot_haalt_het_antwoord_niet():
     """De hele reden dat deze laag bestaat.
 
@@ -78,3 +104,17 @@ def test_een_onopgelost_slot_haalt_het_antwoord_niet():
     assert len(events) == 1
     assert events[0]["type"] == "error"
     assert "{{" not in str(events[0])
+
+
+def test_een_onopgelost_slot_haalt_het_blokkerende_antwoord_niet():
+    """Spiegel van de vorige test, voor het blokkerende pad (`/chat`).
+
+    `_antwoord_tekst` is los gewijzigd van `_antwoord_events`; zonder deze test
+    was de symmetrie tussen beide alleen met codelezing vast te stellen.
+    """
+    import vlam_host
+    from errors import maak_fout
+
+    tekst = vlam_host._antwoord_tekst("Uw adres is {{VESTIGINGSADRES}}.", feiten={})
+    assert "{{" not in tekst
+    assert tekst == maak_fout("ANTWOORD_ONVOLLEDIG").tekst

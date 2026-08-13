@@ -7,6 +7,7 @@ even besmettend voor het onderzoek als een verkeerd feit.
 """
 
 import re
+from datetime import date
 
 _SLOT = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 
@@ -27,15 +28,17 @@ _OORDEELSLOTS = frozenset(
 
 
 def _als_datum(waarde: str) -> str | None:
-    """ISO-datum naar '1 december 2027'. Geen datum? Dan None."""
-    delen = waarde.split("-")
-    if len(delen) != 3:
-        return None
+    """ISO-datum naar '1 december 2027'. Geen (geldige) ISO-datum? Dan None.
+
+    `date.fromisoformat` valideert echt: een niet-bestaande dag (30 februari),
+    een niet-ISO volgorde (dag-maand-jaar) of een willekeurige string geven
+    allemaal een `ValueError` in plaats van een verzonnen datum.
+    """
     try:
-        jaar, maand, dag = (int(d) for d in delen)
-        return f"{dag} {_MAANDEN[maand - 1]} {jaar}"
-    except (ValueError, IndexError):
+        d = date.fromisoformat(waarde)
+    except ValueError:
         return None
+    return f"{d.day} {_MAANDEN[d.month - 1]} {d.year}"
 
 
 def _weergave(naam: str, waarde: object) -> str:
