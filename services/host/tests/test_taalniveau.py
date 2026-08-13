@@ -12,7 +12,7 @@ voor wat de maat wél en niet zegt.
 from pathlib import Path
 
 import pytest
-from taalniveau import MAX_WOORDEN_PER_ZIN, meet
+from taalniveau import MAX_WOORDEN_PER_ZIN, Leesbaarheid, meet
 
 PROMPTS = Path(__file__).resolve().parents[1] / "prompts"
 VOORBEELDEN = sorted((PROMPTS / "examples").glob("*.md"))
@@ -43,6 +43,49 @@ def _assistent_tekst(ruw: str) -> str:
         if aan:
             regels.append(regel)
     return "\n".join(regels)
+
+
+def _meet_voorbeeld(pad: Path) -> Leesbaarheid:
+    """Meet één voorbeeld, of laat de test falen als er niets te meten valt.
+
+    Bewust falen en niet overslaan. `_assistent_tekst` herkent het antwoord aan
+    een regel die met "Assistent" begint en op een dubbele punt eindigt; schrijft
+    iemand `**Assistent**`, dan levert de parser niets op. Bij een skip blijft de
+    suite groen terwijl een voorbeeld met zinnen van dertig woorden ongemeten
+    in de prompt zit - een test die niets meet en toch groen is, is precies de
+    fout waar deze suite tegen bestaat.
+
+    Levert dit een fout op, dan klopt óf het bestand óf de parser. Beide horen
+    iemands aandacht te krijgen; geen van beide hoort stil te blijven.
+    """
+    gemeten = meet(_assistent_tekst(pad.read_text()))
+    if gemeten is None:
+        pytest.fail(
+            f"{pad.name}: geen meetbaar assistent-proza gevonden. Het antwoord "
+            f"hoort te beginnen na een regel als 'Assistent:' (of 'Assistent "
+            f"(toelichting):'). Klopt de opmaak wel, dan loopt de parser in "
+            f"_assistent_tekst achter op het bestandsformaat."
+        )
+    return gemeten
+
+
+def test_afwijkende_opmaak_levert_geen_meting_op():
+    """Legt de grens van de parser vast, want daar hangt _meet_voorbeeld op.
+
+    Zonder deze test is niet zichtbaar dat de herkenning op één schrijfwijze
+    berust, en zou iemand de fail-tak voor overdreven kunnen houden.
+    """
+    afwijkend = (
+        "Gebruiker: Test?\n\n"
+        "**Assistent**\n"
+        "Dit is een opzettelijk veel te lange zin die de grens van vijftien "
+        "woorden ruimschoots overschrijdt.\n"
+    )
+    assert meet(_assistent_tekst(afwijkend)) is None
+
+    herkend = afwijkend.replace("**Assistent**", "Assistent:")
+    gemeten = meet(_assistent_tekst(herkend))
+    assert gemeten is not None and gemeten.aantal_te_lang == 1
 
 
 def test_de_maat_ziet_een_lange_zin():
@@ -85,9 +128,7 @@ def test_voorbeeldantwoorden_demonstreren_de_regel_die_ze_leren(pad):
     Faalt deze test op een nieuw voorbeeld, dan is dat geen formaliteit: het
     voorbeeld leert het model precies het tegenovergestelde van tone.md.
     """
-    gemeten = meet(_assistent_tekst(pad.read_text()))
-    if gemeten is None:
-        pytest.skip("geen assistent-proza in dit voorbeeld")
+    gemeten = _meet_voorbeeld(pad)
     assert gemeten.aantal_te_lang == 0, (
         f"{pad.name}: {gemeten.aantal_te_lang} zin(nen) boven "
         f"{MAX_WOORDEN_PER_ZIN} woorden — het model imiteert dit:\n  "
@@ -111,9 +152,7 @@ def test_voorbeeldantwoorden_gebruiken_ook_alledaagse_woorden(pad):
     vraagt vaktermen uit te leggen, niet weg te laten. 55 klemt de huidige stand
     vast zodat die niet ongemerkt terugzakt; het is geen bewijs van B1.
     """
-    gemeten = meet(_assistent_tekst(pad.read_text()))
-    if gemeten is None:
-        pytest.skip("geen assistent-proza in dit voorbeeld")
+    gemeten = _meet_voorbeeld(pad)
     if gemeten.woorden < MIN_WOORDEN_VOOR_SCORE:
         pytest.skip(
             f"{gemeten.woorden} woorden gemeten - te weinig voor een "
