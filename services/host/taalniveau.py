@@ -8,7 +8,15 @@ regressiebewaking, nooit als bewijs dat iets B1 is — dat oordeel is menselijk.
 Twee bekende beperkingen, allebei reëel in deze repo:
 
 1. De lettergreepteller telt klinkergroepen. Voor het Nederlands is dat een
-   benadering: "ideeën" en "zee" worden verkeerd geteld.
+   benadering, en een eenzijdige: aangrenzende klinkers die wél splitsen gaan
+   voor één groep door, dus de teller telt te weinig en nooit te veel. Gemeten
+   op dertien woorden: zeven fout, alle zeven ondergeteld ("situatie" 3 i.p.v.
+   4, "via" 1 i.p.v. 2, "energiebesparingsplicht" 7 i.p.v. 8). De fout zit dus
+   juist in de Latijnse en samengestelde woorden die een tekst boven B1 tillen,
+   en minder lettergrepen betekent een hogere score. Elke meting hier is een
+   bovengrens. Voor regressiebewaking maakt dat niet uit — de fout is stelselmatig,
+   dus verschillen tussen metingen blijven bruikbaar — maar lees een absolute
+   score nooit als "dit haalt B1".
 2. Een opsomming zonder afsluitende punt wordt als één lange zin gelezen. De
    prompt-voorbeelden staan er vol mee, dus `alleen_proza=True` laat regels
    zonder eindleesteken weg. Zonder die schoonmaak meet je vooral opmaak.

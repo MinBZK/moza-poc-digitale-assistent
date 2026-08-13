@@ -17,6 +17,15 @@ from taalniveau import MAX_WOORDEN_PER_ZIN, meet
 PROMPTS = Path(__file__).resolve().parents[1] / "prompts"
 VOORBEELDEN = sorted((PROMPTS / "examples").glob("*.md"))
 
+# Ondergrens voor de leesbaarheidsindex op de voorbeelden. Zie de docstring van
+# test_voorbeeldantwoorden_gebruiken_ook_alledaagse_woorden voor waarom dit 55 is
+# en niet de 60 die de moduledocstring als "vlot leesbaar" noemt.
+MIN_SCORE = 55
+
+# Onder dit aantal gemeten woorden zegt de index niets: één zin van vijftien
+# woorden levert een getal op dat volledig door die ene zin bepaald wordt.
+MIN_WOORDEN_VOOR_SCORE = 30
+
 
 def _assistent_tekst(ruw: str) -> str:
     """Alleen wat de assistent zegt, niet de vraag of de tool-aanroep."""
@@ -83,4 +92,37 @@ def test_voorbeeldantwoorden_demonstreren_de_regel_die_ze_leren(pad):
         f"{pad.name}: {gemeten.aantal_te_lang} zin(nen) boven "
         f"{MAX_WOORDEN_PER_ZIN} woorden — het model imiteert dit:\n  "
         + "\n  ".join(gemeten.te_lange_zinnen)
+    )
+
+
+@pytest.mark.parametrize("pad", VOORBEELDEN, ids=lambda p: p.name)
+def test_voorbeeldantwoorden_gebruiken_ook_alledaagse_woorden(pad):
+    """De andere helft van B1: woordmoeilijkheid, niet alleen zinslengte.
+
+    Flesch-Douma telt beide. Alleen op zinslengte toetsen laat de helft van de
+    maat los, en die helft loopt de andere kant op: een lange zin opknippen
+    zonder de vaktermen aan te pakken duwt de woorddichtheid juist omhoog. Dat
+    is hier gebeurd - `regelrecht_no_obligation.md` zakte van 58,8 naar 56,9
+    terwijl er een te lange zin uit ging.
+
+    De drempel is 55 en niet de 60 uit de moduledocstring. 60 halen zou betekenen
+    dat de voorbeelden `energiebesparingsplicht` en `woonfunctie` gaan vermijden,
+    en dat zijn de namen die de regelgeving en de BAG er zelf aan geven; `tone.md`
+    vraagt vaktermen uit te leggen, niet weg te laten. 55 klemt de huidige stand
+    vast zodat die niet ongemerkt terugzakt; het is geen bewijs van B1.
+    """
+    gemeten = meet(_assistent_tekst(pad.read_text()))
+    if gemeten is None:
+        pytest.skip("geen assistent-proza in dit voorbeeld")
+    if gemeten.woorden < MIN_WOORDEN_VOOR_SCORE:
+        pytest.skip(
+            f"{gemeten.woorden} woorden gemeten - te weinig voor een "
+            f"leesbaarheidsindex. Flesch op een enkele zin is ruis: een getal "
+            f"dat stellig oogt en niets zegt."
+        )
+    assert gemeten.score >= MIN_SCORE, (
+        f"{pad.name}: score {gemeten.score:.1f} onder {MIN_SCORE} "
+        f"({gemeten.woorden} woorden, gemiddeld "
+        f"{gemeten.gemiddelde_zinslengte:.1f} woorden per zin) — de zinnen zijn "
+        f"kort genoeg, de woorden niet."
     )
