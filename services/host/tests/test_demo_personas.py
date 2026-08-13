@@ -142,7 +142,7 @@ def test_bloemenkweker_is_indieningsplichtig():
     assert totaal["jaarlijks_gasverbruik_m3"] > 25000
 
 
-def test_de_bloesem_heeft_geen_onderzoeksplicht(netbeheerder=None):
+def test_de_bloesem_heeft_geen_onderzoeksplicht():
     """De onderzoeksplicht heeft een ander handelingsperspectief dan rapporteren.
 
     De assistent biedt dat niet. Raakt de persona die drempel toch, dan is een
@@ -150,8 +150,7 @@ def test_de_bloesem_heeft_geen_onderzoeksplicht(netbeheerder=None):
     de implementatie - en dat is precies de uitkomst die het onderzoek moet
     kunnen meten.
     """
-    if netbeheerder is None:
-        netbeheerder = _load("netbeheerder")
+    netbeheerder = _load("netbeheerder")
 
     DREMPEL_ONDERZOEK_GAS_M3 = 170_000
     DREMPEL_ONDERZOEK_ELEKTRICITEIT_KWH = 10_000_000
