@@ -175,6 +175,81 @@ def _controleer_adres(loop: Loop, stap: str, antwoord: str, persona: Persona) ->
     )
 
 
+_BRONTOOLS = {"kvk__mijn_bedrijf", "netbeheerder__verbruik", "regelrecht__execute_law"}
+
+
+def _controleer_slots(
+    loop: Loop, stap: str, antwoord: str, persona: Persona, tools: list[str]
+) -> None:
+    """Geen onopgelost slot, en de bron-waarden staan er na substitutie wél.
+
+    Let op wat dit niet is. De spec noemt ook "geen letterlijk feit waar een slot
+    hoort", en die controle hoort op de RUWE modeltekst vóór substitutie. Die
+    krijgt dit script niet: over HTTP komt alleen het ingevulde antwoord binnen.
+    Wil je dat toetsen, dan moet de host de ruwe tekst meesturen achter een
+    debug-vlag - bewust niet in dit plan, want dat is een nieuw veld op het
+    contract vlak voor een onderzoek.
+
+    Wat hier overblijft is nog steeds het meeste waard: een onopgelost slot
+    betekent dat het model een feit noemde dat de bron niet had, en ontbrekende
+    bron-waarden betekenen dat de substitutie niet gedraaid heeft.
+
+    De tweede controle draait alleen op een beurt die zelf een feiten-tool
+    aanriep. Op stap 6 ("Ja, dien maar in.") is de enige tool `rvo__indienen`,
+    dat geen bedrijfsfeiten teruggeeft; de assistent bevestigt daar terecht
+    zonder de feiten te herhalen, en die beurt heeft niets nieuws om te
+    substitueren.
+    """
+    loop.controleer(
+        stap,
+        "{{" not in antwoord,
+        "geen onopgelost slot in het antwoord",
+        antwoord[:400],
+    )
+    if not any(t in _BRONTOOLS for t in tools):
+        return
+    letterlijk = [
+        waarde
+        for waarde in (persona.naam, persona.straat, persona.elektriciteit, persona.gas)
+        if waarde in antwoord
+    ]
+    loop.controleer(
+        stap,
+        bool(letterlijk),
+        f"de bron-waarden staan in het antwoord ({', '.join(letterlijk) or 'geen'})",
+        "de host heeft de slots niet ingevuld, of het model noemde de feiten niet",
+    )
+
+
+def _controleer_maatregelen_event(loop: Loop, stap: str, events: list[dict]) -> None:
+    """Het answer-event draagt de maatregelen als data, niet alleen als tekst.
+
+    `parseVraag` in digitale-assistent.js leest `maatregelen` op het answer-event
+    vóór het terugvalt op regels tekst parsen (zie de commit die dit veld
+    toevoegde). Zolang dat veld leeg blijft, hangt het formulier alsnog af van
+    hoe het model de beurt toevallig formatteerde - precies wat de tekstparser-
+    controle hierboven meet. Die controle blijft staan: ze meet de fallback, dit
+    hier meet de structurele fix.
+    """
+    antwoorden = [e for e in events if e.get("type") == "answer"]
+    laatste = antwoorden[-1] if antwoorden else {}
+    maatregelen = laatste.get("maatregelen")
+    loop.controleer(
+        stap,
+        bool(maatregelen),
+        "het answer-event draagt een maatregelen-lijst",
+        json.dumps(laatste, ensure_ascii=False)[:400],
+    )
+    if maatregelen:
+        onvolledig = [m for m in maatregelen if not m.get("code") or not m.get("omschrijving")]
+        loop.controleer(
+            stap,
+            not onvolledig,
+            "elk item heeft een gevulde code en omschrijving",
+            json.dumps(onvolledig, ensure_ascii=False),
+        )
+
+
 @dataclass
 class Uitkomst:
     stap: str
@@ -303,6 +378,7 @@ def draai(loop: Loop, persona: Persona) -> None:
             "stap2", waarde in antwoord, f"het antwoord noemt {wat} ({waarde})", antwoord[:400]
         )
     _controleer_adres(loop, "stap2", antwoord, persona)
+    _controleer_slots(loop, "stap2", antwoord, persona, tools)
     _b1(loop, "stap2", antwoord)
 
     print("\n=== 3. maatregelen opvragen: de twee feitelijke vragen ===")
@@ -344,6 +420,7 @@ def draai(loop: Loop, persona: Persona) -> None:
             f"het formulier heet '{spec.titel}'",
             str(spec),
         )
+    _controleer_maatregelen_event(loop, "stap4", events)
     _b1(loop, "stap4", antwoord)
 
     print("\n=== 5. maatregelen invullen: rapport, nog niet indienen ===")
@@ -366,6 +443,14 @@ def draai(loop: Loop, persona: Persona) -> None:
         "de assistent vraagt eerst om bevestiging",
         antwoord[:500],
     )
+    for waarde, wat in (
+        (persona.naam, "bedrijfsnaam"),
+        (persona.straat, "vestigingsadres"),
+        (persona.elektriciteit, "elektriciteitsverbruik"),
+    ):
+        loop.controleer(
+            "stap5", waarde in antwoord, f"het rapport bevat {wat}", antwoord[:400]
+        )
     _b1(loop, "stap5", antwoord)
 
     print("\n=== 6. bevestigen: rapportage indienen ===")
@@ -393,6 +478,7 @@ def draai(loop: Loop, persona: Persona) -> None:
         + antwoord[:400],
     )
     _controleer_adres(loop, "stap6", antwoord, persona)
+    _controleer_slots(loop, "stap6", antwoord, persona, tools)
     _b1(loop, "stap6", antwoord)
 
 
