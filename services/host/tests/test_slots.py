@@ -7,9 +7,25 @@ hele reden dat deze laag bestaat; alles hier moet dus liever weigeren dan gokken
 from slots import vul_slots
 
 
+def _feit(waarde: object) -> dict:
+    """Een feit met alleen de waarde: `vul_slots` leest verder niets uit."""
+    return {"waarde": waarde, "bron": "test", "soort": "opgave"}
+
+
+def test_vul_slots_leest_de_waarde_uit_een_feit():
+    tekst, ontbrekend = vul_slots(
+        "Uw bedrijf {{BEDRIJFSNAAM}}.",
+        {"BEDRIJFSNAAM": {"waarde": "Kwekerij De Bloesem",
+                          "bron": "KvK Handelsregister",
+                          "soort": "registratie"}},
+    )
+    assert tekst == "Uw bedrijf Kwekerij De Bloesem."
+    assert ontbrekend == []
+
+
 def test_bekend_slot_wordt_ingevuld():
     tekst, ontbrekend = vul_slots(
-        "Uw bedrijf {{BEDRIJFSNAAM}} is bekend.", {"BEDRIJFSNAAM": "Kwekerij De Bloesem"}
+        "Uw bedrijf {{BEDRIJFSNAAM}} is bekend.", {"BEDRIJFSNAAM": _feit("Kwekerij De Bloesem")}
     )
     assert tekst == "Uw bedrijf Kwekerij De Bloesem is bekend."
     assert ontbrekend == []
@@ -18,7 +34,7 @@ def test_bekend_slot_wordt_ingevuld():
 def test_getallen_krijgen_nederlandse_duizendtallen():
     """Zonder deze regel schrijft het model de ene keer 420000 en de andere keer
     420.000, en dat verschil ziet de respondent."""
-    tekst, _ = vul_slots("{{ELEKTRICITEIT_KWH}} kWh", {"ELEKTRICITEIT_KWH": 420000})
+    tekst, _ = vul_slots("{{ELEKTRICITEIT_KWH}} kWh", {"ELEKTRICITEIT_KWH": _feit(420000)})
     assert tekst == "420.000 kWh"
 
 
@@ -28,7 +44,7 @@ def test_peiljaar_krijgt_geen_duizendtalscheiding():
     Stond in het vlaggenschipvoorbeeld (informatieplicht_flow.md) en werd door
     geen enkele controle gezien.
     """
-    tekst, _ = vul_slots("Uw verbruik in {{PEILJAAR}}.", {"PEILJAAR": 2025})
+    tekst, _ = vul_slots("Uw verbruik in {{PEILJAAR}}.", {"PEILJAAR": _feit(2025)})
     assert tekst == "Uw verbruik in 2025."
 
 
@@ -37,13 +53,13 @@ def test_rapportage_frequentie_jaren_krijgt_geen_duizendtalscheiding():
     legt vast dat het om de slotnaam gaat, niet om de grootte van de waarde."""
     tekst, _ = vul_slots(
         "Rapporteer elke {{RAPPORTAGE_FREQUENTIE_JAREN}} jaar.",
-        {"RAPPORTAGE_FREQUENTIE_JAREN": 4},
+        {"RAPPORTAGE_FREQUENTIE_JAREN": _feit(4)},
     )
     assert tekst == "Rapporteer elke 4 jaar."
 
 
 def test_booleans_worden_ja_of_nee():
-    tekst, _ = vul_slots("Woonfunctie: {{WOONFUNCTIE}}", {"WOONFUNCTIE": False})
+    tekst, _ = vul_slots("Woonfunctie: {{WOONFUNCTIE}}", {"WOONFUNCTIE": _feit(False)})
     assert tekst == "Woonfunctie: nee"
 
 
@@ -51,7 +67,7 @@ def test_oordeel_wordt_wel_of_niet():
     """Het oordeel komt uit RegelRecht, niet uit het model."""
     tekst, _ = vul_slots(
         "De informatieplicht geldt {{OORDEEL_INFORMATIEPLICHT}} voor u.",
-        {"OORDEEL_INFORMATIEPLICHT": True},
+        {"OORDEEL_INFORMATIEPLICHT": _feit(True)},
     )
     assert tekst == "De informatieplicht geldt wel voor u."
 
@@ -69,18 +85,18 @@ def test_onbekend_slot_blijft_staan_en_wordt_gemeld():
 
 def test_slot_buiten_het_woordenboek_wordt_gemeld():
     """Een verzonnen slotnaam is net zo goed een verzonnen feit."""
-    _, ontbrekend = vul_slots("{{OMZET_2025}}", {"BEDRIJFSNAAM": "x"})
+    _, ontbrekend = vul_slots("{{OMZET_2025}}", {"BEDRIJFSNAAM": _feit("x")})
     assert ontbrekend == ["OMZET_2025"]
 
 
 def test_tekst_zonder_slots_blijft_ongewijzigd():
-    tekst, ontbrekend = vul_slots("Gewoon een zin.", {"BEDRIJFSNAAM": "x"})
+    tekst, ontbrekend = vul_slots("Gewoon een zin.", {"BEDRIJFSNAAM": _feit("x")})
     assert tekst == "Gewoon een zin."
     assert ontbrekend == []
 
 
 def test_datum_wordt_nederlands_geschreven():
-    tekst, _ = vul_slots("{{VOLGENDE_DEADLINE}}", {"VOLGENDE_DEADLINE": "2027-12-01"})
+    tekst, _ = vul_slots("{{VOLGENDE_DEADLINE}}", {"VOLGENDE_DEADLINE": _feit("2027-12-01")})
     assert tekst == "1 december 2027"
 
 
@@ -91,7 +107,7 @@ def test_niet_bestaande_datum_blijft_onbewerkt():
     "30 februari 2027" - een datum die niet bestaat, verzonnen door de laag die
     juist geen feiten mag verzinnen.
     """
-    tekst, _ = vul_slots("{{VOLGENDE_DEADLINE}}", {"VOLGENDE_DEADLINE": "2027-2-30"})
+    tekst, _ = vul_slots("{{VOLGENDE_DEADLINE}}", {"VOLGENDE_DEADLINE": _feit("2027-2-30")})
     assert tekst == "2027-2-30"
 
 
@@ -101,12 +117,12 @@ def test_datum_in_dag_maand_jaar_volgorde_blijft_onbewerkt():
     Zonder validatie werd `31-12-2027` (jaar-maand-dag gelezen) stil
     "2027 december 31" - onzin, zonder enige melding.
     """
-    tekst, _ = vul_slots("{{VOLGENDE_DEADLINE}}", {"VOLGENDE_DEADLINE": "31-12-2027"})
+    tekst, _ = vul_slots("{{VOLGENDE_DEADLINE}}", {"VOLGENDE_DEADLINE": _feit("31-12-2027")})
     assert tekst == "31-12-2027"
 
 
 def test_waarde_zonder_streepjes_blijft_ongewijzigd():
-    tekst, _ = vul_slots("{{VESTIGINGSPLAATS}}", {"VESTIGINGSPLAATS": "Utrecht"})
+    tekst, _ = vul_slots("{{VESTIGINGSPLAATS}}", {"VESTIGINGSPLAATS": _feit("Utrecht")})
     assert tekst == "Utrecht"
 
 

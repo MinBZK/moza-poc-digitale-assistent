@@ -178,7 +178,7 @@ async def test_feitenkaart_vult_zich_via_publieke_ingang(mode, kind, transport, 
         await host.chat("sess", "hoi", mode=mode, session_kvk=SESSIE)
 
     conv_key = host._conv_key(SESSIE, "sess", mode)
-    assert host.feiten.get(conv_key, {}).get("VESTIGINGSADRES") == VESTIGINGSADRES, (
+    assert host.feiten.get(conv_key, {}).get("VESTIGINGSADRES", {}).get("waarde") == VESTIGINGSADRES, (
         f"self.feiten is niet gevuld voor pad '{mode}/{kind}/{transport}' "
         f"(conv_key={conv_key!r}, feiten={host.feiten!r})"
     )

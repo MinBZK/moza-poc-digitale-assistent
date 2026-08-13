@@ -85,6 +85,6 @@ def vul_slots(tekst: str, feiten: dict) -> tuple[str, list[str]]:
         if naam not in feiten:
             ontbrekend.append(naam)
             return match.group(0)
-        return _weergave(naam, feiten[naam])
+        return _weergave(naam, feiten[naam]["waarde"])
 
     return _SLOT.sub(vervang, tekst or ""), ontbrekend

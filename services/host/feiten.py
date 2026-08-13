@@ -8,10 +8,17 @@ rapport dat namens de ondernemer naar RVO gaat.
 Waarom hier en niet in de MCP-servers: die leveren de vorm van hun eigen bron.
 De vertaling naar slotnamen is een keuze van de host, en één plek waar die keuze
 staat is beter dan vijf servers die hem elk half maken.
+
+Elk feit draagt zijn herkomst (`waarde`, `bron`, `soort`) in plaats van alleen
+zijn waarde: een tweede dict ernaast met dezelfde sleutels kan uit de pas lopen
+met wat er werkelijk opgehaald is, en dat is precies hoe de provenance uit de
+MCP-envelope eerder verdween.
 """
 
 import json
 import logging
+
+import regelrouting
 
 logger = logging.getLogger("vlam.feiten")
 
@@ -40,6 +47,19 @@ def _gebruiksdoel(bag: dict) -> str | None:
     return ", ".join(doelen) if doelen else None
 
 
+def _met_herkomst(waarden: dict, bron: str, soort: str) -> dict:
+    """Verpak platte waarden tot feiten met hun herkomst.
+
+    None-waarden vallen weg: een feit zonder waarde is geen feit, en een lege
+    plek is eerlijker dan een verzonnen invulling.
+    """
+    return {
+        naam: {"waarde": waarde, "bron": bron, "soort": soort}
+        for naam, waarde in waarden.items()
+        if waarde is not None
+    }
+
+
 def _uit_kvk(data: dict) -> dict:
     vestiging = (data.get("_embedded") or {}).get("hoofdvestiging") or {}
     # `is_woonfunctie` zet de KvK-server naast `bag`, niet erin (server.py).
@@ -52,7 +72,7 @@ def _uit_kvk(data: dict) -> dict:
         "WOONFUNCTIE": data.get("is_woonfunctie"),
         "GEBRUIKSDOEL": _gebruiksdoel(data.get("bag") or {}),
     }
-    return {k: v for k, v in feiten.items() if v is not None}
+    return _met_herkomst(feiten, "KvK Handelsregister", "registratie")
 
 
 def _uit_netbeheerder(data: dict) -> dict:
@@ -72,7 +92,7 @@ def _uit_netbeheerder(data: dict) -> dict:
         "PEILJAAR": credential.get("peiljaar"),
         "NETBEHEERDER": credential.get("uitgegeven_door"),
     }
-    return {k: v for k, v in feiten.items() if v is not None}
+    return _met_herkomst(feiten, "Business Wallet", "attestatie")
 
 
 # De uitkomsten van RegelRecht die als slot beschikbaar komen.
@@ -90,24 +110,46 @@ _UITKOMST_VELDEN = {
 }
 
 
+def _herkomst_gebruikte_waarden(waarden: dict) -> dict:
+    """Herkomst per veld i.p.v. één vaste bron voor de hele dict.
+
+    RegelRecht echoot hier terug wat wíj de engine als invoer gaven. Een
+    verbruikscijfer dat zo terugkomt hoort de Business Wallet als bron te
+    houden, niet de wet die het alleen doorgaf - anders schrijven we een
+    attestatie van de netbeheerder toe aan RegelRecht, en straks een opgave
+    van de ondernemer ook.
+    """
+    feiten: dict[str, dict] = {}
+    for naam, waarde in waarden.items():
+        if waarde is None:
+            continue
+        veld = regelrouting.route(naam)
+        bron, soort = (veld.bron, veld.soort) if veld else ("RegelRecht", "wetsconstante")
+        sleutel = veld.feitnaam if veld and veld.feitnaam else naam
+        feiten[sleutel] = {"waarde": waarde, "bron": bron, "soort": soort}
+    return feiten
+
+
 def _uit_regelrecht(data: dict) -> dict:
-    feiten: dict[str, object] = {}
-    feiten.update(data.get("drempelwaarden") or {})
-    feiten.update(data.get("gebruikte_waarden") or {})
+    feiten: dict[str, dict] = {}
+    feiten.update(_met_herkomst(data.get("drempelwaarden") or {}, "RegelRecht", "wetsconstante"))
+    feiten.update(_herkomst_gebruikte_waarden(data.get("gebruikte_waarden") or {}))
     uitkomsten = data.get("uitkomsten") or {}
-    for bron, slot in _OORDELEN.items():
-        if bron in uitkomsten:
-            feiten[slot] = uitkomsten[bron]
-    for bron, slot in _UITKOMST_VELDEN.items():
-        if uitkomsten.get(bron) is not None:
-            feiten[slot] = uitkomsten[bron]
+    oordelen = {slot: uitkomsten[naam] for naam, slot in _OORDELEN.items() if naam in uitkomsten}
+    uitkomstvelden = {
+        slot: uitkomsten[naam]
+        for naam, slot in _UITKOMST_VELDEN.items()
+        if uitkomsten.get(naam) is not None
+    }
+    feiten.update(_met_herkomst(oordelen, "RegelRecht", "wetsconstante"))
+    feiten.update(_met_herkomst(uitkomstvelden, "RegelRecht", "wetsconstante"))
     return feiten
 
 
 def _uit_rvo(data: dict) -> dict:
     zaak = data.get("lopende_zaak") or {}
     nummer = zaak.get("referentienummer")
-    return {"REFERENTIENUMMER": nummer} if nummer else {}
+    return _met_herkomst({"REFERENTIENUMMER": nummer}, "RVO", "registratie")
 
 
 _OOGSTERS = {
@@ -118,7 +160,7 @@ _OOGSTERS = {
 }
 
 
-def feiten_uit_tool(tool_naam: str, resultaat: str) -> dict[str, object]:
+def feiten_uit_tool(tool_naam: str, resultaat: str) -> dict[str, dict]:
     """Feiten uit één tool-resultaat, met slotnamen als sleutel.
 
     Een onbekende tool of onleesbaar resultaat levert een leeg dict op: een bron

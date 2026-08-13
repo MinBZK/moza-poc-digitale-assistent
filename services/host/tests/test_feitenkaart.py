@@ -19,6 +19,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 from feiten import feiten_uit_tool
 
 MCP_DIR = Path(__file__).resolve().parent.parent.parent / "mcp"
@@ -69,15 +71,46 @@ def _envelope(data: dict) -> str:
     return json.dumps({"data": data, "provenance": {"source": "test"}})
 
 
+@pytest.fixture
+async def kvk_resultaat():
+    """Envelope van de echte KvK-server, voor Kwekerij De Bloesem."""
+    return await _kvk_resultaat("62345681")
+
+
+@pytest.fixture
+def netbeheerder_resultaat():
+    """Envelope van de echte netbeheerder-server, voor Kwekerij De Bloesem."""
+    return _netbeheerder_resultaat("62345681")
+
+
+def test_een_feit_draagt_zijn_bron_en_soort(kvk_resultaat):
+    """Herkomst hoort bij de waarde, niet ernaast.
+
+    Een tweede dict die je erbij moet houden is precies de constructie waarlangs
+    de provenance de vorige keer verdween.
+    """
+    feiten = feiten_uit_tool("kvk__mijn_bedrijf", kvk_resultaat)
+    naam = feiten["BEDRIJFSNAAM"]
+    assert naam["waarde"] == "Kwekerij De Bloesem"
+    assert naam["bron"] == "KvK Handelsregister"
+    assert naam["soort"] == "registratie"
+
+
+def test_verbruik_draagt_de_business_wallet_als_bron(netbeheerder_resultaat):
+    feiten = feiten_uit_tool("netbeheerder__verbruik", netbeheerder_resultaat)
+    assert feiten["ELEKTRICITEIT_KWH"]["bron"] == "Business Wallet"
+    assert feiten["ELEKTRICITEIT_KWH"]["soort"] == "attestatie"
+
+
 async def test_kvk_levert_naam_nummer_en_bezoekadres():
     """Kwekerij De Bloesem is de persona uit de regressie: 'Hoefweg 210'."""
     resultaat = await _kvk_resultaat("62345681")
     feiten = feiten_uit_tool("kvk__mijn_bedrijf", resultaat)
-    assert feiten["BEDRIJFSNAAM"] == "Kwekerij De Bloesem"
-    assert feiten["KVK_NUMMER"] == "62345681"
-    assert feiten["RECHTSVORM"] == "Vennootschap onder firma"
-    assert feiten["VESTIGINGSNUMMER"] == "000062345681"
-    assert feiten["VESTIGINGSADRES"] == "Hoefweg 210, 2665KG Bleiswijk"
+    assert feiten["BEDRIJFSNAAM"]["waarde"] == "Kwekerij De Bloesem"
+    assert feiten["KVK_NUMMER"]["waarde"] == "62345681"
+    assert feiten["RECHTSVORM"]["waarde"] == "Vennootschap onder firma"
+    assert feiten["VESTIGINGSNUMMER"]["waarde"] == "000062345681"
+    assert feiten["VESTIGINGSADRES"]["waarde"] == "Hoefweg 210, 2665KG Bleiswijk"
 
 
 async def test_adres_wordt_op_type_gekozen_niet_op_positie():
@@ -88,15 +121,15 @@ async def test_adres_wordt_op_type_gekozen_niet_op_positie():
     """
     resultaat = await _kvk_resultaat("61234570")
     feiten = feiten_uit_tool("kvk__mijn_bedrijf", resultaat)
-    assert feiten["VESTIGINGSADRES"] == "Waalhaven 120, 3089JJ Rotterdam"
+    assert feiten["VESTIGINGSADRES"]["waarde"] == "Waalhaven 120, 3089JJ Rotterdam"
 
 
 async def test_gebruiksdoel_met_één_waarde_wordt_leesbare_tekst():
     """`bag.gebruiksdoelen` is een lijst; met één waarde blijft dat leesbaar."""
     resultaat = await _kvk_resultaat("62345681")
     feiten = feiten_uit_tool("kvk__mijn_bedrijf", resultaat)
-    assert feiten["GEBRUIKSDOEL"] == "industriefunctie"
-    assert feiten["WOONFUNCTIE"] is False
+    assert feiten["GEBRUIKSDOEL"]["waarde"] == "industriefunctie"
+    assert feiten["WOONFUNCTIE"]["waarde"] is False
 
 
 async def test_gebruiksdoel_met_meerdere_waarden_wordt_leesbare_tekst():
@@ -107,9 +140,9 @@ async def test_gebruiksdoel_met_meerdere_waarden_wordt_leesbare_tekst():
     """
     resultaat = await _kvk_resultaat("61234570")
     feiten = feiten_uit_tool("kvk__mijn_bedrijf", resultaat)
-    assert feiten["GEBRUIKSDOEL"] == "kantoorfunctie, industriefunctie"
-    assert "[" not in feiten["GEBRUIKSDOEL"]
-    assert feiten["WOONFUNCTIE"] is False
+    assert feiten["GEBRUIKSDOEL"]["waarde"] == "kantoorfunctie, industriefunctie"
+    assert "[" not in feiten["GEBRUIKSDOEL"]["waarde"]
+    assert feiten["WOONFUNCTIE"]["waarde"] is False
 
 
 def test_netbeheerder_levert_verbruik_en_peiljaar():
@@ -120,10 +153,10 @@ def test_netbeheerder_levert_verbruik_en_peiljaar():
     """
     resultaat = _netbeheerder_resultaat("62345681")
     feiten = feiten_uit_tool("netbeheerder__verbruik", resultaat)
-    assert feiten["ELEKTRICITEIT_KWH"] == 420000
-    assert feiten["GAS_M3"] == 140000
-    assert feiten["PEILJAAR"] == 2025
-    assert feiten["NETBEHEERDER"] == "Stedin (mock)"
+    assert feiten["ELEKTRICITEIT_KWH"]["waarde"] == 420000
+    assert feiten["GAS_M3"]["waarde"] == 140000
+    assert feiten["PEILJAAR"]["waarde"] == 2025
+    assert feiten["NETBEHEERDER"]["waarde"] == "Stedin (mock)"
 
 
 def test_netbeheerder_zonder_attestatie_levert_niets():
@@ -149,10 +182,48 @@ def test_regelrecht_levert_drempels_en_oordelen():
         }
     )
     feiten = feiten_uit_tool("regelrecht__execute_law", resultaat)
-    assert feiten["DREMPEL_ELEKTRICITEIT_KWH"] == 50000
-    assert feiten["OORDEEL_INFORMATIEPLICHT"] is True
-    assert feiten["OORDEEL_ONDERZOEKSPLICHT"] is False
-    assert feiten["VOLGENDE_DEADLINE"] == "2027-12-01"
+    assert feiten["DREMPEL_ELEKTRICITEIT_KWH"]["waarde"] == 50000
+    assert feiten["DREMPEL_ELEKTRICITEIT_KWH"]["bron"] == "RegelRecht"
+    assert feiten["DREMPEL_ELEKTRICITEIT_KWH"]["soort"] == "wetsconstante"
+    assert feiten["OORDEEL_INFORMATIEPLICHT"]["waarde"] is True
+    assert feiten["OORDEEL_ONDERZOEKSPLICHT"]["waarde"] is False
+    assert feiten["VOLGENDE_DEADLINE"]["waarde"] == "2027-12-01"
+
+
+def test_gebruikte_waarde_uit_regelrecht_houdt_de_echte_bron():
+    """`gebruikte_waarden` echoot terug wat wíj de engine gaven.
+
+    Een verbruikscijfer dat zo terugkomt hoort de Business Wallet als bron te
+    houden, niet RegelRecht - anders schrijven we een attestatie van de
+    netbeheerder toe aan de wet.
+    """
+    resultaat = _envelope(
+        {"gebruikte_waarden": {"JAARLIJKS_GASVERBRUIK_M3": 140000}}
+    )
+    feiten = feiten_uit_tool("regelrecht__execute_law", resultaat)
+    assert feiten["GAS_M3"]["waarde"] == 140000
+    assert feiten["GAS_M3"]["bron"] == "Business Wallet"
+    assert feiten["GAS_M3"]["soort"] == "attestatie"
+
+
+def test_gebruikte_waarde_zonder_route_valt_terug_op_regelrecht():
+    """Een veld dat `regelrouting` niet kent, blijft aan RegelRecht toegeschreven."""
+    resultaat = _envelope({"gebruikte_waarden": {"ONBEKEND_VELD": 42}})
+    feiten = feiten_uit_tool("regelrecht__execute_law", resultaat)
+    assert feiten["ONBEKEND_VELD"]["waarde"] == 42
+    assert feiten["ONBEKEND_VELD"]["bron"] == "RegelRecht"
+    assert feiten["ONBEKEND_VELD"]["soort"] == "wetsconstante"
+
+
+def test_oordeel_met_expliciete_null_levert_geen_feit_op():
+    """Bug uit `NEXT_STEPS.md`: `_OORDELEN` filterde `None` niet weg.
+
+    Een `null`-oordeel van de engine mocht nooit als slotwaarde eindigen ("De
+    onderzoeksplicht geldt None voor u"); een feit zonder waarde is geen feit.
+    """
+    resultaat = _envelope({"uitkomsten": {"heeft_onderzoeksplicht": None}})
+    feiten = feiten_uit_tool("regelrecht__execute_law", resultaat)
+    assert "OORDEEL_ONDERZOEKSPLICHT" not in feiten
 
 
 def test_rvo_levert_referentienummer():
@@ -164,7 +235,7 @@ def test_rvo_levert_referentienummer():
     """
     resultaat = _rvo_resultaat("62345681")
     feiten = feiten_uit_tool("rvo__indienen", resultaat)
-    assert feiten["REFERENTIENUMMER"] == "RVO-EBR-2026-62345681-001"
+    assert feiten["REFERENTIENUMMER"]["waarde"] == "RVO-EBR-2026-62345681-001"
 
 
 def test_regelrecht_levert_de_uitkomstvelden_die_slots_md_aanbiedt():
@@ -192,10 +263,13 @@ def test_regelrecht_levert_de_uitkomstvelden_die_slots_md_aanbiedt():
         }
     )
     feiten = feiten_uit_tool("regelrecht__execute_law", resultaat)
-    assert feiten["OORDEEL_ENERGIEBESPARINGSPLICHT"] is True
-    assert feiten["RAPPORTAGE_FREQUENTIE_JAREN"] == 4
-    assert feiten["RAPPORTAGE_METHODE"] == "RVO eLoket (mijn.rvo.nl) met eHerkenning niveau 2+"
-    assert feiten["BEVOEGD_GEZAG"] == "gemeente"
+    assert feiten["OORDEEL_ENERGIEBESPARINGSPLICHT"]["waarde"] is True
+    assert feiten["RAPPORTAGE_FREQUENTIE_JAREN"]["waarde"] == 4
+    assert (
+        feiten["RAPPORTAGE_METHODE"]["waarde"]
+        == "RVO eLoket (mijn.rvo.nl) met eHerkenning niveau 2+"
+    )
+    assert feiten["BEVOEGD_GEZAG"]["waarde"] == "gemeente"
 
 
 def test_onbekende_tool_levert_niets():
