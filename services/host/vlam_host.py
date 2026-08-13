@@ -259,6 +259,16 @@ def _antwoord_tekst(tekst: str, afgekapt: bool = False, feiten: dict | None = No
     return tekst
 
 
+# Foutcodes waarbij het bijbehorende assistent-bericht uit de geschiedenis
+# moet: bij beide zag de respondent een foutmelding, geen antwoord (leeg bij
+# LLM_LEEG_ANTWOORD, met onopgeloste `{{...}}`-slots bij ANTWOORD_ONVOLLEDIG).
+# Blijft het bericht toch staan, dan gelooft het model dat het dát antwoord al
+# gaf, en bij een structurele oorzaak (bv. een slot dat nooit oplost) wordt de
+# fout plakkerig in plaats van eenmalig.
+_HERSTEL_CODES = frozenset({"LLM_LEEG_ANTWOORD", "ANTWOORD_ONVOLLEDIG"})
+_HERSTEL_TEKSTEN = frozenset(maak_fout(code).tekst for code in _HERSTEL_CODES)
+
+
 def _is_afgekapt(respons_of_choice) -> bool:
     """Liep het model tegen zijn max_tokens aan?
 
@@ -810,9 +820,10 @@ class VLAMHost:
             self.conversations[conv_key] = []
         messages = self.conversations[conv_key]
         feiten = self.feiten.setdefault(conv_key, {})
-        # Zie chat_stream: bij een leeg modelantwoord draaien we de hele beurt
-        # terug, anders blokkeert een assistent-bericht met lege inhoud elke
-        # volgende beurt in deze sessie.
+        # Zie chat_stream: bij een leeg of onvolledig modelantwoord draaien we
+        # de hele beurt terug (_HERSTEL_CODES), anders blokkeert een
+        # assistent-bericht dat de respondent nooit zo zag elke volgende beurt
+        # in deze sessie.
         herstelpunt = len(messages)
         messages.append({"role": "user", "content": user_message})
 
@@ -825,7 +836,7 @@ class VLAMHost:
                 antwoord = await self._chat_vlam(messages, session_kvk, vlam, feiten)
             else:
                 antwoord = await self._chat_claude(messages, session_kvk, claude, feiten)
-            if antwoord == maak_fout("LLM_LEEG_ANTWOORD").tekst:
+            if antwoord in _HERSTEL_TEKSTEN:
                 del messages[herstelpunt:]
             return antwoord
 
@@ -874,12 +885,13 @@ class VLAMHost:
                     self.conversations[conv_key] = []
                 messages = self.conversations[conv_key]
                 feiten = self.feiten.setdefault(conv_key, {})
-                # Beginstand van deze beurt. Loopt de beurt stuk op een leeg
-                # modelantwoord, dan draaien we hierop terug: een
-                # assistent-bericht met lege inhoud blijft anders in de
-                # geschiedenis staan en laat élke volgende beurt in deze sessie
-                # stuklopen op de Messages API. De melding zegt "probeer het
-                # opnieuw", en dat moet dan ook kunnen.
+                # Beginstand van deze beurt. Loopt de beurt stuk op een leeg of
+                # onvolledig modelantwoord (_HERSTEL_CODES), dan draaien we
+                # hierop terug: een assistent-bericht dat de respondent nooit zo
+                # zag (leeg, of met onopgeloste `{{...}}`-slots) blijft anders in
+                # de geschiedenis staan en laat élke volgende beurt in deze
+                # sessie stuklopen op de Messages API. De melding zegt "probeer
+                # het opnieuw", en dat moet dan ook kunnen.
                 herstelpunt = len(messages)
                 messages.append({"role": "user", "content": user_message})
 
@@ -905,7 +917,7 @@ class VLAMHost:
 
                 if gen is not None:
                     async for event in gen:
-                        if event.get("code") == "LLM_LEEG_ANTWOORD":
+                        if event.get("code") in _HERSTEL_CODES:
                             del messages[herstelpunt:]
                         yield event
         except Exception as e:

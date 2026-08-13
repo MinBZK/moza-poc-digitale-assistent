@@ -695,3 +695,52 @@ async def test_leeg_antwoord_laat_geen_spoor_in_de_geschiedenis(monkeypatch):
         "de mislukte beurt hoort helemaal teruggedraaid te zijn, zodat een "
         "nieuwe poging op een schone geschiedenis begint"
     )
+
+
+# --- Een geblokkeerd antwoord (onopgelost slot) mag ook geen spoor achterlaten -
+#
+# Reviewbevinding: de rollback naar `herstelpunt` vuurde alleen bij
+# LLM_LEEG_ANTWOORD. Bij ANTWOORD_ONVOLLEDIG bleef het assistent-bericht mét
+# de onopgeloste `{{...}}`-slots in de geschiedenis staan - het model geloofde
+# dan dat het dat antwoord had gegeven, terwijl de respondent een foutmelding
+# zag.
+
+
+class _OnvolledigAntwoordClaude:
+    """Anthropic-achtige client die tekst met een onopgelost slot teruggeeft."""
+
+    api_key = "sk-ant-test0000000000000000"
+
+    def __init__(self):
+        import types
+
+        self.messages = types.SimpleNamespace(create=self._create)
+
+    async def _create(self, **kwargs):
+        import types
+
+        blok = types.SimpleNamespace(type="text", text="Uw adres is {{VESTIGINGSADRES}}.")
+        return types.SimpleNamespace(content=[blok], usage=None, stop_reason="end_turn")
+
+
+async def test_onvolledig_antwoord_laat_geen_spoor_in_de_geschiedenis(monkeypatch):
+    host = vlam_host.VLAMHost()
+    monkeypatch.setattr(host, "claude_client", _OnvolledigAntwoordClaude())
+
+    events = [
+        e
+        async for e in host.chat_stream(
+            "s1", "wat is mijn adres?", mode="claude", session_kvk="85234567"
+        )
+    ]
+
+    codes = [e.get("code") for e in events]
+    assert "ANTWOORD_ONVOLLEDIG" in codes, f"geen onvolledig-antwoord-melding: {codes}"
+
+    conv_key = host._conv_key("85234567", "s1", "claude")
+    historie = host.conversations.get(conv_key, [])
+    assert historie == [], (
+        "de mislukte beurt hoort helemaal teruggedraaid te zijn: het assistent-"
+        "bericht met het onopgeloste slot mag niet blijven staan, anders "
+        "gelooft het model dat het dat antwoord al gaf"
+    )
