@@ -13,7 +13,7 @@ dus geen `van_toepassing`-vlag meer om op te filteren.
 
 import json
 
-from vlam_host import maatregelen_voor_event
+from vlam_host import maatregelen_uit_status, maatregelen_voor_event
 
 
 def _envelope(uitkomsten: dict) -> str:
@@ -133,3 +133,51 @@ def test_data_geen_dict_gooit_niet():
 def test_uitkomsten_geen_dict_gooit_niet():
     resultaat = json.dumps({"data": {"uitkomsten": "niet een dict"}})
     assert maatregelen_voor_event("regelrecht__execute_law", resultaat) is None
+
+
+# --- De host draait de regel zelf; het model roept hem niet meer aan ---------
+
+
+def _status(maatregelen, klaar=True):
+    return {"klaar": True, "wacht_op": None, "reden": "", "resultaat": {},
+            "maatregelen": {"klaar": klaar, "wacht_op": None, "reden": "",
+                            "resultaat": {"uitkomsten": {"maatregelen": maatregelen}}}}
+
+
+def test_maatregelen_komen_uit_de_regelloop():
+    """Sinds de host de maatregelenregel zelf draait, komt de lijst niet meer uit
+    een tool-aanroep van het model.
+
+    Zonder deze weg draagt het answer-event geen maatregelen meer en valt het
+    formulier terug op het parsen van de tekst die het model die beurt toevallig
+    schreef - precies wat de gestructureerde overdracht moest vervangen.
+    """
+    velden = maatregelen_uit_status(_status([_maatregel("GK1", "Breng gevelschermen aan", "Tuinbouwkassen", "XIVa")]))
+    assert velden == [
+        {
+            "code": "GK1",
+            "omschrijving": "Breng gevelschermen aan",
+            "categorie": "Tuinbouwkassen",
+            "bijlage": "XIVa",
+        }
+    ]
+
+
+def test_zonder_tweede_regel_geen_maatregelen():
+    """Geldt de energiebesparingsplicht niet, dan draait de maatregelenregel niet."""
+    assert maatregelen_uit_status({"klaar": True, "wacht_op": None, "resultaat": {}}) is None
+
+
+def test_een_wachtende_regel_levert_geen_lijst():
+    """Wacht de regel nog op de categorieen, dan is er niets te tonen."""
+    assert maatregelen_uit_status(_status([], klaar=False)) is None
+
+
+def test_geen_regelstatus_gooit_niet():
+    """Op het CLI-transport draait de lus niet; dan is er geen status."""
+    assert maatregelen_uit_status(None) is None
+
+
+def test_uitkomsten_geen_dict_in_status_gooit_niet():
+    status = {"maatregelen": {"resultaat": {"uitkomsten": "niet een dict"}}}
+    assert maatregelen_uit_status(status) is None

@@ -516,6 +516,44 @@ def _extract_lopende_zaak(tool_name: str, result: str) -> dict | None:
         return None
 
 
+def _maatregelen_uit_lijst(maatregelen: object) -> list[dict] | None:
+    """Map de maatregelen uit de wet naar de vorm die het formulier leest.
+
+    De frontend leest `omschrijving`; de wet levert `naam`. Zonder die
+    hermapping toont het formulier kale codes zonder tekst.
+    """
+    if not isinstance(maatregelen, list):
+        return None
+    geldend = [
+        {
+            "code": m.get("code", ""),
+            "omschrijving": m.get("naam", ""),
+            "categorie": m.get("categorie", ""),
+            "bijlage": m.get("bijlage", ""),
+        }
+        for m in maatregelen
+        if isinstance(m, dict) and m.get("code")
+    ]
+    return geldend or None
+
+
+def maatregelen_uit_status(regel_status: dict | None) -> list[dict] | None:
+    """De maatregelen die de regelloop zelf al heeft bepaald.
+
+    De host draait de maatregelenregel sinds taak 9 zelf; het model roept hem
+    niet meer aan. `maatregelen_voor_event` kijkt alleen naar tool-resultaten van
+    het model en zou daardoor niets meer opleveren - dan bereikt de lijst het
+    answer-event niet en valt het formulier terug op het parsen van de tekst die
+    het model die beurt toevallig schreef. Precies wat de gestructureerde
+    overdracht moest vervangen.
+    """
+    maatregelen = (regel_status or {}).get("maatregelen") or {}
+    uitkomsten = (maatregelen.get("resultaat") or {}).get("uitkomsten") or {}
+    if not isinstance(uitkomsten, dict):
+        return None
+    return _maatregelen_uit_lijst(uitkomsten.get("maatregelen"))
+
+
 def maatregelen_voor_event(tool_naam: str, resultaat: str) -> list[dict] | None:
     """De geldende EML-maatregelen als veld voor het answer-event.
 
@@ -528,20 +566,10 @@ def maatregelen_voor_event(tool_naam: str, resultaat: str) -> list[dict] | None:
         return None
     try:
         data = json.loads(resultaat).get("data") or {}
-        maatregelen = (data.get("uitkomsten") or {}).get("maatregelen") or []
-        geldend = [
-            {
-                "code": m.get("code", ""),
-                "omschrijving": m.get("naam", ""),
-                "categorie": m.get("categorie", ""),
-                "bijlage": m.get("bijlage", ""),
-            }
-            for m in maatregelen
-            if isinstance(m, dict) and m.get("code")
-        ]
+        uitkomsten = data.get("uitkomsten") or {}
+        return _maatregelen_uit_lijst(uitkomsten.get("maatregelen"))
     except (ValueError, AttributeError):
         return None
-    return geldend or None
 
 
 def _log_tool_error(tool_key: str, exc: Exception, code: str = "") -> None:
@@ -1347,7 +1375,9 @@ class VLAMHost:
 
         # Per beurt (niet per iteratie): de tool-aanroep en het uiteindelijke
         # tekstantwoord zitten meestal in verschillende agentic-stappen.
-        maatregelen_deze_beurt = None
+        # Beginwaarde uit de regelloop: die draait de maatregelenregel zelf, dus
+        # zonder deze regel draagt het answer-event geen maatregelen meer.
+        maatregelen_deze_beurt = maatregelen_uit_status(regel_status)
         max_iterations = 10
         for _ in range(max_iterations):
             api_kwargs = {
@@ -1442,7 +1472,9 @@ class VLAMHost:
 
         # Per beurt (niet per iteratie): de tool-aanroep en het uiteindelijke
         # tekstantwoord zitten meestal in verschillende agentic-stappen.
-        maatregelen_deze_beurt = None
+        # Beginwaarde uit de regelloop: die draait de maatregelenregel zelf, dus
+        # zonder deze regel draagt het answer-event geen maatregelen meer.
+        maatregelen_deze_beurt = maatregelen_uit_status(regel_status)
         max_iterations = 10
         for _ in range(max_iterations):
             api_kwargs = {

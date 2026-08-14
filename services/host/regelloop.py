@@ -146,6 +146,19 @@ async def volg_regel(
         sleutels_voor = set(feiten)
         tool_ruw = await call_tool(veld.tool, {})
         samenvoegen(feiten, feiten_uit_tool(veld.tool, tool_ruw))
+        if set(feiten) == sleutels_voor and veld.corrigeerbaar:
+            # De bron leverde het niet, maar dit veld mág de ondernemer zeggen:
+            # het is een afleiding van ons uit een registratie, geen waarneming
+            # van die registratie zelf. Zonder deze uitweg loopt een bedrijf
+            # zonder de benodigde inschrijving vast op "onbekend" terwijl de
+            # ondernemer het antwoord gewoon weet.
+            return Uitkomst(
+                klaar=False,
+                resultaat=None,
+                wacht_op="opgave",
+                reden=f"{veld.bron} leverde {veldnaam} niet op; de ondernemer kan het zelf opgeven.",
+                velden=({"naam": veldnaam, "beschrijving": ontbrekend[0].get("beschrijving", "")},),
+            )
         if set(feiten) == sleutels_voor:
             # Deze ronde leverde geen enkel nieuw feit op: `veld.bron` gaf
             # niet het gevraagde veld terug (storing, lege BAG). Nog vier

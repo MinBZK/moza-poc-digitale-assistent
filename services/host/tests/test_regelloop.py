@@ -274,3 +274,61 @@ async def test_lus_stopt_meteen_als_een_ronde_geen_nieuw_feit_oplevert():
     # ronde zonder vooruitgang (dezelfde KvK-data opnieuw) - dan stoppen, niet
     # nog drie keer dezelfde twee aanroepen herhalen.
     assert pogingen == {"execute_law": 2, "kvk": 2}
+
+
+async def test_bron_zonder_antwoord_laat_een_corrigeerbaar_veld_aan_de_ondernemer():
+    """De KvK levert niet altijd wat wij eruit afleiden.
+
+    `TEELT_GEWASSEN_IN_KAS` komt uit de SBI-omschrijving; een bedrijf zonder
+    ingeschreven activiteiten levert die niet op. Zonder uitweg loopt de lus dan
+    vast op "onbekend", terwijl de ondernemer zelf prima weet of hij in een kas
+    teelt. Het veld is als corrigeerbaar gemarkeerd, dus mag hij het opgeven.
+    """
+
+    async def call_tool(naam, arguments):
+        if naam == "regelrecht__execute_law":
+            return json.dumps({
+                "data": {"ontbrekende_gegevens": [
+                    {"naam": "TEELT_GEWASSEN_IN_KAS", "beschrijving": "Teelt u in kassen?"}
+                ]}
+            })
+        if naam == "kvk__mijn_bedrijf":
+            # Geen sbiActiviteiten: de afleiding levert niets op.
+            return json.dumps({"data": {"naam": "Zonder inschrijving BV"}})
+        raise AssertionError(f"onverwachte tool: {naam}")
+
+    uit = await volg_regel(
+        law="omgevingswet/energiebesparing/maatregelen",
+        service="RVO",
+        feiten={},
+        call_tool=call_tool,
+        toestemming=True,
+    )
+    assert uit.wacht_op == "opgave"
+    assert [v["naam"] for v in uit.velden] == ["TEELT_GEWASSEN_IN_KAS"]
+    assert uit.velden[0]["beschrijving"] == "Teelt u in kassen?"
+
+
+async def test_bron_zonder_antwoord_op_een_niet_corrigeerbaar_veld_blijft_onbekend():
+    """`IS_WOONFUNCTIE` is een waarneming van de BAG, geen afleiding van ons.
+
+    Levert die bron niets, dan is de uitkomst onbekend - de ondernemer mag een
+    registratie niet overschrijven omdat een ophaling faalde.
+    """
+
+    async def call_tool(naam, arguments):
+        if naam == "regelrecht__execute_law":
+            return json.dumps({"data": {"ontbrekende_gegevens": [{"naam": "IS_WOONFUNCTIE"}]}})
+        if naam == "kvk__mijn_bedrijf":
+            return json.dumps({"data": {}})
+        raise AssertionError(f"onverwachte tool: {naam}")
+
+    uit = await volg_regel(
+        law="omgevingswet/energiebesparing/informatieplicht",
+        service="RVO",
+        feiten={},
+        call_tool=call_tool,
+        toestemming=True,
+    )
+    assert uit.wacht_op is None
+    assert uit.velden == ()
