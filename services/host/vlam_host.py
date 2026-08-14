@@ -986,7 +986,7 @@ class VLAMHost:
         feiten = self.feiten.setdefault(conv_key, {})
         if toestemming:
             self.toestemming[conv_key] = True
-        feiten.update(_opgaven_als_feiten(opgaven))
+        samenvoegen(feiten, _opgaven_als_feiten(opgaven))
         use_cli = mode.startswith("cli:")
         # Zie chat_stream: bij een leeg of onvolledig modelantwoord draaien we
         # de hele beurt terug (_HERSTEL_CODES), anders blokkeert een
@@ -1082,7 +1082,7 @@ class VLAMHost:
                 feiten = self.feiten.setdefault(conv_key, {})
                 if toestemming:
                     self.toestemming[conv_key] = True
-                feiten.update(_opgaven_als_feiten(opgaven))
+                samenvoegen(feiten, _opgaven_als_feiten(opgaven))
                 # Beginstand van deze beurt. Loopt de beurt stuk op een leeg of
                 # onvolledig modelantwoord (_HERSTEL_CODES), dan draaien we
                 # hierop terug: een assistent-bericht dat de respondent nooit zo
@@ -1176,7 +1176,9 @@ class VLAMHost:
         `claude` is de client van dít verzoek (MVP-02) en is verplicht: geen
         stille terugval op de gedeelde server-client, zodat een vergeten
         argument niet ongemerkt de verkeerde sleutel gebruikt. `feiten` is de
-        sessiekaart uit `self.feiten` (by reference) — alleen `.update()`en.
+        sessiekaart uit `self.feiten` (by reference) — alleen bijwerken via
+        `samenvoegen()`, nooit `.update()`: een echo mag een bestaand feit
+        niet overschrijven.
         `regel_status` is de uitkomst van de regelloop van vóór deze beurt
         (`_regel_status`); `None` als die niet gedraaid is (CLI-transport).
         `conv_key` gaat naar `_bron_aanroep_gated` (PDR-008): roept het model
@@ -1265,11 +1267,13 @@ class VLAMHost:
 
         `vlam` is de client van dít verzoek (MVP-02), verplicht meegegeven.
         `feiten` is de sessiekaart uit `self.feiten` (by reference) — alleen
-        `.update()`en. `regel_status` is de uitkomst van de regelloop van vóór
-        deze beurt (`_regel_status`); `None` als die niet gedraaid is
-        (CLI-transport). `conv_key` gaat naar `_bron_aanroep_gated` (PDR-008):
-        roept het model zelf `netbeheerder__verbruik` aan, dan weigert die
-        poort de aanroep zolang toestemming niet vastligt.
+        bijwerken via `samenvoegen()`, nooit `.update()`: een echo mag een
+        bestaand feit niet overschrijven. `regel_status` is de uitkomst van
+        de regelloop van vóór deze beurt (`_regel_status`); `None` als die
+        niet gedraaid is (CLI-transport). `conv_key` gaat naar
+        `_bron_aanroep_gated` (PDR-008): roept het model zelf
+        `netbeheerder__verbruik` aan, dan weigert die poort de aanroep
+        zolang toestemming niet vastligt.
         """
         tools_openai = self.registry.get_openai_tools()
         system_prompt = self._system_prompt("vlam", regel_status=regel_status, feiten=feiten)
@@ -1387,7 +1391,8 @@ class VLAMHost:
 
         `claude` is de client van dít verzoek (MVP-02), verplicht meegegeven.
         `feiten` is de sessiekaart uit `self.feiten` (by reference) — alleen
-        `.update()`en.
+        bijwerken via `samenvoegen()`, nooit `.update()`: een echo mag een
+        bestaand feit niet overschrijven.
         """
         tools = CLI_TOOL_DEFINITIONS_ANTHROPIC
         system_prompt = self._system_prompt(
@@ -1474,7 +1479,8 @@ class VLAMHost:
 
         `vlam` is de client van dít verzoek (MVP-02), verplicht meegegeven.
         `feiten` is de sessiekaart uit `self.feiten` (by reference) — alleen
-        `.update()`en.
+        bijwerken via `samenvoegen()`, nooit `.update()`: een echo mag een
+        bestaand feit niet overschrijven.
         """
         tools_openai = CLI_TOOL_DEFINITIONS_OPENAI
         system_prompt = self._system_prompt(
@@ -1576,9 +1582,11 @@ class VLAMHost:
         """`claude` is de client van dít verzoek (MVP-02), verplicht meegegeven.
 
         `feiten` is de sessiekaart uit `self.feiten` (by reference) — alleen
-        `.update()`en. `regel_status` is de uitkomst van de regelloop van vóór
-        deze beurt (`_regel_status`). `conv_key` gaat naar `_execute_tools`,
-        dat de PDR-008-poort toepast op elke tool-aanroep van het model.
+        bijwerken via `samenvoegen()`, nooit `.update()`: een echo mag een
+        bestaand feit niet overschrijven. `regel_status` is de uitkomst van
+        de regelloop van vóór deze beurt (`_regel_status`). `conv_key` gaat
+        naar `_execute_tools`, dat de PDR-008-poort toepast op elke
+        tool-aanroep van het model.
         """
         if not claude.api_key:
             return _geen_sleutel_fout("claude").tekst
@@ -1638,9 +1646,10 @@ class VLAMHost:
         """`vlam` is de client van dít verzoek (MVP-02), verplicht meegegeven.
 
         `feiten` is de sessiekaart uit `self.feiten` (by reference) — alleen
-        `.update()`en. `regel_status` is de uitkomst van de regelloop van vóór
-        deze beurt (`_regel_status`). `conv_key` gaat naar
-        `_bron_aanroep_gated`, dat de PDR-008-poort toepast op elke
+        bijwerken via `samenvoegen()`, nooit `.update()`: een echo mag een
+        bestaand feit niet overschrijven. `regel_status` is de uitkomst van
+        de regelloop van vóór deze beurt (`_regel_status`). `conv_key` gaat
+        naar `_bron_aanroep_gated`, dat de PDR-008-poort toepast op elke
         tool-aanroep van het model.
         """
         tools_openai = self.registry.get_openai_tools()
