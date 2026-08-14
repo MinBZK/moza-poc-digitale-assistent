@@ -59,7 +59,7 @@ async def test_lus_stopt_bij_een_bron_die_toestemming_vraagt():
 
 async def test_lus_stopt_bij_iets_dat_alleen_de_ondernemer_weet():
     call_tool = _engine([
-        {"ontbrekende_gegevens": [{"naam": "HEEFT_KOELINSTALLATIE"}]},
+        {"ontbrekende_gegevens": [{"naam": "MAAKT_GEBRUIK_VAN_VERLAAGD_ENERGIEBELASTINGTARIEF"}]},
     ])
     uit = await volg_regel(
         law="omgevingswet/energiebesparing/maatregelen",

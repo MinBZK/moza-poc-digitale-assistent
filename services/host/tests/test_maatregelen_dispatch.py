@@ -27,14 +27,27 @@ SESSIE = "85234567"
 MAATREGELEN_ENVELOPE = json.dumps(
     {
         "data": {
-            "maatregelen": [
-                {"code": "GC1", "naam": "Pas een klokregeling toe", "van_toepassing": True},
-                {"code": "FE4", "naam": "Iets anders", "van_toepassing": False},
-            ]
+            "uitkomsten": {
+                "maatregelen": [
+                    {
+                        "code": "GC1",
+                        "naam": "Pas een klokregeling toe",
+                        "categorie": "Ruimteverwarming",
+                        "bijlage": "XIV",
+                    }
+                ]
+            }
         }
     }
 )
-VERWACHTE_MAATREGELEN = [{"code": "GC1", "omschrijving": "Pas een klokregeling toe"}]
+VERWACHTE_MAATREGELEN = [
+    {
+        "code": "GC1",
+        "omschrijving": "Pas een klokregeling toe",
+        "categorie": "Ruimteverwarming",
+        "bijlage": "XIV",
+    }
+]
 
 
 # --- Fakes: OpenAI/VLAM-stijl (gelijk aan test_feitenkaart_dispatch.py) ------

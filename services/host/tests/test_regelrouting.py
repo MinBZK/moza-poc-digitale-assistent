@@ -31,7 +31,7 @@ def test_verbruik_vraagt_toestemming_bedrijfsgegevens_niet():
 
 def test_opgaven_van_de_ondernemer_hebben_geen_tool():
     """Die komen uit het formulier, niet uit een bron die we kunnen aanroepen."""
-    veld = route("HEEFT_KOELINSTALLATIE")
+    veld = route("MAAKT_GEBRUIK_VAN_VERLAAGD_ENERGIEBELASTINGTARIEF")
     assert veld.tool is None
     assert veld.soort == "opgave"
 

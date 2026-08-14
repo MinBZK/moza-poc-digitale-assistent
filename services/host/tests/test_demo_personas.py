@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+import feiten
+
 MCP_DIR = Path(__file__).resolve().parent.parent.parent / "mcp"
 
 NOON_KVK = "85234567"
@@ -100,27 +102,41 @@ def test_wallet_presenteert_attestatie_met_toestemming():
     assert data["verbruik"]["totaal"]["jaarlijks_elektriciteitsverbruik_kwh"] > 50_000
 
 
-def test_eml_fallback_volgt_bedrijfskenmerken():
-    regelrecht = _load("regelrecht")
-    data = regelrecht._eml_fallback(
-        {"HEEFT_KOELINSTALLATIE": True, "HEEFT_AFZUIGINSTALLATIE": False}
+def test_bloemenkweker_telt_als_teelt_in_kas():
+    """De hele sectorbepaling hangt hieraan.
+
+    Artikel 4.14, tweede lid, en artikel 5.29, tweede lid, van de
+    Omgevingsregeling wijzen de glastuinbouwbijlagen aan bij een activiteit als
+    bedoeld in artikel 3.205 Bal: het telen van gewassen in kassen. Het
+    handelsregister kent dat begrip niet, maar de SBI-omschrijving van De Bloesem
+    zegt letterlijk "(onder glas)".
+
+    Gaat dit stuk, dan krijgt een kweker onder glas de algemene bijlage - met
+    maatregelen als FD3 (nachtafdekking van koelmeubels) die in zijn eigen
+    bijlage niet voorkomen, en zonder de categorieen Tuinbouwkassen en
+    Glastuinbouw die er wel in staan.
+    """
+    kvk = _load("kvk")
+    bedrijf = next(
+        b for b in kvk.MOCK_PROFIELEN.values() if b.get("kvkNummer") == "62345681"
     )
-    per_code = {m["code"]: m["van_toepassing"] for m in data["maatregelen"]}
-    # onvoorwaardelijke maatregelen gelden altijd
-    assert per_code["GF4"] is True
-    # koelinstallatie=True activeert de productkoeling-maatregelen
-    assert per_code["FD3"] is True
-    # afzuiginstallatie=False deactiveert de afzuig-/ventilatiemaatregelen
-    assert per_code["FE4"] is False
+    assert feiten._teelt_in_kas(bedrijf["sbiActiviteiten"]) is True
 
 
-def test_eml_fallback_zonder_feiten_geeft_de_twee_vragen():
-    regelrecht = _load("regelrecht")
-    data = regelrecht._eml_fallback({})
-    assert [v["naam"] for v in data["benodigde_feiten"]] == [
-        "HEEFT_KOELINSTALLATIE",
-        "HEEFT_AFZUIGINSTALLATIE",
-    ]
+def test_cafe_telt_niet_als_teelt_in_kas():
+    """Eén persona die wel onder glas teelt verbergt "geeft altijd True"."""
+    kvk = _load("kvk")
+    bedrijf = next(
+        b
+        for b in kvk.MOCK_PROFIELEN.values()
+        if any(a.get("sbiCode") == "56102" for a in b.get("sbiActiviteiten") or [])
+    )
+    assert feiten._teelt_in_kas(bedrijf["sbiActiviteiten"]) is False
+
+
+def test_zonder_sbi_activiteiten_geen_uitspraak():
+    """Geen inschrijving is geen waarneming: dan hoort de ondernemer het te zeggen."""
+    assert feiten._teelt_in_kas([]) is None
 
 
 # --- Onderzoekspersona's -----------------------------------------------------

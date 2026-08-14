@@ -47,6 +47,30 @@ def _gebruiksdoel(bag: dict) -> str | None:
     return ", ".join(doelen) if doelen else None
 
 
+def _teelt_in_kas(sbi_activiteiten: list) -> bool | None:
+    """Of de ingeschreven activiteiten telen onder glas noemen.
+
+    Artikel 3.205 Bal wijst "het telen van gewassen in kassen" aan, en die
+    aanwijzing bepaalt welke bijlage van de erkende maatregelenlijst geldt. Het
+    handelsregister kent dat begrip niet, maar de SBI-omschrijving zegt bij
+    glastuinbouw letterlijk "(onder glas)" - bv. 01192, "Teelt van bloemen,
+    bloembollen en perkplanten (onder glas)".
+
+    Dit is een afleiding van ons, geen kwalificatie van de wet of van de KvK.
+    Daarom levert hij alleen een vermoeden op waar de ondernemer overheen kan:
+    `samenvoegen` laat een opgave nooit door een registratie overschrijven. Geen
+    enkele activiteit onder glas geeft False en niet None - "de KvK noemt geen
+    kas" is een waarneming, geen onwetendheid.
+    """
+    if not sbi_activiteiten:
+        return None
+    return any(
+        "onder glas" in str(a.get("sbiOmschrijving", "")).lower()
+        for a in sbi_activiteiten
+        if isinstance(a, dict)
+    )
+
+
 def _met_herkomst(waarden: dict, bron: str, soort: str) -> dict:
     """Verpak platte waarden tot feiten met hun herkomst.
 
@@ -71,6 +95,7 @@ def _uit_kvk(data: dict) -> dict:
         "VESTIGINGSADRES": _bezoekadres(vestiging),
         "WOONFUNCTIE": data.get("is_woonfunctie"),
         "GEBRUIKSDOEL": _gebruiksdoel(data.get("bag") or {}),
+        "TEELT_IN_KAS": _teelt_in_kas(data.get("sbiActiviteiten") or []),
     }
     return _met_herkomst(feiten, "KvK Handelsregister", "registratie")
 
@@ -177,9 +202,23 @@ def samenvoegen(feiten: dict, nieuwe_feiten: dict) -> None:
     overschrijven met een verzonnen getal. Bestaat het feit nog niet, dan mag
     de echo hem wél aanleggen (bv. de eerste ronde); `_parameters_uit_feiten`
     in `regelloop.py` vertrouwt zo'n feit daarna sowieso niet als wetsinvoer.
+
+    Een opgave van de ondernemer wordt evenmin overschreven door iets anders dan
+    een nieuwe opgave. Sommige velden vullen we uit een registratie als
+    vermoeden - `TEELT_IN_KAS` uit de SBI-omschrijving - en dan moet de correctie
+    van de ondernemer blijven staan, ook als de KvK later in het gesprek nog eens
+    geraadpleegd wordt. Zonder deze regel wint de laatste ophaling, en dat is
+    precies de verkeerde: hij weet minder dan degene die het bedrijf runt.
     """
     for naam, feit in nieuwe_feiten.items():
-        if feit.get("soort") == "echo" and naam in feiten:
+        bestaand = feiten.get(naam)
+        if feit.get("soort") == "echo" and bestaand is not None:
+            continue
+        if (
+            bestaand is not None
+            and bestaand.get("soort") == "opgave"
+            and feit.get("soort") != "opgave"
+        ):
             continue
         feiten[naam] = feit
 

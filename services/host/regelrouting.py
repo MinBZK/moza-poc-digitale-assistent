@@ -7,8 +7,10 @@ is - dat kan niet uit de pas lopen met de waarde.
 Staat een veld hier niet, dan stopt de orkestratielus en meldt dat. Raden waar
 een gegeven vandaan komt is precies wat dit ontwerp onmogelijk maakt.
 
-Nu één wet. De tabel staat als aparte eenheid zodat een tweede wet hier landt en
-niet door de host heen verspreid raakt.
+Twee wetten delen deze tabel: de informatieplicht en de maatregelbepaling. Ze
+overlappen in het KvK-nummer, en de velden die alleen de tweede vraagt staan er
+gewoon naast - de tabel is per veld, niet per wet, zodat een derde wet die
+opnieuw naar het verbruik vraagt hier niets hoeft toe te voegen.
 """
 
 from dataclasses import dataclass
@@ -24,6 +26,13 @@ class Veld:
     `feitnaam` is de naam waaronder dit gegeven in de feitenkaart staat, of None
     als die gelijk is aan de regelnaam. Dit voorkomt dat de RegelRecht-naamgeving
     en de feitenkaart-naamgeving uit de pas lopen.
+
+    `corrigeerbaar` staat toe dat de ondernemer een waarde uit een registratie
+    overschrijft. Dat is niet de regel maar de uitzondering: het geldt alleen waar
+    wij een juridisch begrip uit een registratie áfleiden dat die registratie zelf
+    niet kent - "telen in kassen" uit een SBI-omschrijving. De correctie komt
+    binnen als opgave, met de ondernemer als bron, en `feiten.samenvoegen` laat
+    hem daarna niet meer overschrijven door een volgende ophaling.
     """
 
     bron: str
@@ -31,6 +40,7 @@ class Veld:
     tool: str | None
     toestemming: bool
     feitnaam: str | None = None
+    corrigeerbaar: bool = False
 
 
 HERKOMST: dict[str, Veld] = {
@@ -47,8 +57,23 @@ HERKOMST: dict[str, Veld] = {
         "Business Wallet", "attestatie", "netbeheerder__verbruik", True,
         feitnaam="GAS_M3"
     ),
-    "HEEFT_KOELINSTALLATIE": Veld("de ondernemer", "opgave", None, False),
-    "HEEFT_AFZUIGINSTALLATIE": Veld("de ondernemer", "opgave", None, False),
+    # Bepaalt welke bijlage van de erkende maatregelenlijst geldt (artikel 4.14,
+    # tweede lid, en artikel 5.29, tweede lid, Omgevingsregeling). Het
+    # handelsregister kent het begrip "kas" niet, maar de SBI-omschrijving noemt
+    # telen onder glas; `feiten._teelt_in_kas` leidt daar een vermoeden uit af dat
+    # de ondernemer kan corrigeren. De andere twee weet alleen hij: telen in een
+    # gebouw dat geen kas is staat niet als zodanig in het register, en of het
+    # verlaagde energiebelastingtarief gebruikt wordt is een fiscaal gegeven dat
+    # geen van onze bronnen draagt.
+    "TEELT_GEWASSEN_IN_KAS": Veld(
+        "KvK Handelsregister", "registratie", "kvk__mijn_bedrijf", False,
+        feitnaam="TEELT_IN_KAS", corrigeerbaar=True
+    ),
+    "TEELT_GEWASSEN_IN_GEBOUW_GEEN_KAS": Veld("de ondernemer", "opgave", None, False),
+    "MAAKT_GEBRUIK_VAN_VERLAAGD_ENERGIEBELASTINGTARIEF": Veld(
+        "de ondernemer", "opgave", None, False
+    ),
+    "AANWEZIGE_CATEGORIEEN": Veld("de ondernemer", "opgave", None, False),
 }
 
 

@@ -186,6 +186,61 @@ def _regel_status_klaar_tekst(resultaat: dict) -> str:
     return " ".join(delen)
 
 
+def _maatregelen_status_tekst(maatregelen: dict | None) -> str | None:
+    """Tekst voor de tweede regel in de keten: de erkende maatregelen.
+
+    De host draait die regel zelf zodra de energiebesparingsplicht geldt
+    (artikel 5.15d Bal draagt op te rapporteren over de getroffen erkende
+    maatregelen). Het model hoeft dus niet te besluiten dát de lijst nodig is —
+    alleen te vertellen wat eruit kwam, of te vragen wat er nog aan ontbreekt.
+    """
+    if not maatregelen:
+        return None
+    wacht_op = maatregelen.get("wacht_op")
+    if wacht_op == "opgave":
+        return (
+            "Voor de erkende maatregelen is nog nodig welke installaties en "
+            "gebouwdelen bij dit bedrijf voorkomen. Vraag dat via het formulier "
+            "en verzin de categorieën niet zelf."
+        )
+    if wacht_op == "toestemming":
+        return (
+            "De maatregelenlijst wacht nog op toestemming van de ondernemer voor "
+            "een bron. Vraag daar EXPLICIET om."
+        )
+    if not maatregelen.get("klaar"):
+        return (
+            "De erkende maatregelen zijn op dit moment niet te bepalen. Meld dat "
+            "eerlijk in plaats van een lijst te noemen die u niet hebt."
+        )
+    uitkomsten = (maatregelen.get("resultaat") or {}).get("uitkomsten") or {}
+    lijst = uitkomsten.get("maatregelen") or []
+    if not lijst:
+        return (
+            "De maatregelentoets is afgerond en levert voor de opgegeven "
+            "categorieën geen erkende maatregelen op. Meld dat als uitkomst."
+        )
+    delen = [
+        f"De maatregelentoets is afgerond: {len(lijst)} erkende maatregelen uit "
+        "de bijlage die voor dit bedrijf geldt."
+    ]
+    bijlagen = [
+        uitkomsten.get("bijlage_milieubelastende_activiteiten"),
+        uitkomsten.get("bijlage_gebouwen"),
+    ]
+    genoemd = [b for b in bijlagen if b]
+    if genoemd:
+        delen.append(
+            "Het gaat om bijlage " + " en ".join(genoemd) + " van de Omgevingsregeling."
+        )
+    delen.append(
+        "Noem de maatregelen uit dit resultaat en verzin er geen bij. Elke "
+        "maatregel geldt onder de randvoorwaarden die erbij staan; presenteer ze "
+        "als voorwaarden om na te gaan, niet als vaststaand."
+    )
+    return " ".join(delen)
+
+
 def _geoogste_feiten_tekst(feiten: dict | None) -> str | None:
     """Welke feiten de host al heeft opgehaald, als tekst voor de prompt.
 
@@ -240,6 +295,9 @@ def _compose_regel_status(regel_status: dict | None, feiten: dict | None = None)
         )
     else:
         status = _regel_status_klaar_tekst(regel_status.get("resultaat") or {})
+    maatregelen_tekst = _maatregelen_status_tekst(regel_status.get("maatregelen"))
+    if maatregelen_tekst:
+        status = f"{status} {maatregelen_tekst}"
     feiten_tekst = _geoogste_feiten_tekst(feiten)
     if feiten_tekst:
         status = f"{status} {feiten_tekst}"

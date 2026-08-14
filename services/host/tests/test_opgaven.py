@@ -20,6 +20,7 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 import vlam_host  # noqa: E402
+from feiten import samenvoegen  # noqa: E402
 
 SESSIE = "85234567"
 
@@ -41,9 +42,9 @@ async def _drain(gen):
 
 
 def test_bekende_opgave_krijgt_bron_de_ondernemer_en_soort_opgave():
-    feiten = vlam_host._opgaven_als_feiten({"HEEFT_KOELINSTALLATIE": True})
+    feiten = vlam_host._opgaven_als_feiten({"MAAKT_GEBRUIK_VAN_VERLAAGD_ENERGIEBELASTINGTARIEF": True})
     assert feiten == {
-        "HEEFT_KOELINSTALLATIE": {
+        "MAAKT_GEBRUIK_VAN_VERLAAGD_ENERGIEBELASTINGTARIEF": {
             "waarde": True,
             "bron": "de ondernemer",
             "soort": "opgave",
@@ -72,15 +73,15 @@ def test_opgave_met_waarde_null_levert_geen_feit_op():
     """`opgaven` is een publiek HTTP-veld dat elke client kan vullen. Een
     `null` erin mag geen feit met `waarde=None` opleveren: dat gaat als
     parameter naar de wet en rendert als het woord "None" in het antwoord."""
-    feiten = vlam_host._opgaven_als_feiten({"HEEFT_KOELINSTALLATIE": None})
+    feiten = vlam_host._opgaven_als_feiten({"MAAKT_GEBRUIK_VAN_VERLAAGD_ENERGIEBELASTINGTARIEF": None})
     assert feiten == {}
 
 
 def test_opgave_met_waarde_false_blijft_wel_een_feit():
     """De None-filter mag niet per ongeluk ook falsy-maar-geldige waarden
     (False, 0, "") wegvangen - alleen None is geen antwoord."""
-    feiten = vlam_host._opgaven_als_feiten({"HEEFT_KOELINSTALLATIE": False})
-    assert feiten["HEEFT_KOELINSTALLATIE"]["waarde"] is False
+    feiten = vlam_host._opgaven_als_feiten({"MAAKT_GEBRUIK_VAN_VERLAAGD_ENERGIEBELASTINGTARIEF": False})
+    assert feiten["MAAKT_GEBRUIK_VAN_VERLAAGD_ENERGIEBELASTINGTARIEF"]["waarde"] is False
 
 
 # --- Via de publieke ingang: landen vóór de regelloop draait ---------------
@@ -115,15 +116,15 @@ async def test_opgaven_landen_in_de_feitenkaart_voordat_de_lus_draait():
             "Geldt de informatieplicht voor mij?",
             mode="claude",
             session_kvk=SESSIE,
-            opgaven={"HEEFT_KOELINSTALLATIE": True},
+            opgaven={"MAAKT_GEBRUIK_VAN_VERLAAGD_ENERGIEBELASTINGTARIEF": True},
         )
     )
 
     assert gezien_parameters, "de regelloop heeft de wet niet aangeroepen"
-    assert gezien_parameters[0]["HEEFT_KOELINSTALLATIE"] is True
+    assert gezien_parameters[0]["MAAKT_GEBRUIK_VAN_VERLAAGD_ENERGIEBELASTINGTARIEF"] is True
 
     conv_key = host._conv_key(SESSIE, "sess", "claude")
-    assert host.feiten[conv_key]["HEEFT_KOELINSTALLATIE"] == {
+    assert host.feiten[conv_key]["MAAKT_GEBRUIK_VAN_VERLAAGD_ENERGIEBELASTINGTARIEF"] == {
         "waarde": True,
         "bron": "de ondernemer",
         "soort": "opgave",
@@ -184,11 +185,11 @@ def test_chat_stream_endpoint_geeft_opgaven_door_aan_de_host(monkeypatch):
 
     r = client.post(
         "/chat/stream",
-        json={"message": "hoi", "opgaven": {"HEEFT_KOELINSTALLATIE": True}},
+        json={"message": "hoi", "opgaven": {"MAAKT_GEBRUIK_VAN_VERLAAGD_ENERGIEBELASTINGTARIEF": True}},
         headers={"X-Test-User": SESSIE},
     )
     assert r.status_code == 200
-    assert gezien.get("opgaven") == {"HEEFT_KOELINSTALLATIE": True}
+    assert gezien.get("opgaven") == {"MAAKT_GEBRUIK_VAN_VERLAAGD_ENERGIEBELASTINGTARIEF": True}
 
 
 def test_chat_endpoint_geeft_opgaven_door_aan_de_host(monkeypatch):
@@ -202,8 +203,44 @@ def test_chat_endpoint_geeft_opgaven_door_aan_de_host(monkeypatch):
 
     r = client.post(
         "/chat",
-        json={"message": "hoi", "opgaven": {"HEEFT_AFZUIGINSTALLATIE": False}},
+        json={"message": "hoi", "opgaven": {"TEELT_GEWASSEN_IN_GEBOUW_GEEN_KAS": False}},
         headers={"X-Test-User": SESSIE},
     )
     assert r.status_code == 200
-    assert gezien.get("opgaven") == {"HEEFT_AFZUIGINSTALLATIE": False}
+    assert gezien.get("opgaven") == {"TEELT_GEWASSEN_IN_GEBOUW_GEEN_KAS": False}
+
+
+def test_correctie_op_een_registratie_komt_door_als_opgave():
+    """De ondernemer mag de kas-afleiding uit de SBI-omschrijving corrigeren.
+
+    `TEELT_GEWASSEN_IN_KAS` komt uit de KvK, maar het handelsregister kent het
+    begrip "kas" niet: wij leiden het af uit "(onder glas)" in de
+    SBI-omschrijving. Die afleiding is van ons, dus de ondernemer moet erover
+    heen kunnen. De correctie draagt zichtbaar wie hem deed.
+    """
+    feiten = vlam_host._opgaven_als_feiten({"TEELT_GEWASSEN_IN_KAS": False})
+    assert feiten["TEELT_IN_KAS"]["waarde"] is False
+    assert feiten["TEELT_IN_KAS"]["soort"] == "opgave"
+    assert "de ondernemer" in feiten["TEELT_IN_KAS"]["bron"]
+    assert "KvK" in feiten["TEELT_IN_KAS"]["bron"]
+
+
+def test_registratie_zonder_correctierecht_blijft_geweigerd():
+    """Alleen expliciet gemarkeerde velden zijn corrigeerbaar.
+
+    `IS_WOONFUNCTIE` komt uit de BAG-verrijking en is een waarneming, geen
+    afleiding van ons; een client mag die niet overschrijven.
+    """
+    assert vlam_host._opgaven_als_feiten({"IS_WOONFUNCTIE": True}) == {}
+
+
+def test_correctie_overleeft_een_latere_kvk_ophaling():
+    """Zonder deze regel wint de laatste ophaling van de eerdere correctie."""
+    feiten = {}
+    samenvoegen(feiten, vlam_host._opgaven_als_feiten({"TEELT_GEWASSEN_IN_KAS": False}))
+    samenvoegen(
+        feiten,
+        {"TEELT_IN_KAS": {"waarde": True, "bron": "KvK Handelsregister", "soort": "registratie"}},
+    )
+    assert feiten["TEELT_IN_KAS"]["waarde"] is False
+    assert feiten["TEELT_IN_KAS"]["soort"] == "opgave"

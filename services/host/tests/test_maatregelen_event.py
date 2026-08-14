@@ -4,6 +4,11 @@ vraagSpec() in digitale-assistent.js leest payload.maatregelen vóór het
 terugvalt op het parsen van de platte tekst. Zolang de backend dat veld niet
 vult, hangt het formulier af van hoe het model die beurt formatteert - en dat
 verschilt per beurt.
+
+De wet levert de maatregelen die voor dit bedrijf gelden al gefilterd op: staat
+een maatregel in `uitkomsten.maatregelen`, dan valt hij onder de bijlage die
+voor dit bedrijf geldt én in een categorie die bij het bedrijf voorkomt. Er is
+dus geen `van_toepassing`-vlag meer om op te filteren.
 """
 
 import json
@@ -11,79 +16,104 @@ import json
 from vlam_host import maatregelen_voor_event
 
 
-def _envelope(data: dict) -> str:
-    return json.dumps({"data": data, "provenance": {"source": "test"}})
+def _envelope(uitkomsten: dict) -> str:
+    return json.dumps(
+        {"data": {"uitkomsten": uitkomsten}, "provenance": {"source": "test"}}
+    )
 
 
-def test_alleen_geldende_maatregelen_gaan_mee():
+def _maatregel(code: str, naam: str, categorie: str = "Ruimteverwarming", bijlage: str = "XIV") -> dict:
+    return {"code": code, "naam": naam, "categorie": categorie, "bijlage": bijlage}
+
+
+def test_een_maatregel_gaat_mee_met_code_omschrijving_categorie_en_bijlage():
     resultaat = _envelope(
-        {
-            "maatregelen": [
-                {"code": "GC1", "naam": "Pas een klokregeling toe", "van_toepassing": True},
-                {"code": "FE4", "naam": "Iets anders", "van_toepassing": False},
-            ]
-        }
+        {"maatregelen": [_maatregel("GC1", "Pas een klokregeling toe en regel deze in")]}
     )
     assert maatregelen_voor_event("regelrecht__execute_law", resultaat) == [
-        {"code": "GC1", "omschrijving": "Pas een klokregeling toe"}
+        {
+            "code": "GC1",
+            "omschrijving": "Pas een klokregeling toe en regel deze in",
+            "categorie": "Ruimteverwarming",
+            "bijlage": "XIV",
+        }
     ]
 
 
-def test_meerdere_geldende_maatregelen_gaan_allemaal_mee():
-    """Eén overblijvende maatregel verbergt 'geeft de enige terug' i.p.v.
-    'kiest de juiste' (CLAUDE.md). Drie geldende, twee niet-geldende."""
+def test_meerdere_maatregelen_gaan_allemaal_mee_in_volgorde():
+    """Eén maatregel verbergt 'geeft de enige terug' i.p.v. 'geeft ze allemaal'
+    (CLAUDE.md). Drie stuks, uit twee verschillende bijlagen."""
     resultaat = _envelope(
         {
             "maatregelen": [
-                {"code": "GC1", "naam": "Pas een klokregeling toe", "van_toepassing": True},
-                {"code": "GC3", "naam": "Pas een weersafhankelijke regeling toe", "van_toepassing": True},
-                {"code": "FE4", "naam": "Iets anders", "van_toepassing": False},
-                {"code": "FD3", "naam": "Pas nachtafdekking toe", "van_toepassing": True},
-                {"code": "GD1", "naam": "Nog iets anders", "van_toepassing": False},
+                _maatregel("GK1", "Breng beweegbare gevelschermen aan", "Tuinbouwkassen", "XIVa"),
+                _maatregel("PT1", "Pas meerdere schakelgroepen toe", "Glastuinbouw", "VIIaa"),
+                _maatregel("GF4", "Vervang lampen door LED", "Binnenverlichting", "XIVa"),
             ]
         }
     )
-    assert maatregelen_voor_event("regelrecht__execute_law", resultaat) == [
-        {"code": "GC1", "omschrijving": "Pas een klokregeling toe"},
-        {"code": "GC3", "omschrijving": "Pas een weersafhankelijke regeling toe"},
-        {"code": "FD3", "omschrijving": "Pas nachtafdekking toe"},
-    ]
-
-
-def test_malvormd_element_tussen_geldende_maatregelen_laat_de_hele_extractie_stuklopen():
-    """Vastleggen wat er nu gebeurt: één kapot element tussen twee geldende
-    maatregelen levert `None` op voor de hele lijst, niet de twee geldende.
-
-    `m.get("van_toepassing")` op een niet-dict gooit een AttributeError; de
-    `except (ValueError, AttributeError)` in `maatregelen_voor_event` vangt die
-    voor de hele oogst, niet per element."""
-    resultaat = _envelope(
-        {
-            "maatregelen": [
-                {"code": "GC1", "naam": "Pas een klokregeling toe", "van_toepassing": True},
-                "niet een dict",
-                {"code": "FD3", "naam": "Pas nachtafdekking toe", "van_toepassing": True},
-            ]
-        }
-    )
-    assert maatregelen_voor_event("regelrecht__execute_law", resultaat) is None
+    velden = maatregelen_voor_event("regelrecht__execute_law", resultaat)
+    assert [v["code"] for v in velden] == ["GK1", "PT1", "GF4"]
+    assert [v["bijlage"] for v in velden] == ["XIVa", "VIIaa", "XIVa"]
 
 
 def test_naam_wordt_omschrijving():
-    """De frontend leest m.omschrijving; _eml_lijst produceert m.naam.
+    """De frontend leest m.omschrijving; de wet levert m.naam.
 
     Zonder deze hermapping toont het formulier kale codes zonder tekst.
     """
-    resultaat = _envelope(
-        {"maatregelen": [{"code": "GF4", "naam": "Vervang lampen door LED", "van_toepassing": True}]}
-    )
+    resultaat = _envelope({"maatregelen": [_maatregel("GF4", "Vervang lampen door LED")]})
     velden = maatregelen_voor_event("regelrecht__execute_law", resultaat)
     assert velden[0]["omschrijving"] == "Vervang lampen door LED"
+
+
+def test_malvormd_element_valt_weg_maar_de_rest_blijft():
+    """Eén kapot element mag de andere maatregelen niet meenemen in zijn val.
+
+    De oude vorm liet de hele oogst op `None` uitkomen omdat `.get()` op een
+    string een AttributeError gooit die buiten de lus gevangen werd. Nu wordt
+    per element gefilterd: de ondernemer ziet de maatregelen die wél kloppen.
+    """
+    resultaat = _envelope(
+        {
+            "maatregelen": [
+                _maatregel("GC1", "Pas een klokregeling toe"),
+                "niet een dict",
+                _maatregel("FD3", "Pas nachtafdekking toe"),
+            ]
+        }
+    )
+    velden = maatregelen_voor_event("regelrecht__execute_law", resultaat)
+    assert [v["code"] for v in velden] == ["GC1", "FD3"]
+
+
+def test_maatregel_zonder_code_valt_weg():
+    """Een maatregel zonder code kan de ondernemer niet rapporteren."""
+    resultaat = _envelope(
+        {"maatregelen": [{"naam": "Naamloos"}, _maatregel("GC1", "Pas een klokregeling toe")]}
+    )
+    velden = maatregelen_voor_event("regelrecht__execute_law", resultaat)
+    assert [v["code"] for v in velden] == ["GC1"]
+
+
+def test_lege_maatregelenlijst_geeft_geen_veld():
+    """Geen maatregelen is een uitkomst, geen formulier.
+
+    De wet kan legitiem nul maatregelen opleveren (geen enkele categorie
+    aanwezig); dan hoort er geen leeg formulier mee te gaan.
+    """
+    assert maatregelen_voor_event("regelrecht__execute_law", _envelope({"maatregelen": []})) is None
 
 
 def test_zonder_maatregelen_geen_veld():
     """Anders draagt elk volgend antwoord een verouderd formulier mee."""
     assert maatregelen_voor_event("regelrecht__execute_law", _envelope({})) is None
+
+
+def test_informatieplicht_uitkomst_levert_geen_maatregelen():
+    """Beide regels lopen langs dezelfde tool; alleen de tweede draagt maatregelen."""
+    resultaat = _envelope({"heeft_informatieplicht": True, "rapportage_frequentie_jaren": 4})
+    assert maatregelen_voor_event("regelrecht__execute_law", resultaat) is None
 
 
 def test_andere_tool_levert_niets():
@@ -100,7 +130,6 @@ def test_data_geen_dict_gooit_niet():
     assert maatregelen_voor_event("regelrecht__execute_law", resultaat) is None
 
 
-def test_maatregel_geen_dict_gooit_niet():
-    """Eén malvormd element in de lijst mag de hele extractie niet laten crashen."""
-    resultaat = _envelope({"maatregelen": ["niet een dict"]})
+def test_uitkomsten_geen_dict_gooit_niet():
+    resultaat = json.dumps({"data": {"uitkomsten": "niet een dict"}})
     assert maatregelen_voor_event("regelrecht__execute_law", resultaat) is None

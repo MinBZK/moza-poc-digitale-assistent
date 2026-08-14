@@ -95,6 +95,12 @@ REGELRECHT_DEFINITIES_ALLOWLIST: dict[str, dict] = {
             "RAPPORTAGE_FREQUENTIE_JAREN": 4,
         },
     },
+    # De maatregelbepaling draagt de indeling van de erkende maatregelenlijst
+    # (CATEGORIEEN: 28 categorieën, elk met hun onderdeel). Het formulier vraagt
+    # de ondernemer welke daarvan bij hem voorkomen; die lijst hoort uit de wet
+    # te komen en niet uit een kopie in de frontend. Geen fallback: is de engine
+    # weg, dan toont het formulier geen zelfbedachte indeling.
+    "omgevingswet/energiebesparing/maatregelen": {"service": "RVO"},
 }
 
 
@@ -112,6 +118,7 @@ _KVK_SESSIE_TOOLS = frozenset(
     }
 )
 _INFORMATIEPLICHT_LAW = "omgevingswet/energiebesparing/informatieplicht"
+_MAATREGELEN_LAW = "omgevingswet/energiebesparing/maatregelen"
 
 # Sleutels die een identiteit dragen (KvK-nummer, BSN, RSIN, burgerservicenummer).
 # Het LLM mag ze nooit meegeven aan de generieke execute_law-tool: identiteit komt
@@ -177,7 +184,23 @@ def _inject_session_kvk(tool_key: str, arguments: dict, kvk: str) -> dict:
     return args
 
 
-def _regel_status_dict(uitkomst: Uitkomst) -> dict:
+def _plicht_geldt(uitkomst: Uitkomst) -> bool:
+    """Of de energiebesparingsplicht geldt volgens de afgeronde informatieplichttoets.
+
+    Alleen een afgeronde toets telt: zolang de eerste regel nog op toestemming of
+    een opgave wacht, is er geen uitkomst om de tweede regel op te baseren, en
+    zou het starten ervan de ondernemer vragen stellen voor een verplichting die
+    misschien niet eens geldt.
+    """
+    if not uitkomst.klaar or not uitkomst.resultaat:
+        return False
+    if not uitkomst.resultaat.get("voldoet_aan_voorwaarden"):
+        return False
+    uitkomsten = uitkomst.resultaat.get("uitkomsten") or {}
+    return bool(uitkomsten.get("heeft_energiebesparingsplicht"))
+
+
+def _regel_status_dict(uitkomst: Uitkomst, maatregelen: Uitkomst | None = None) -> dict:
     """Vertaal `Uitkomst` naar wat de systeemprompt nodig heeft.
 
     Bij overschrijding van de rondegrens geeft `volg_regel` `klaar=False` mét
@@ -185,23 +208,45 @@ def _regel_status_dict(uitkomst: Uitkomst) -> dict:
     `wacht_op`-waarden (zie `regelloop.Uitkomst`). Zonder deze normalisatie
     valt dat geval stilzwijgend door de `wacht_op`-afhandeling in de prompt
     heen; hier wordt het expliciet "onbekend".
+
+    `maatregelen` is de uitkomst van de tweede regel in de keten, of None als
+    die niet gedraaid heeft (de plicht geldt niet, of de eerste regel is nog
+    niet rond). Hij staat apart in plaats van de eerste te vervangen: de
+    ondernemer heeft beide antwoorden nodig — of de plicht geldt én welke
+    maatregelen erbij horen — en het model mag het tweede niet voor het eerste
+    aanzien.
     """
     wacht_op = uitkomst.wacht_op or ("onbekend" if not uitkomst.klaar else None)
-    return {
+    status = {
         "klaar": uitkomst.klaar,
         "wacht_op": wacht_op,
         "reden": uitkomst.reden,
         "resultaat": uitkomst.resultaat,
     }
+    if maatregelen is not None:
+        status["maatregelen"] = {
+            "klaar": maatregelen.klaar,
+            "wacht_op": maatregelen.wacht_op
+            or ("onbekend" if not maatregelen.klaar else None),
+            "reden": maatregelen.reden,
+            "resultaat": maatregelen.resultaat,
+        }
+    return status
 
 
 def _opgaven_als_feiten(opgaven: dict[str, object] | None) -> dict[str, dict]:
     """Verpak de formulierantwoorden van de frontend tot feiten met herkomst.
 
     Alleen velden die `regelrouting.route()` kent mét `soort == "opgave"` komen
-    door: een frontend mag daarmee geen willekeurig feit de kaart in schrijven,
-    ook geen feit dat wél in de routeringstabel staat maar uit een andere bron
-    hoort te komen (bv. `IS_WOONFUNCTIE`, een registratie).
+    door, plus de velden die expliciet als `corrigeerbaar` gemarkeerd staan: een
+    frontend mag daarmee geen willekeurig feit de kaart in schrijven, ook geen
+    feit dat wél in de routeringstabel staat maar uit een andere bron hoort te
+    komen (bv. `IS_WOONFUNCTIE`, een registratie).
+
+    Een correctie landt als opgave, met de ondernemer als bron. Dat is geen
+    cosmetiek: het maakt zichtbaar dat de waarde niet meer uit de KvK komt maar
+    van degene die het bedrijf runt, en het zorgt ervoor dat een volgende
+    KvK-ophaling hem niet stilletjes terugdraait (zie `feiten.samenvoegen`).
 
     `opgaven` is een publiek HTTP-veld dat elke client kan vullen; een `null`
     erin mag geen feit met `waarde=None` opleveren. Zo'n feit gaat als
@@ -213,10 +258,14 @@ def _opgaven_als_feiten(opgaven: dict[str, object] | None) -> dict[str, dict]:
         if waarde is None:
             continue
         veld = regelrouting.route(str(naam))
-        if veld is None or veld.soort != "opgave":
+        if veld is None or not (veld.soort == "opgave" or veld.corrigeerbaar):
             continue
         sleutel = veld.feitnaam or str(naam)
-        feiten[sleutel] = {"waarde": waarde, "bron": veld.bron, "soort": veld.soort}
+        if veld.soort == "opgave":
+            bron, soort = veld.bron, veld.soort
+        else:
+            bron, soort = f"de ondernemer (correctie op {veld.bron})", "opgave"
+        feiten[sleutel] = {"waarde": waarde, "bron": bron, "soort": soort}
     return feiten
 
 
@@ -404,10 +453,16 @@ def maatregelen_voor_event(tool_naam: str, resultaat: str) -> list[dict] | None:
         return None
     try:
         data = json.loads(resultaat).get("data") or {}
+        maatregelen = (data.get("uitkomsten") or {}).get("maatregelen") or []
         geldend = [
-            {"code": m.get("code", ""), "omschrijving": m.get("naam", "")}
-            for m in (data.get("maatregelen") or [])
-            if m.get("van_toepassing")
+            {
+                "code": m.get("code", ""),
+                "omschrijving": m.get("naam", ""),
+                "categorie": m.get("categorie", ""),
+                "bijlage": m.get("bijlage", ""),
+            }
+            for m in maatregelen
+            if isinstance(m, dict) and m.get("code")
         ]
     except (ValueError, AttributeError):
         return None
@@ -911,6 +966,7 @@ class VLAMHost:
             return resultaat
 
         async def draai() -> None:
+            maatregelen = None
             try:
                 uitkomst = await volg_regel(
                     law=_INFORMATIEPLICHT_LAW,
@@ -919,6 +975,21 @@ class VLAMHost:
                     call_tool=call_tool,
                     toestemming=self.toestemming.get(conv_key, False),
                 )
+                # De maatregelenregel volgt uit de uitkomst van de eerste, niet
+                # uit de vraag van de ondernemer of een keuze van het model.
+                # Artikel 5.15d Bal draagt op te rapporteren over de getroffen
+                # erkende maatregelen: geldt de plicht, dan hoort de lijst erbij.
+                # Geldt hij niet, dan blijft de tweede regel uit — dan is er niets
+                # te rapporteren en zouden we de ondernemer om gegevens vragen die
+                # geen enkel doel dienen.
+                if _plicht_geldt(uitkomst):
+                    maatregelen = await volg_regel(
+                        law=_MAATREGELEN_LAW,
+                        service=REGELRECHT_DEFINITIES_ALLOWLIST[_MAATREGELEN_LAW]["service"],
+                        feiten=feiten,
+                        call_tool=call_tool,
+                        toestemming=self.toestemming.get(conv_key, False),
+                    )
             except Exception:
                 # Een onverwachte fout hier (bv. onleesbare JSON van een bron)
                 # mag de generator niet eeuwig laten wachten op een item dat
@@ -927,7 +998,10 @@ class VLAMHost:
                 uitkomst = Uitkomst(
                     klaar=False, resultaat=None, wacht_op="onbekend", reden=""
                 )
-            await queue.put({"type": "regel_status", "status": _regel_status_dict(uitkomst)})
+                maatregelen = None
+            await queue.put(
+                {"type": "regel_status", "status": _regel_status_dict(uitkomst, maatregelen)}
+            )
 
         taak = asyncio.create_task(draai())
         try:
