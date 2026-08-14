@@ -668,6 +668,7 @@ class VLAMHost:
         bronnen_offline: list[str] | None = None,
         cli_transport: bool = False,
         regel_status: dict | None = None,
+        feiten: dict | None = None,
     ) -> str:
         """Stel de systeemprompt samen, inclusief welke bronnen nu offline zijn.
 
@@ -676,6 +677,9 @@ class VLAMHost:
         de MCP-status zegt daar niets, maar het CLI-transport heeft zijn eigen
         gaten — er is bijvoorbeeld geen netbeheerder-wrapper. `regel_status` komt
         van `_regel_status`: wat de regelloop deze beurt al heeft bepaald.
+        `feiten` gaat mee zodat "STATUS VAN DE REGELTOETS" de geoogste
+        feitnamen kan noemen — anders klopt de verwijzing ernaartoe in
+        `tool_usage.md` voor de bedrijfsgegevens niet.
         """
         return get_system_prompt(
             mode,
@@ -685,6 +689,7 @@ class VLAMHost:
             ),
             cli_transport=cli_transport,
             regel_status=regel_status,
+            feiten=feiten,
         )
 
     def get_status(self) -> dict:
@@ -1179,7 +1184,7 @@ class VLAMHost:
         zolang toestemming niet vastligt — zie `_execute_tools`.
         """
         tools = self.registry.get_anthropic_tools()
-        system_prompt = self._system_prompt("claude", regel_status=regel_status)
+        system_prompt = self._system_prompt("claude", regel_status=regel_status, feiten=feiten)
 
         # Per beurt (niet per iteratie): de tool-aanroep en het uiteindelijke
         # tekstantwoord zitten meestal in verschillende agentic-stappen.
@@ -1267,7 +1272,7 @@ class VLAMHost:
         poort de aanroep zolang toestemming niet vastligt.
         """
         tools_openai = self.registry.get_openai_tools()
-        system_prompt = self._system_prompt("vlam", regel_status=regel_status)
+        system_prompt = self._system_prompt("vlam", regel_status=regel_status, feiten=feiten)
         openai_messages = self._to_openai_messages(messages, system_prompt)
 
         # Per beurt (niet per iteratie): de tool-aanroep en het uiteindelijke
@@ -1578,7 +1583,7 @@ class VLAMHost:
         if not claude.api_key:
             return _geen_sleutel_fout("claude").tekst
         tools = self.registry.get_anthropic_tools()
-        system_prompt = self._system_prompt("claude", regel_status=regel_status)
+        system_prompt = self._system_prompt("claude", regel_status=regel_status, feiten=feiten)
 
         max_iterations = 10
         for _ in range(max_iterations):
@@ -1639,7 +1644,7 @@ class VLAMHost:
         tool-aanroep van het model.
         """
         tools_openai = self.registry.get_openai_tools()
-        system_prompt = self._system_prompt("vlam", regel_status=regel_status)
+        system_prompt = self._system_prompt("vlam", regel_status=regel_status, feiten=feiten)
         openai_messages = self._to_openai_messages(messages, system_prompt)
 
         max_iterations = 10

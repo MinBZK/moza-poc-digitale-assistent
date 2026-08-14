@@ -186,7 +186,23 @@ def _regel_status_klaar_tekst(resultaat: dict) -> str:
     return " ".join(delen)
 
 
-def _compose_regel_status(regel_status: dict | None) -> str | None:
+def _geoogste_feiten_tekst(feiten: dict | None) -> str | None:
+    """Welke feiten de host al heeft opgehaald, als tekst voor de prompt.
+
+    `tool_usage.md` verwijst voor de bedrijfsgegevens naar "STATUS VAN DE
+    REGELTOETS" - zonder deze regel bevat dat blok alleen de uitkomsttekst
+    (`voldoet_aan_voorwaarden`, `uitkomsten`) en geen enkel opgehaald feit,
+    waardoor die verwijzing niet klopt. De namen komen 1-op-1 overeen met de
+    plaatshouders uit `slots.md`, zodat het model ze meteen kan gebruiken in
+    plaats van er zelf een tool voor te overwegen.
+    """
+    if not feiten:
+        return None
+    namen = ", ".join(f"{{{{{naam}}}}}" for naam in sorted(feiten))
+    return f"Al opgehaald en met bron beschikbaar: {namen}."
+
+
+def _compose_regel_status(regel_status: dict | None, feiten: dict | None = None) -> str | None:
     """Bouw het blok dat vertelt wat de regelloop deze beurt al heeft bepaald.
 
     `regelloop.volg_regel` draait vóór het model de beurt ziet en haalt zelf op
@@ -224,6 +240,9 @@ def _compose_regel_status(regel_status: dict | None) -> str | None:
         )
     else:
         status = _regel_status_klaar_tekst(regel_status.get("resultaat") or {})
+    feiten_tekst = _geoogste_feiten_tekst(feiten)
+    if feiten_tekst:
+        status = f"{status} {feiten_tekst}"
     return _load("shared/regel_status.md").replace("{status}", status)
 
 
@@ -233,6 +252,7 @@ def compose_system_prompt(
     bronnen_offline: list[str] | None = None,
     cli_transport: bool = False,
     regel_status: dict | None = None,
+    feiten: dict | None = None,
 ) -> str:
     """Assemble the system prompt from modular blocks.
 
@@ -244,6 +264,9 @@ def compose_system_prompt(
             tools than the shared routing table describes.
         regel_status: What the rule loop (`regelloop.volg_regel`) already
             determined this turn, or None if it did not run (CLI transport).
+        feiten: The facts harvested so far this conversation (`VLAMHost.feiten`),
+            named in the "STATUS VAN DE REGELTOETS" block so `tool_usage.md`'s
+            reference to it for company data is actually true.
 
     Returns:
         Complete system prompt string.
@@ -273,7 +296,7 @@ def compose_system_prompt(
             # storing, dus het hoort in een eigen blok en niet in de
             # beschikbaarheidslijst.
             blocks.append(_load("shared/cli_transport.md"))
-        regel = _compose_regel_status(regel_status)
+        regel = _compose_regel_status(regel_status, feiten)
         if regel:
             blocks.append(regel)  # wat de regelloop deze beurt al bepaalde
         if status:

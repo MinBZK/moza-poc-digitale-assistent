@@ -109,6 +109,36 @@ def test_klaar_positief_noemt_de_uitkomst_niet_de_sleutelnaam():
     assert "voldoet_aan_voorwaarden" not in blok
 
 
+def test_status_blok_noemt_de_geoogste_feitnamen():
+    """`tool_usage.md` verwijst voor de bedrijfsgegevens naar dit blok; zonder
+    de feitnamen erin klopt die verwijzing niet - het blok bevatte tot dusver
+    alleen de uitkomsttekst, geen enkel opgehaald feit."""
+    blok = _compose_regel_status(
+        {
+            "klaar": False,
+            "wacht_op": "toestemming",
+            "reden": "x",
+            "resultaat": None,
+        },
+        feiten={
+            "BEDRIJFSNAAM": {"waarde": "Kwekerij De Bloesem", "bron": "KvK", "soort": "registratie"},
+            "VESTIGINGSADRES": {"waarde": "Hoefweg 210", "bron": "KvK", "soort": "registratie"},
+        },
+    )
+    assert "{{BEDRIJFSNAAM}}" in blok
+    assert "{{VESTIGINGSADRES}}" in blok
+
+
+def test_status_blok_zonder_feiten_blijft_werken():
+    """Geen feiten (nog niets opgehaald, of CLI-transport) mag niet crashen en
+    voegt geen loze zin toe."""
+    blok = _compose_regel_status(
+        {"klaar": False, "wacht_op": "toestemming", "reden": "x", "resultaat": None},
+        feiten=None,
+    )
+    assert "Al opgehaald" not in blok
+
+
 def test_klaar_negatief_meldt_dat_de_verplichting_niet_geldt():
     """C4: `voldoet_aan_voorwaarden: False` zonder ontbrekende gegevens is een
     definitief "nee", geen onbekende toestand — en dat moet het model ook zo
