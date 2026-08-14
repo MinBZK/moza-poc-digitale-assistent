@@ -1724,8 +1724,11 @@ class VLAMHost:
     ) -> tuple[str, object, bool]:
         """`_bron_aanroep`, met de PDR-008-poort voor de Business Wallet ervoor.
 
-        Dit is de enige plek waar een MCP-tool-aanroep de registry bereikt —
-        model én regelloop lopen hier allebei doorheen. Zolang
+        Model én regelloop lopen hier allebei doorheen voor elke tool-aanroep
+        die toestemming kan vergen. (`get_definities` roept de registry ook
+        rechtstreeks aan, buiten deze poort om - onschadelijk, want dat pad
+        vraagt alleen drempelwaarden op met lege parameters, nooit verbruik.)
+        Zolang
         `self.toestemming[conv_key]` niet is vastgelegd, komt
         `netbeheerder__verbruik` de poort niet door: geen bron-aanroep, maar
         een tool-resultaat met de catalogusmelding, alsof de bron zelf weigerde.
