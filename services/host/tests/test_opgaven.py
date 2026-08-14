@@ -68,6 +68,21 @@ def test_lege_of_ontbrekende_opgaven_geven_geen_feiten():
     assert vlam_host._opgaven_als_feiten({}) == {}
 
 
+def test_opgave_met_waarde_null_levert_geen_feit_op():
+    """`opgaven` is een publiek HTTP-veld dat elke client kan vullen. Een
+    `null` erin mag geen feit met `waarde=None` opleveren: dat gaat als
+    parameter naar de wet en rendert als het woord "None" in het antwoord."""
+    feiten = vlam_host._opgaven_als_feiten({"HEEFT_KOELINSTALLATIE": None})
+    assert feiten == {}
+
+
+def test_opgave_met_waarde_false_blijft_wel_een_feit():
+    """De None-filter mag niet per ongeluk ook falsy-maar-geldige waarden
+    (False, 0, "") wegvangen - alleen None is geen antwoord."""
+    feiten = vlam_host._opgaven_als_feiten({"HEEFT_KOELINSTALLATIE": False})
+    assert feiten["HEEFT_KOELINSTALLATIE"]["waarde"] is False
+
+
 # --- Via de publieke ingang: landen vóór de regelloop draait ---------------
 
 

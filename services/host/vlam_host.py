@@ -202,9 +202,16 @@ def _opgaven_als_feiten(opgaven: dict[str, object] | None) -> dict[str, dict]:
     door: een frontend mag daarmee geen willekeurig feit de kaart in schrijven,
     ook geen feit dat wél in de routeringstabel staat maar uit een andere bron
     hoort te komen (bv. `IS_WOONFUNCTIE`, een registratie).
+
+    `opgaven` is een publiek HTTP-veld dat elke client kan vullen; een `null`
+    erin mag geen feit met `waarde=None` opleveren. Zo'n feit gaat als
+    parameter naar de wet en rendert als het woord "None" in het antwoord -
+    dezelfde reden waarom `_met_herkomst` in `feiten.py` None-waarden weglaat.
     """
     feiten: dict[str, dict] = {}
     for naam, waarde in (opgaven or {}).items():
+        if waarde is None:
+            continue
         veld = regelrouting.route(str(naam))
         if veld is None or veld.soort != "opgave":
             continue
