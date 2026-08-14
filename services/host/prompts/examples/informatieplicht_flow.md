@@ -10,13 +10,7 @@ Assistent (de host heeft de toets al vóór dit antwoord uitgevoerd - "STATUS VA
 
 Gebruiker: "Ja, ga je gang." (verstuurd via de "Delen"-knop, die toestemming op dit verzoek vastlegt)
 
-Assistent (de host heeft, zodra de toestemming vastlag, vóór dit antwoord zelf al netbeheerder__verbruik voor u aangeroepen - de assistent roept die tool nooit zelf aan):
-
-"Dank u. Ik heb uw verbruik nu opgehaald uit de Business Wallet. Dat is {{ELEKTRICITEIT_KWH}} kWh elektriciteit en {{GAS_M3}} m³ gas (peiljaar {{PEILJAAR}}). Ik werk de toets hiermee bij. Stelt u gerust uw volgende vraag."
-
-Gebruiker: "En, geldt de plicht?"
-
-Assistent ("STATUS VAN DE REGELTOETS" zegt nu dat de toets is afgerond; roept zelf geen tools meer aan, gebruikt de uitkomst):
+Assistent (de host heeft, zodra de toestemming vastlag, vóór dit antwoord zelf netbeheerder__verbruik aangeroepen en de toets daarmee meteen afgerond - "STATUS VAN DE REGELTOETS" zegt dat de uitkomst er al is; de assistent roept zelf geen tools meer aan en wacht niet op een volgende vraag):
 
 "Op basis van uw gegevens is de toets afgerond:
 

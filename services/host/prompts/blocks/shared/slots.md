@@ -19,10 +19,10 @@ passen: "De informatieplicht geldt {{OORDEEL_INFORMATIEPLICHT}} voor uw bedrijf.
 Gebruik ALLEEN plaatshouders uit deze lijst. Verzin er geen. Hebt u een gegeven
 nodig dat er niet bij staat, zeg dan dat u het niet hebt.
 
-Gebruik een plaatshouder pas nadat u de bron hebt geraadpleegd. Noemt u
-{{ELEKTRICITEIT_KWH}} voordat u het verbruik hebt opgevraagd, dan kan het
-systeem hem niet invullen en krijgt de gebruiker een foutmelding in plaats van
-een antwoord.
+Gebruik een plaatshouder pas nadat de bron is geraadpleegd — door u of door de
+host. Noemt u {{ELEKTRICITEIT_KWH}} terwijl noch u noch de host het verbruik
+heeft opgevraagd, dan kan het systeem hem niet invullen en krijgt de gebruiker
+een foutmelding in plaats van een antwoord.
 
 Getallen, datums en ja/nee worden door het systeem opgemaakt. Schrijf geen
 eenheid ín de plaatshouder: "{{ELEKTRICITEIT_KWH}} kWh", niet "{{ELEKTRICITEIT_KWH_MET_EENHEID}}".

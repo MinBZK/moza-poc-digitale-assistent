@@ -32,7 +32,7 @@ VOORBEELDEN = sorted((PROMPTS / "examples").glob("*.md"))
 # een verbetering die vastgelegd hoort te worden.
 BASISSCORE = {
     "buiten_scope_met_brug.md": 58.1,
-    "informatieplicht_flow.md": 52.6,
+    "informatieplicht_flow.md": 52.4,
     "koop_regelrecht_combined.md": 64.7,
     "koop_search.md": 25.5,
     "koop_specific_law.md": 38.9,
