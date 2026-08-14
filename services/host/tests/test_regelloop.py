@@ -7,7 +7,7 @@ het antwoord heeft.
 
 import json
 
-from regelloop import volg_regel
+from regelloop import _parameters_uit_feiten, volg_regel
 
 
 def _engine(stappen):
@@ -157,3 +157,61 @@ async def test_lus_loopt_niet_eindeloos_als_een_bron_niets_oplevert():
         toestemming=True,
     )
     assert uit.klaar is False
+
+
+def test_parameters_uit_feiten_slaat_een_echo_over():
+    """Een echo is alleen wat WIJ als invoer instuurden, teruggekaatst door
+    RegelRecht - nooit een eigen waarneming. Telt hij mee als wetsinvoer, dan
+    wordt een door het model verzonnen override een feit dat de host de
+    volgende ronde zelf weer als wetsinvoer aan de wet aanbiedt."""
+    feiten = {
+        "ELEKTRICITEIT_KWH": {
+            "waarde": 999999,
+            "bron": "RegelRecht (doorgegeven invoer)",
+            "soort": "echo",
+        }
+    }
+    parameters = _parameters_uit_feiten(feiten)
+    assert "JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH" not in parameters
+
+
+def test_parameters_uit_feiten_gebruikt_wel_een_attestatie():
+    """Tegenhanger van de vorige test: een echte attestatie telt gewoon mee."""
+    feiten = {
+        "ELEKTRICITEIT_KWH": {"waarde": 420000, "bron": "Business Wallet", "soort": "attestatie"}
+    }
+    parameters = _parameters_uit_feiten(feiten)
+    assert parameters["JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH"] == 420000
+
+
+async def test_lus_stopt_meteen_als_een_ronde_geen_nieuw_feit_oplevert():
+    """Voortgangsbewaking: geen tweede, derde... vijfde aanroep van dezelfde
+    twee tools als de bron het gevraagde veld niet levert. `_leeg_kvk` in de
+    test hierboven bewijst alleen dat de lus ooit stopt; deze test bewijst dat
+    ze na de eerste mislukte poging stopt, niet na `MAX_RONDES`."""
+    pogingen = {"execute_law": 0, "kvk": 0}
+
+    async def _telt_aanroepen(naam, arguments):
+        if naam == "regelrecht__execute_law":
+            pogingen["execute_law"] += 1
+            return json.dumps({"data": {"ontbrekende_gegevens": [{"naam": "IS_WOONFUNCTIE"}]}})
+        if naam == "kvk__mijn_bedrijf":
+            pogingen["kvk"] += 1
+            # Levert nooit is_woonfunctie: precies de storing/lege-BAG-situatie
+            # die de voortgangscontrole moet opvangen.
+            return json.dumps({"data": {"naam": "Kwekerij De Bloesem"}})
+        raise AssertionError(f"onverwachte tool: {naam}")
+
+    uit = await volg_regel(
+        law="omgevingswet/energiebesparing/informatieplicht",
+        service="RVO",
+        feiten={},
+        call_tool=_telt_aanroepen,
+        toestemming=True,
+    )
+    assert uit.klaar is False
+    assert uit.wacht_op is None
+    # Eén ronde die wél vooruitgang boekt (BEDRIJFSNAAM is nieuw), daarna één
+    # ronde zonder vooruitgang (dezelfde KvK-data opnieuw) - dan stoppen, niet
+    # nog drie keer dezelfde twee aanroepen herhalen.
+    assert pogingen == {"execute_law": 2, "kvk": 2}
