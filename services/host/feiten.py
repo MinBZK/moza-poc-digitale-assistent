@@ -165,6 +165,25 @@ _OOGSTERS = {
 }
 
 
+def samenvoegen(feiten: dict, nieuwe_feiten: dict) -> None:
+    """Voeg nieuw geoogste feiten toe aan de feitenkaart, in-place.
+
+    Een echo (`soort == "echo"`) overschrijft nooit een bestaand feit. Zonder
+    deze regel verdringt de terugkoppeling van RegelRecht - wat WIJ instuurden,
+    geen eigen waarneming - de attestatie die er al stond: na de wetsaanroep
+    zou het verbruik niet langer uit de Business Wallet komen maar uit
+    "RegelRecht (doorgegeven invoer)". Erger nog: een `overrides`-waarde die
+    het model verzint komt via dezelfde weg terug en zou een echte attestatie
+    overschrijven met een verzonnen getal. Bestaat het feit nog niet, dan mag
+    de echo hem wél aanleggen (bv. de eerste ronde); `_parameters_uit_feiten`
+    in `regelloop.py` vertrouwt zo'n feit daarna sowieso niet als wetsinvoer.
+    """
+    for naam, feit in nieuwe_feiten.items():
+        if feit.get("soort") == "echo" and naam in feiten:
+            continue
+        feiten[naam] = feit
+
+
 def feiten_uit_tool(tool_naam: str, resultaat: str) -> dict[str, dict]:
     """Feiten uit één tool-resultaat, met slotnamen als sleutel.
 

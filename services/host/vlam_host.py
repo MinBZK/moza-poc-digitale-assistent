@@ -41,7 +41,7 @@ from errors import (
     naar_llm,
     verrijk_llm,
 )
-from feiten import feiten_uit_tool
+from feiten import feiten_uit_tool, samenvoegen
 from log_redaction import redact_always, redact_temporarily
 from mcp_client import MCPToolRegistry
 from regelloop import Uitkomst, volg_regel
@@ -895,7 +895,7 @@ class VLAMHost:
                 )
             if fout:
                 await queue.put(naar_event(fout, "bron_fout"))
-            feiten.update(feiten_uit_tool(tool_key, resultaat))
+            samenvoegen(feiten, feiten_uit_tool(tool_key, resultaat))
             return resultaat
 
         async def draai() -> None:
@@ -1228,7 +1228,7 @@ class VLAMHost:
             # Emit lopende zaak als case-event bij succesvolle indiening
             for tu, tr in zip(tool_uses, tool_results, strict=True):
                 inhoud = tr.get("content", "")
-                feiten.update(feiten_uit_tool(tu.name, inhoud))
+                samenvoegen(feiten, feiten_uit_tool(tu.name, inhoud))
                 maatregelen_deze_beurt = (
                     maatregelen_voor_event(tu.name, inhoud) or maatregelen_deze_beurt
                 )
@@ -1348,7 +1348,7 @@ class VLAMHost:
                 if fout:
                     yield naar_event(fout, "bron_fout")
 
-                feiten.update(feiten_uit_tool(tool_key, result))
+                samenvoegen(feiten, feiten_uit_tool(tool_key, result))
                 maatregelen_deze_beurt = (
                     maatregelen_voor_event(tool_key, result) or maatregelen_deze_beurt
                 )
@@ -1433,7 +1433,7 @@ class VLAMHost:
                 if fout:
                     yield naar_event(fout, "bron_fout")
 
-                feiten.update(feiten_uit_tool(tu.name, result))
+                samenvoegen(feiten, feiten_uit_tool(tu.name, result))
                 zaak = _extract_lopende_zaak(tu.name, result)
                 if zaak:
                     yield {"type": "case", "data": zaak}
@@ -1535,7 +1535,7 @@ class VLAMHost:
                 if fout:
                     yield naar_event(fout, "bron_fout")
 
-                feiten.update(feiten_uit_tool(tool_key, result))
+                samenvoegen(feiten, feiten_uit_tool(tool_key, result))
                 zaak = _extract_lopende_zaak(tool_key, result)
                 if zaak:
                     yield {"type": "case", "data": zaak}
@@ -1605,7 +1605,7 @@ class VLAMHost:
 
             tool_results, _, _ = await self._execute_tools(tool_uses, session_kvk, conv_key)
             for tu, tr in zip(tool_uses, tool_results, strict=True):
-                feiten.update(feiten_uit_tool(tu.name, tr.get("content", "")))
+                samenvoegen(feiten, feiten_uit_tool(tu.name, tr.get("content", "")))
             messages.append({"role": "user", "content": tool_results})
 
         return maak_fout("LLM_MAX_STAPPEN").tekst
@@ -1692,7 +1692,7 @@ class VLAMHost:
                         conv_key,
                     )
 
-                feiten.update(feiten_uit_tool(tool_key, result))
+                samenvoegen(feiten, feiten_uit_tool(tool_key, result))
                 openai_messages.append(
                     {
                         "role": "tool",

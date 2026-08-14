@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from feiten import feiten_uit_tool
+from feiten import feiten_uit_tool, samenvoegen
 
 MCP_DIR = Path(__file__).resolve().parent.parent.parent / "mcp"
 
@@ -270,6 +270,75 @@ def test_regelrecht_levert_de_uitkomstvelden_die_slots_md_aanbiedt():
         == "RVO eLoket (mijn.rvo.nl) met eHerkenning niveau 2+"
     )
     assert feiten["BEVOEGD_GEZAG"]["waarde"] == "gemeente"
+
+
+def test_echo_overschrijft_geen_bestaand_feit():
+    """De kern van de eindreview-bevinding: de echo mag de attestatie niet verdringen.
+
+    Nagemeten scenario: eerst levert de Business Wallet 420000 kWh als
+    attestatie. De daaropvolgende wetsaanroep echoot diezelfde waarde terug
+    (soort `echo`) - zonder deze regel overschrijft die echo het feit en is
+    de herkomst na één ronde geen Business Wallet meer, precies de belofte
+    die deze branch doet.
+    """
+    feiten: dict = {}
+    samenvoegen(
+        feiten,
+        {"ELEKTRICITEIT_KWH": {"waarde": 420000, "bron": "Business Wallet", "soort": "attestatie"}},
+    )
+    samenvoegen(
+        feiten,
+        {
+            "ELEKTRICITEIT_KWH": {
+                "waarde": 420000,
+                "bron": "RegelRecht (doorgegeven invoer)",
+                "soort": "echo",
+            }
+        },
+    )
+    assert feiten["ELEKTRICITEIT_KWH"]["bron"] == "Business Wallet"
+    assert feiten["ELEKTRICITEIT_KWH"]["soort"] == "attestatie"
+
+
+def test_echo_overschrijft_geen_bestaand_feit_ook_niet_met_afwijkende_waarde():
+    """Het ernstigere geval: een door het model verzonnen override komt als
+    echo terug met een ANDERE waarde dan de echte attestatie. Zonder deze
+    regel wint het verzonnen getal het van de Business Wallet-waarde."""
+    feiten: dict = {}
+    samenvoegen(
+        feiten,
+        {"ELEKTRICITEIT_KWH": {"waarde": 420000, "bron": "Business Wallet", "soort": "attestatie"}},
+    )
+    samenvoegen(
+        feiten,
+        {
+            "ELEKTRICITEIT_KWH": {
+                "waarde": 999999,
+                "bron": "RegelRecht (doorgegeven invoer)",
+                "soort": "echo",
+            }
+        },
+    )
+    assert feiten["ELEKTRICITEIT_KWH"]["waarde"] == 420000
+    assert feiten["ELEKTRICITEIT_KWH"]["soort"] == "attestatie"
+
+
+def test_echo_mag_wel_een_nieuw_feit_aanleggen():
+    """Bestaat het feit nog niet, dan mag de echo hem wél toevoegen (bv. de
+    eerste ronde). `_parameters_uit_feiten` in `regelloop.py` vertrouwt zo'n
+    feit daarna sowieso niet als wetsinvoer (aparte test in
+    `test_regelloop.py`)."""
+    feiten: dict = {}
+    samenvoegen(feiten, {"ONBEKEND_VELD": {"waarde": 42, "bron": "x", "soort": "echo"}})
+    assert feiten["ONBEKEND_VELD"]["waarde"] == 42
+
+
+def test_een_niet_echo_feit_overschrijft_gewoon():
+    """Geen speciale regel voor registratie/attestatie/wetsconstante: die
+    overschrijven zoals `dict.update` altijd deed - alleen de echo is bijzonder."""
+    feiten = {"BEDRIJFSNAAM": {"waarde": "Oud", "bron": "KvK", "soort": "registratie"}}
+    samenvoegen(feiten, {"BEDRIJFSNAAM": {"waarde": "Nieuw", "bron": "KvK", "soort": "registratie"}})
+    assert feiten["BEDRIJFSNAAM"]["waarde"] == "Nieuw"
 
 
 def test_onbekende_tool_levert_niets():

@@ -3,7 +3,7 @@
 `feiten_uit_tool` zelf staat onder test in `test_feitenkaart.py`; dat bewijst
 niets over de bedrading in `vlam_host.py`. Zonder deze test heeft precies de
 fout die taak 4 riskeert geen vangnet: zet iemand later `feiten = {...}` in
-plaats van `feiten.update(...)` in een van de zes `_chat_*`-methoden, dan
+plaats van `samenvoegen(feiten, ...)` in een van de zes `_chat_*`-methoden, dan
 vervangt dat de by-reference-koppeling naar `self.feiten[conv_key]` door een
 lokale dict, blijft de sessiekaart leeg, en blijft CI groen.
 
