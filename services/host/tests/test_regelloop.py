@@ -72,6 +72,65 @@ async def test_lus_stopt_bij_iets_dat_alleen_de_ondernemer_weet():
     assert uit.wacht_op == "opgave"
 
 
+async def test_alle_openstaande_opgaven_gaan_in_een_keer_mee():
+    """Eén formulier met alle vragen, niet één vraag per beurt.
+
+    De lus stopt op het eerste veld dat hij niet zelf kan halen, maar de andere
+    openstaande opgaven staan al in dezelfde respons. Zou hij ze één voor één
+    melden, dan kost het de ondernemer drie beurten om drie vinkjes te zetten en
+    stuit de lus na elk antwoord op de volgende.
+    """
+    call_tool = _engine([
+        {
+            "ontbrekende_gegevens": [
+                {"naam": "TEELT_GEWASSEN_IN_GEBOUW_GEEN_KAS", "beschrijving": "Teelt u in een gebouw?"},
+                {"naam": "MAAKT_GEBRUIK_VAN_VERLAAGD_ENERGIEBELASTINGTARIEF", "beschrijving": "Verlaagd tarief?"},
+                {"naam": "AANWEZIGE_CATEGORIEEN", "beschrijving": "Welke categorieen?"},
+            ]
+        },
+    ])
+    uit = await volg_regel(
+        law="omgevingswet/energiebesparing/maatregelen",
+        service="RVO",
+        feiten={},
+        call_tool=call_tool,
+        toestemming=True,
+    )
+    assert uit.wacht_op == "opgave"
+    assert [v["naam"] for v in uit.velden] == [
+        "TEELT_GEWASSEN_IN_GEBOUW_GEEN_KAS",
+        "MAAKT_GEBRUIK_VAN_VERLAAGD_ENERGIEBELASTINGTARIEF",
+        "AANWEZIGE_CATEGORIEEN",
+    ]
+    assert uit.velden[0]["beschrijving"] == "Teelt u in een gebouw?"
+
+
+async def test_een_veld_met_een_bron_hoort_niet_in_het_formulier():
+    """Wat de host zelf kan ophalen, vraagt hij niet aan de ondernemer.
+
+    `IS_WOONFUNCTIE` komt uit de BAG-verrijking. Zou hij in het formulier komen,
+    dan vraagt de assistent iets wat hij al weet - en laat hij de ondernemer een
+    registratie overschrijven die geen afleiding van ons is.
+    """
+    call_tool = _engine([
+        {
+            "ontbrekende_gegevens": [
+                {"naam": "AANWEZIGE_CATEGORIEEN", "beschrijving": "Welke categorieen?"},
+                {"naam": "IS_WOONFUNCTIE", "beschrijving": "Woonfunctie?"},
+            ]
+        },
+    ])
+    uit = await volg_regel(
+        law="omgevingswet/energiebesparing/maatregelen",
+        service="RVO",
+        feiten={},
+        call_tool=call_tool,
+        toestemming=True,
+    )
+    assert uit.wacht_op == "opgave"
+    assert [v["naam"] for v in uit.velden] == ["AANWEZIGE_CATEGORIEEN"]
+
+
 async def test_onbekend_veld_stopt_de_lus_in_plaats_van_te_raden():
     call_tool = _engine([
         {"ontbrekende_gegevens": [{"naam": "OMZET_2025"}]},

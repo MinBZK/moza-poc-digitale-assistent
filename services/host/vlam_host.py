@@ -200,6 +200,73 @@ def _plicht_geldt(uitkomst: Uitkomst) -> bool:
     return bool(uitkomsten.get("heeft_energiebesparingsplicht"))
 
 
+_CATEGORIEVELD = "AANWEZIGE_CATEGORIEEN"
+
+
+def _vraag_uit_uitkomst(uitkomst: Uitkomst, definities: dict | None) -> dict | None:
+    """Bouw het formulier dat de wet nodig heeft, uit de wet zelf.
+
+    De veldnamen en de vraagteksten komen uit `ontbrekende_gegevens`; dat is de
+    beschrijving die de wetgever bij de parameter schreef. De keuzelijst voor de
+    categorieën komt uit `CATEGORIEEN` in de wet. De frontend voegt niets toe:
+    zou zij de 28 categorieën zelf kennen, dan is er een vierde kopie van
+    regelkennis die kan gaan afwijken - precies wat deze branch opruimt.
+
+    De categorieën gaan gegroepeerd per onderdeel mee (Gebouwen, Faciliteiten,
+    Processen), zodat het formulier eerst het onderdeel kan vragen en daarna
+    alleen de categorieën die daarbij horen. Achtentwintig aankruisvakjes in één
+    lijst is voor een ondernemer geen vraag maar een inventarisatie.
+    """
+    if uitkomst.wacht_op != "opgave" or not uitkomst.velden:
+        return None
+
+    categorieen = (definities or {}).get("CATEGORIEEN") or []
+    per_onderdeel: dict[str, list[str]] = {}
+    for item in categorieen:
+        if not isinstance(item, dict):
+            continue
+        onderdeel, naam = item.get("onderdeel"), item.get("categorie")
+        if onderdeel and naam and naam not in per_onderdeel.setdefault(onderdeel, []):
+            per_onderdeel[onderdeel].append(naam)
+
+    velden = []
+    for veld in uitkomst.velden:
+        naam = veld["naam"]
+        label = veld.get("beschrijving") or naam
+        if naam == _CATEGORIEVELD:
+            if not per_onderdeel:
+                # Zonder de indeling uit de wet is er geen keuzelijst te tonen.
+                # Dan liever geen formulier dan een formulier met een lijst die
+                # wij zelf verzonnen hebben.
+                logger.warning("Geen CATEGORIEEN in de wet; formulier zonder categorievraag")
+                continue
+            velden.append(
+                {
+                    "naam": naam,
+                    "label": label,
+                    "type": "categorieen",
+                    "groepen": [
+                        {"onderdeel": onderdeel, "opties": per_onderdeel[onderdeel]}
+                        for onderdeel in sorted(per_onderdeel)
+                    ],
+                }
+            )
+        else:
+            velden.append({"naam": naam, "label": label, "type": "radio", "opties": ["Ja", "Nee"]})
+
+    if not velden:
+        return None
+    return {
+        "titel": "Gegevens voor de erkende maatregelenlijst",
+        "tekst": (
+            "Deze gegevens bepalen welke maatregelen voor uw bedrijf gelden. "
+            "De vragen komen uit de regeling zelf."
+        ),
+        "bron": "RegelRecht — Omgevingsregeling",
+        "velden": velden,
+    }
+
+
 def _regel_status_dict(uitkomst: Uitkomst, maatregelen: Uitkomst | None = None) -> dict:
     """Vertaal `Uitkomst` naar wat de systeemprompt nodig heeft.
 
@@ -287,6 +354,7 @@ def _antwoord_events(
     afgekapt: bool = False,
     feiten: dict | None = None,
     maatregelen: list[dict] | None = None,
+    vraag: dict | None = None,
 ) -> list[dict]:
     """De events die bij dit antwoord horen.
 
@@ -308,6 +376,11 @@ def _antwoord_events(
     heeft aangeroepen (`vraagSpec` in digitale-assistent.js leest dit veld vóór
     het terugvalt op tekst parsen); anders draagt elk volgend antwoord een
     verouderd formulier mee.
+
+    `vraag` is het formulier dat de regel nodig heeft, opgebouwd uit de wet zelf
+    (`_vraag_uit_uitkomst`). Het gaat vóór `maatregelen` in de frontend: staat de
+    regel nog te wachten op een opgave, dan is dát de vraag aan de ondernemer en
+    niet een lijst maatregelen die nog niet bepaald kan zijn.
     """
     tekst, ontbrekend = vul_slots(tekst, feiten or {})
     if ontbrekend:
@@ -319,6 +392,8 @@ def _antwoord_events(
     antwoord = {"type": "answer", "message": tekst}
     if maatregelen:
         antwoord["maatregelen"] = maatregelen
+    if vraag:
+        antwoord["vraag"] = vraag
     if afgekapt:
         logger.warning("Het antwoord van het model is afgekapt op max_tokens")
         return [
@@ -999,9 +1074,17 @@ class VLAMHost:
                     klaar=False, resultaat=None, wacht_op="onbekend", reden=""
                 )
                 maatregelen = None
-            await queue.put(
-                {"type": "regel_status", "status": _regel_status_dict(uitkomst, maatregelen)}
-            )
+            status = _regel_status_dict(uitkomst, maatregelen)
+            if maatregelen is not None and maatregelen.wacht_op == "opgave":
+                # De keuzelijst komt uit de wet, niet uit de frontend. Lukt het
+                # ophalen niet, dan blijft `vraag` weg en valt de frontend terug
+                # op de tekst van het model — onnauwkeuriger, maar nooit een
+                # zelfbedachte lijst categorieën.
+                definities = await self.get_definities(_MAATREGELEN_LAW)
+                vraag = _vraag_uit_uitkomst(maatregelen, definities.get("definities"))
+                if vraag:
+                    status["vraag"] = vraag
+            await queue.put({"type": "regel_status", "status": status})
 
         taak = asyncio.create_task(draai())
         try:
@@ -1297,7 +1380,11 @@ class VLAMHost:
                     b.text for b in assistant_content if hasattr(b, "text")
                 )
                 for event in _antwoord_events(
-                    text, _is_afgekapt(response), feiten, maatregelen_deze_beurt
+                    text,
+                    _is_afgekapt(response),
+                    feiten,
+                    maatregelen_deze_beurt,
+                    (regel_status or {}).get("vraag"),
                 ):
                     yield event
                 return
@@ -1402,6 +1489,7 @@ class VLAMHost:
                     _is_afgekapt(choice),
                     feiten,
                     maatregelen_deze_beurt,
+                    (regel_status or {}).get("vraag"),
                 ):
                     yield event
                 return

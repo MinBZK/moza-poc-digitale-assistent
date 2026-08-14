@@ -33,12 +33,18 @@ class Uitkomst:
     gevraagde veld niet): dan is `klaar=False` én `wacht_op=None`, een derde
     toestand naast de drie genoemde waarden. De aanroeper (`_regel_status_dict`
     in `vlam_host.py`) vertaalt die combinatie naar "onbekend".
+
+    `velden` staat alleen gevuld bij `wacht_op == "opgave"`: de velden die de
+    ondernemer moet aanleveren, met de beschrijving die de wet er zelf bij geeft.
+    De host maakt daar het formulier van, zodat de vraagtekst uit de wet komt en
+    niet uit de frontend of het model.
     """
 
     klaar: bool
     resultaat: dict | None
     wacht_op: str | None
     reden: str
+    velden: tuple[dict, ...] = ()
 
 
 def _parameters_uit_feiten(feiten: dict) -> dict:
@@ -118,11 +124,23 @@ async def volg_regel(
                 reden=f"{veldnaam} komt uit {veld.bron}; dat vergt akkoord van de ondernemer.",
             )
         if veld.tool is None:
+            # Alle openstaande velden die de ondernemer moet opgeven, niet alleen
+            # het eerste: één formulier met vier vragen is beter dan vier beurten
+            # met elk één vraag, en de lus zou na elk antwoord toch weer op de
+            # volgende stuiten. De beschrijving komt van de wet zelf - dat is de
+            # vraagtekst zoals de wetgever hem stelt.
+            openstaand = tuple(
+                {"naam": item["naam"], "beschrijving": item.get("beschrijving", "")}
+                for item in ontbrekend
+                if (route := regelrouting.route(item["naam"])) is not None
+                and route.tool is None
+            )
             return Uitkomst(
                 klaar=False,
                 resultaat=None,
                 wacht_op="opgave",
                 reden=f"{veldnaam} weet alleen de ondernemer; dat hoort uit het formulier te komen.",
+                velden=openstaand,
             )
 
         sleutels_voor = set(feiten)
