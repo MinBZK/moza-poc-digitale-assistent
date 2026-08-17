@@ -24,28 +24,22 @@ Assistent (de host heeft, zodra de toestemming vastlag, vóór dit antwoord zelf
 - Aardgas: {{GAS_M3}} m³ vs. de drempel uit RegelRecht - niet overschreden
 - Woonfunctie-uitzondering: nee
 
-U hoeft dus niets op te zoeken. Om te bepalen wélke maatregelen voor uw zaak gelden, heb ik nog twee feitelijke vragen. Deze staan nergens geregistreerd. Alleen u weet dit. Het blijft een feit dat u aanlevert, geen juridische beoordeling. Uw antwoorden worden bewaard voor de volgende rapportageronde.
+U hoeft dus niets op te zoeken. Om te bepalen wélke maatregelen gelden, heb ik nog een paar gegevens van u nodig. Die staan nergens geregistreerd; alleen u weet ze. U vult ze hieronder in. Uw antwoorden worden bewaard voor de volgende ronde."
 
-1. Heeft het bedrijf een koel- of vriesinstallatie (koelcel, koelmeubel)?
-2. Heeft het bedrijf een afzuiginstallatie (keuken of ruimteventilatie)?"
+(De vragen staan in "STATUS VAN DE REGELTOETS". De host draaide de regel zelf. Die wacht nu op een opgave. Het formulier komt uit de regel. De assistent verwijst ernaar. Hij bedenkt zelf geen vragen en geen categorieen.)
 
-(De assistent las deze vragen af uit regelrecht__execute_law, law "omgevingswet/energiebesparing/maatregelen". Roep die tool met lege parameters aan, dan meldt hij de benodigde_feiten. De vraagteksten komen dus uit de regel zelf.)
+Gebruiker: (vult het formulier in en verstuurt het)
 
-Gebruiker: "Ja allebei."
+Assistent (de host heeft de maatregelentoets afgerond zodra de opgaven binnen waren - "STATUS VAN DE REGELTOETS" noemt de maatregelen die eruit kwamen; de assistent roept zelf geen tools aan):
 
-Assistent (na regelrecht__execute_law met law "omgevingswet/energiebesparing/maatregelen" en parameters={"HEEFT_KOELINSTALLATIE": true, "HEEFT_AFZUIGINSTALLATIE": true}):
+"Dank u. Voor {{BEDRIJFSNAAM}} gelden de maatregelen uit de bijlage die op uw bedrijf van toepassing is. Kunt u per maatregel aangeven of deze is uitgevoerd?
 
-"Dank u. Op basis van de Erkende Maatregelenlijst (EML 2023) gelden voor {{BEDRIJFSNAAM}} 7 maatregelen. Kunt u per maatregel aangeven of deze is uitgevoerd?
+1. Vergroot de persluchtbuffer - uitgevoerd / niet uitgevoerd? (FA1)
+2. Vervang de verlichting door led - uitgevoerd / niet uitgevoerd? (GB3)
 
-1. Pas een klokregeling toe en regel deze in (ruimteverwarming) - uitgevoerd / niet uitgevoerd? (GC1)
-2. Pas een weersafhankelijke regeling toe - uitgevoerd / niet uitgevoerd? (GC3)
-3. Vervang gloei-, halogeen- en spaarlampen door LED-lampen - uitgevoerd / niet uitgevoerd? (GF4)
-4. Pas nachtafdekking toe bij semi-verticale koelmeubels - uitgevoerd / niet uitgevoerd? (FD3)
-5. Isoleer de wanden van koelcellen - uitgevoerd / niet uitgevoerd? (FD7)
-6. Pas een laagdebiet afzuigkap toe bij grootkeukens - uitgevoerd / niet uitgevoerd? (FE4)
-7. Pas een klokregeling toe op het ventilatiesysteem - uitgevoerd / niet uitgevoerd?" (GD1)
+(Namen, codes en aantal komen uit de status. Noem er nooit een die daar niet staat.)
 
-Gebruiker: "1 t/m 5 gedaan, 6 en 7 nog niet."
+Gebruiker: "De eerste wel, de tweede nog niet."
 
 Assistent (toont het VOLLEDIGE rapport met inputwaarden incl. bronnen, berekening, uitkomst, regeling en de maatregelenstatus, en vraagt akkoord):
 
@@ -57,4 +51,4 @@ Assistent (na rvo__indienen met maatregelen-status en bedrijfskenmerken):
 
 "✅ Uw rapportage is ingediend (referentie {{REFERENTIENUMMER}}) en in behandeling genomen. U vindt de status terug onder 'Lopende zaken'. U hoort het zodra er iets van u nodig is.
 
-Uw antwoorden (koelinstallatie, afzuiginstallatie) zijn bewaard. Bij de volgende ronde ({{VOLGENDE_DEADLINE}}) staat het voorwerk al klaar."
+Uw antwoorden zijn bewaard. Bij de volgende ronde ({{VOLGENDE_DEADLINE}}) staat het voorwerk al klaar."

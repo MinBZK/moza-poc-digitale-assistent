@@ -6,6 +6,7 @@ De host fungeert als tussenstap:
 
 import asyncio
 import functools
+import hashlib
 import json
 import logging
 import re
@@ -349,12 +350,34 @@ def _geen_sleutel_fout(backend: str = ""):
     return maak_fout("LLM_NIET_INGESTELD")
 
 
+def toestemming_uit_status(regel_status: dict | None) -> dict | None:
+    """Het deelverzoek dat bij deze stand van de regelloop hoort, of None.
+
+    De lus stopt vóór een bron die toestemming vergt (PDR-008) en de poort in
+    de host stuurt geen `tool`-event meer voor een aanroep die ze weigert. De
+    frontend hing haar Business Wallet-kaart aan dat event; zonder dit veld is
+    er dus geen moment meer waarop zij het deelverzoek kan tonen, en geen
+    manier voor de respondent om akkoord te geven.
+
+    De bron komt uit de routeringstabel en niet uit een letterlijke naam hier:
+    komt er ooit een tweede toestemmingsplichtige bron bij, dan hoeft dit niet
+    mee te veranderen.
+    """
+    if not regel_status or regel_status.get("wacht_op") != "toestemming":
+        return None
+    bronnen = sorted(
+        {veld.bron for veld in regelrouting.HERKOMST.values() if veld.toestemming}
+    )
+    return {"bron": " en ".join(bronnen)} if bronnen else None
+
+
 def _antwoord_events(
     tekst: str,
     afgekapt: bool = False,
     feiten: dict | None = None,
     maatregelen: list[dict] | None = None,
     vraag: dict | None = None,
+    toestemming_nodig: dict | None = None,
 ) -> list[dict]:
     """De events die bij dit antwoord horen.
 
@@ -394,6 +417,8 @@ def _antwoord_events(
         antwoord["maatregelen"] = maatregelen
     if vraag:
         antwoord["vraag"] = vraag
+    if toestemming_nodig:
+        antwoord["toestemming_nodig"] = toestemming_nodig
     if afgekapt:
         logger.warning("Het antwoord van het model is afgekapt op max_tokens")
         return [
@@ -570,6 +595,25 @@ def maatregelen_voor_event(tool_naam: str, resultaat: str) -> list[dict] | None:
         return _maatregelen_uit_lijst(uitkomsten.get("maatregelen"))
     except (ValueError, AttributeError):
         return None
+
+
+def log_sleutel(conv_key: str) -> str:
+    """Een logvriendelijke aanduiding van een gesprek, zonder de identiteit erin.
+
+    `_conv_key` bevat het KvK-nummer en het client-gekozen session_id. Die
+    sleutel rechtstreeks logeren zet beide in platte tekst in de log en
+    ondermijnt de maskering die hier elders juist wel is aangebracht
+    (`_arg_keys`, `_loggable_cmd`, het `<kvk>`-pad in de KvK-server). PDR-009
+    sluit dat uit.
+
+    Wat een beheerder nodig heeft is twee dingen: regels van hetzelfde gesprek
+    aan elkaar kunnen knopen, en weten langs welk transport het liep. De hash
+    levert het eerste, de modus het tweede. De hash is niet omkeerbaar naar het
+    KvK-nummer zonder de sessie al te kennen.
+    """
+    modus = conv_key.rsplit("|", 1)[-1] if "|" in conv_key else "onbekend"
+    korte = hashlib.sha256(conv_key.encode("utf-8")).hexdigest()[:10]
+    return f"{korte}/{modus}"
 
 
 def _log_tool_error(tool_key: str, exc: Exception, code: str = "") -> None:
@@ -1097,7 +1141,7 @@ class VLAMHost:
                 # Een onverwachte fout hier (bv. onleesbare JSON van een bron)
                 # mag de generator niet eeuwig laten wachten op een item dat
                 # nooit komt: liever "onbekend" dan een hangende stream.
-                logger.exception("Regelloop onverwacht gefaald [conv_key=%r]", conv_key)
+                logger.exception("Regelloop onverwacht gefaald [gesprek=%s]", log_sleutel(conv_key))
                 uitkomst = Uitkomst(
                     klaar=False, resultaat=None, wacht_op="onbekend", reden=""
                 )
@@ -1415,6 +1459,7 @@ class VLAMHost:
                     feiten,
                     maatregelen_deze_beurt,
                     (regel_status or {}).get("vraag"),
+                    toestemming_uit_status(regel_status),
                 ):
                     yield event
                 return
@@ -1522,6 +1567,7 @@ class VLAMHost:
                     feiten,
                     maatregelen_deze_beurt,
                     (regel_status or {}).get("vraag"),
+                    toestemming_uit_status(regel_status),
                 ):
                     yield event
                 return
@@ -1624,7 +1670,14 @@ class VLAMHost:
                 text = "\n".join(
                     b.text for b in assistant_content if hasattr(b, "text")
                 )
-                for event in _antwoord_events(text, _is_afgekapt(response), feiten):
+                # Geen deelverzoek op het CLI-transport: daar draait geen
+                # regelloop (die hangt aan `execute_law`, dat alleen de
+                # MCP-kant heeft) en is de netbeheerder niet aangesloten. Een
+                # kaart tonen zou om toestemming vragen voor een bron die deze
+                # modus toch niet raadpleegt.
+                for event in _antwoord_events(
+                    text, _is_afgekapt(response), feiten, toestemming_nodig=None
+                ):
                     yield event
                 return
 
@@ -1715,8 +1768,13 @@ class VLAMHost:
 
             tool_calls = assistant_msg.tool_calls
             if not tool_calls:
+                # Zie de CLI-toelichting hierboven: geen regelloop, geen
+                # netbeheerder, dus geen deelverzoek.
                 for event in _antwoord_events(
-                    assistant_msg.content or "", _is_afgekapt(choice), feiten
+                    assistant_msg.content or "",
+                    _is_afgekapt(choice),
+                    feiten,
+                    toestemming_nodig=None,
                 ):
                     yield event
                 return
@@ -1950,8 +2008,8 @@ class VLAMHost:
         if tool_key == "netbeheerder__verbruik" and not self.toestemming.get(conv_key, False):
             fout = maak_fout("TOESTEMMING_VEREIST", bron="netbeheerder")
             logger.warning(
-                "Business Wallet geweigerd zonder vastgelegde toestemming [conv_key=%r]",
-                conv_key,
+                "Business Wallet geweigerd zonder vastgelegde toestemming [gesprek=%s]",
+                log_sleutel(conv_key),
             )
             return naar_llm(fout), fout, False
         resultaat, fout = await _bron_aanroep(aanroep, tool_key, arguments)
