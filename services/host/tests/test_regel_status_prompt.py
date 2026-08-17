@@ -219,3 +219,56 @@ def test_klaar_negatief_meldt_dat_de_verplichting_niet_geldt():
     assert "geldt niet voor uw bedrijf" in blok
     assert "niet automatisch bepalen" not in blok
     assert "onbekend" not in blok.lower()
+
+
+# --- Welke feitnamen het model aangeboden krijgt -----------------------------
+
+
+def _feit(waarde):
+    return {"waarde": waarde, "bron": "RegelRecht", "soort": "wetsconstante"}
+
+
+def test_alleen_bruikbare_plaatshouders_worden_aangeboden():
+    """Het model krijgt alleen namen die de host ook echt kan invullen.
+
+    De feitenkaart bevat naast echte feiten ook rekenvariabelen van de
+    regelengine: `gebruikte_waarden` van de maatregelenwet leverde onder meer
+    `current`, `current.categorie`, `VIIaa`, `XIVa`, `gemeente` en
+    `is_glastuinbouwsector`. Die werden alle 35 als plaatshouder aangeboden.
+
+    Twee manieren waarop dat op het scherm belandt. Een naam met kleine letters
+    wordt niet ingevuld en ook niet als onopgelost herkend, dus `{{gemeente}}`
+    blijft letterlijk staan. En een naam met een lijst erachter wordt wél
+    ingevuld, met de Python-weergave van die lijst.
+    """
+    feiten = {
+        "BEDRIJFSNAAM": _feit("Kwekerij De Bloesem"),
+        "ELEKTRICITEIT_KWH": _feit(420000),
+        "gemeente": _feit("gemeente"),
+        "current.categorie": _feit("Perslucht"),
+        "VIIaa": _feit(True),
+        "is_glastuinbouwsector": _feit(True),
+        "CATEGORIEEN": _feit([{"categorie": "Perslucht"}]),
+        "maatregelen": _feit([{"code": "FA1"}]),
+    }
+    blok = _compose_regel_status(
+        {"klaar": False, "wacht_op": "toestemming", "reden": "x", "resultaat": None},
+        feiten=feiten,
+    )
+    assert "{{BEDRIJFSNAAM}}" in blok
+    assert "{{ELEKTRICITEIT_KWH}}" in blok
+    for ongewenst in ("gemeente", "current.categorie", "VIIaa", "is_glastuinbouwsector"):
+        assert ongewenst not in blok, f"{ongewenst} wordt nog als plaatshouder aangeboden"
+    for lijstnaam in ("CATEGORIEEN", "maatregelen"):
+        assert f"{{{{{lijstnaam}}}}}" not in blok, (
+            f"{lijstnaam} draagt een lijst en hoort geen plaatshouder te zijn"
+        )
+
+
+def test_zonder_bruikbare_feiten_geen_lege_zin():
+    """Alleen onbruikbare namen mag geen 'Al opgehaald en met bron beschikbaar: .'"""
+    blok = _compose_regel_status(
+        {"klaar": False, "wacht_op": "toestemming", "reden": "x", "resultaat": None},
+        feiten={"current": _feit("x"), "maatregelen": _feit([1, 2])},
+    )
+    assert "Al opgehaald" not in blok

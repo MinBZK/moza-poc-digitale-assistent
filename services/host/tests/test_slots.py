@@ -154,3 +154,56 @@ def test_een_onopgelost_slot_haalt_het_blokkerende_antwoord_niet():
     tekst = vlam_host._antwoord_tekst("Uw adres is {{VESTIGINGSADRES}}.", feiten={})
     assert "{{" not in tekst
     assert tekst == maak_fout("ANTWOORD_ONVOLLEDIG").tekst
+
+
+# --- Wat een slot NIET mag doen ---------------------------------------------
+
+
+def test_een_kvk_nummer_blijft_een_nummer():
+    """`date.fromisoformat` accepteert sinds 3.11 ook het ISO-basisformaat.
+
+    Daardoor leest een achtcijferig nummer waarvan de middelste cijfers toevallig
+    een geldige maand en dag vormen als datum. Gemeten op de persona's van de
+    frontend: 67890123 werd "23 januari 6789" en 24681012 werd "12 oktober 2468".
+    Een datum in dit systeem komt altijd met streepjes binnen (2027-12-01), dus
+    het basisformaat hoeft niet herkend te worden.
+    """
+    from slots import vul_slots
+
+    feiten = {"KVK_NUMMER": {"waarde": "67890123", "bron": "KvK", "soort": "registratie"}}
+    tekst, ontbrekend = vul_slots("KvK {{KVK_NUMMER}}.", feiten)
+    assert tekst == "KvK 67890123."
+    assert not ontbrekend
+
+
+def test_een_echte_datum_wordt_nog_steeds_uitgeschreven():
+    """De tegenproef: het formaat dat de bronnen wél leveren blijft werken."""
+    from slots import vul_slots
+
+    feiten = {
+        "VOLGENDE_DEADLINE": {"waarde": "2027-12-01", "bron": "RegelRecht", "soort": "wetsconstante"}
+    }
+    tekst, _ = vul_slots("Uiterlijk {{VOLGENDE_DEADLINE}}.", feiten)
+    assert tekst == "Uiterlijk 1 december 2027."
+
+
+def test_een_lijstwaarde_wordt_niet_als_python_uitgeschreven():
+    """Anders staat er een rij dicts in het antwoord van de assistent.
+
+    De feitenkaart draagt ook waarden die geen zin in kunnen: de 28 categorieen
+    uit de wet, of de maatregelenlijst. Die horen niet ingevuld te worden maar
+    gemeld, zodat de aanroeper het antwoord tegenhoudt in plaats van er een
+    `[{'categorie': ...}]` op te zetten.
+    """
+    from slots import vul_slots
+
+    feiten = {
+        "CATEGORIEEN": {
+            "waarde": [{"categorie": "Perslucht", "onderdeel": "Faciliteiten"}],
+            "bron": "RegelRecht",
+            "soort": "wetsconstante",
+        }
+    }
+    tekst, ontbrekend = vul_slots("Dit geldt: {{CATEGORIEEN}}.", feiten)
+    assert "categorie" not in tekst
+    assert ontbrekend == ["CATEGORIEEN"]

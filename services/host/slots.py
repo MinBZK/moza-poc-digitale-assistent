@@ -38,12 +38,21 @@ _GEEN_DUIZENDTAL = frozenset({"PEILJAAR", "RAPPORTAGE_FREQUENTIE_JAREN"})
 
 
 def _als_datum(waarde: str) -> str | None:
-    """ISO-datum naar '1 december 2027'. Geen (geldige) ISO-datum? Dan None.
+    """ISO-datum met streepjes naar '1 december 2027'. Anders None.
 
     `date.fromisoformat` valideert echt: een niet-bestaande dag (30 februari),
     een niet-ISO volgorde (dag-maand-jaar) of een willekeurige string geven
     allemaal een `ValueError` in plaats van een verzonnen datum.
+
+    Het ISO-basisformaat zonder streepjes (`20271201`) wordt bewust niet
+    herkend, ook al accepteert Python het sinds 3.11. Anders leest een
+    achtcijferig KvK-nummer waarvan de middelste cijfers toevallig een geldige
+    maand en dag vormen als datum: 67890123 werd "23 januari 6789". De bronnen
+    in dit systeem leveren datums altijd mét streepjes, dus er gaat niets
+    verloren.
     """
+    if waarde.count("-") != 2:
+        return None
     try:
         d = date.fromisoformat(waarde)
     except ValueError:
@@ -85,6 +94,13 @@ def vul_slots(tekst: str, feiten: dict) -> tuple[str, list[str]]:
         if naam not in feiten:
             ontbrekend.append(naam)
             return match.group(0)
-        return _weergave(naam, feiten[naam]["waarde"])
+        waarde = feiten[naam]["waarde"]
+        # De feitenkaart draagt ook waarden die geen zin in kunnen: de
+        # categorieen uit de wet, de maatregelenlijst. Die horen gemeld te
+        # worden, niet als Python-repr op het scherm van een respondent.
+        if isinstance(waarde, list | dict | tuple | set):
+            ontbrekend.append(naam)
+            return match.group(0)
+        return _weergave(naam, waarde)
 
     return _SLOT.sub(vervang, tekst or ""), ontbrekend

@@ -295,6 +295,10 @@ def _maatregelen_opsomming(lijst: list) -> str:
     return "; ".join(delen)
 
 
+# Dezelfde vorm die `slots._SLOT` invult; buiten deze vorm kan de host niets.
+_SLOTNAAM = re.compile(r"[A-Z0-9_]+")
+
+
 def _geoogste_feiten_tekst(feiten: dict | None) -> str | None:
     """Welke feiten de host al heeft opgehaald, als tekst voor de prompt.
 
@@ -307,8 +311,34 @@ def _geoogste_feiten_tekst(feiten: dict | None) -> str | None:
     """
     if not feiten:
         return None
-    namen = ", ".join(f"{{{{{naam}}}}}" for naam in sorted(feiten))
+    namen = ", ".join(f"{{{{{naam}}}}}" for naam in sorted(_bruikbare_slots(feiten)))
+    if not namen:
+        return None
     return f"Al opgehaald en met bron beschikbaar: {namen}."
+
+
+def _bruikbare_slots(feiten: dict) -> list[str]:
+    """De feitnamen die de host ook echt in een zin kan invullen.
+
+    De feitenkaart is breder dan de slotlijst: `gebruikte_waarden` van de
+    maatregelenwet levert ook de rekenvariabelen van de engine mee - `current`,
+    `current.categorie`, `VIIaa`, `gemeente`, `is_glastuinbouwsector`. Werden
+    die als plaatshouder aangeboden, dan ging het twee kanten op fout. Een naam
+    met kleine letters valt buiten `slots._SLOT`, wordt dus niet ingevuld én
+    niet als onopgelost gemeld: `{{gemeente}}` bleef letterlijk op het scherm
+    staan. En een naam met een lijst erachter - de 28 categorieen, de
+    maatregelenlijst - werd wél ingevuld, met de Python-weergave van die lijst.
+
+    Twee eisen dus: de naam moet de slot-vorm hebben, en de waarde moet in een
+    zin passen. De feitenkaart zelf blijft ongemoeid; die draagt die waarden
+    terecht, want de regelloop voert ze als wetsparameter weer op.
+    """
+    return [
+        naam
+        for naam, feit in feiten.items()
+        if _SLOTNAAM.fullmatch(naam)
+        and not isinstance((feit or {}).get("waarde"), list | dict | tuple | set)
+    ]
 
 
 def _compose_regel_status(regel_status: dict | None, feiten: dict | None = None) -> str | None:
