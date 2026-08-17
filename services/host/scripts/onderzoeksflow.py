@@ -140,6 +140,103 @@ def parse_vraag(bericht: str) -> VraagSpec | None:
     )
 
 
+# Wat de respondent op elk regelveld antwoordt. De sleutels zijn de veldnamen
+# uit de wet, niet uit dit script: vraagt een nieuwe versie van de wet om een
+# veld dat hier niet staat, dan hoort de meting daarop te falen en niet stil
+# een formulier onbeantwoord te laten. Precies dat ging mis toen de wet van de
+# demo-subset (koel-/afzuiginstallatie) naar de sectorbewuste versie ging: het
+# script bleef de oude twee vragen beantwoorden, het formulier bleef openstaan
+# en alle stappen erna maten niets meer.
+_OPGAVE_ANTWOORDEN: dict[str, object] = {
+    "TEELT_GEWASSEN_IN_KAS": True,
+    "TEELT_GEWASSEN_IN_GEBOUW_GEEN_KAS": False,
+    "MAAKT_GEBRUIK_VAN_VERLAAGD_ENERGIEBELASTINGTARIEF": True,
+    # Twee categorieën, uit twee verschillende onderdelen: één categorie
+    # verbergt of de groepering meekomt, en de hele lijst maakt van de meting
+    # een uitputtende inventarisatie.
+    "AANWEZIGE_CATEGORIEEN": ["Binnenverlichting", "Perslucht"],
+    # De demo-subset van vóór de sectorbewuste wet. Blijft staan zodat de
+    # meting ook tegen een engine met de oude wet doorloopt.
+    "HEEFT_KOELINSTALLATIE": True,
+    "HEEFT_AFZUIGINSTALLATIE": False,
+}
+
+_JA_NEE = {True: "Ja", False: "Nee"}
+
+
+def vraag_uit_events(events: list[dict]) -> dict | None:
+    """De gestructureerde vraag-spec van het answer-event, of None.
+
+    De frontend leest `payload.vraag` vóór ze de tekst gaat parsen
+    (`vraagSpec` in digitale-assistent.js). Dit script deed dat niet en las
+    alleen de tekst, waardoor het de veldnamen niet kende en het formulier dus
+    niet kon invullen.
+    """
+    for event in reversed(events):
+        if event.get("type") == "answer" and event.get("vraag"):
+            return event["vraag"]
+    return None
+
+
+def beantwoord_vraag(vraag: dict) -> tuple[str, dict, list[str]]:
+    """Vul het formulier zoals de frontend het verstuurt.
+
+    Geeft (bericht, opgaven, onbeantwoord) terug. `bericht` is de tekst die de
+    respondent ziet vertrekken, `opgaven` de losse waarden op het chat-contract
+    — dezelfde tweedeling als in digitale-assistent.js, waar `delen` voor de
+    mens is en `opgaven` voor de regel. `onbeantwoord` noemt de velden waarvoor
+    dit script geen antwoord kent; die lijst hoort leeg te zijn.
+    """
+    delen: list[str] = []
+    opgaven: dict[str, object] = {}
+    onbeantwoord: list[str] = []
+    for veld in vraag.get("velden") or []:
+        naam = veld.get("naam", "")
+        if naam not in _OPGAVE_ANTWOORDEN:
+            onbeantwoord.append(naam)
+            continue
+        waarde = _OPGAVE_ANTWOORDEN[naam]
+        opgaven[naam] = waarde
+        if isinstance(waarde, list):
+            delen.append("Aanwezig: " + ", ".join(waarde))
+        else:
+            delen.append(f"{veld.get('label') or naam}: {_JA_NEE[bool(waarde)]}")
+    return " ".join(delen), opgaven, onbeantwoord
+
+
+def maatregelen_uit_events(events: list[dict]) -> list[dict]:
+    """De maatregelen die het answer-event draagt, of een lege lijst."""
+    for event in reversed(events):
+        if event.get("type") == "answer" and event.get("maatregelen"):
+            return event["maatregelen"]
+    return []
+
+
+def status_per_maatregel(maatregelen: list[dict]) -> str:
+    """De status van élke maatregel, zoals het formulier hem verstuurt.
+
+    Twee dingen zaten hier eerder fout. De codes stonden vast in dit bestand
+    (`GC1`, `FD3`), en die bestaan niet meer zodra de bijlage die voor dit
+    bedrijf geldt andere maatregelen bevat. En de zin dekte maar twee
+    maatregelen, terwijl de rapportage over álle geldende maatregelen gaat: de
+    assistent vroeg dan terecht om de overige eenentwintig en kwam nooit aan
+    indienen toe. De frontend rendert per maatregel een radioknop en stuurt ze
+    in één keer terug; dat is wat hier wordt nagebootst.
+
+    Om en om uitgevoerd/niet uitgevoerd, zodat het rapport beide gevallen
+    draagt: alles op één waarde verbergt of de assistent het onderscheid
+    overneemt.
+    """
+    codes = [m.get("code", "") for m in maatregelen if m.get("code")]
+    if not codes:
+        return "De eerste maatregel is uitgevoerd, de tweede nog niet."
+    delen = [
+        f"{code}: {'uitgevoerd' if i % 2 == 0 else 'niet uitgevoerd'}"
+        for i, code in enumerate(codes)
+    ]
+    return "Status per maatregel: " + "; ".join(delen) + "."
+
+
 def _veldnaam(inhoud: str) -> str:
     """De `naam` die parseVeldRegel aan een veld geeft."""
     schoon = inhoud.rstrip().rstrip("?").strip()
@@ -404,7 +501,11 @@ class Loop:
                 print(f"         {regel}")
 
     def beurt(
-        self, bericht: str, *, toestemming: bool | None = None
+        self,
+        bericht: str,
+        *,
+        toestemming: bool | None = None,
+        opgaven: dict | None = None,
     ) -> tuple[str, list[str], list[dict]]:
         """Eén beurt zoals de frontend hem stuurt. Geeft (antwoord, tools, events).
 
@@ -414,6 +515,11 @@ class Loop:
         respondent niet meer nabootsen: sinds de PDR-008-poort in de host
         (`vlam_host._bron_aanroep_gated`) stelt platte tekst als "Ja, ga je
         gang." de Business Wallet niet meer open.
+
+        `opgaven` gaat mee zoals het vraag-formulier van de frontend het vult:
+        de losse antwoorden per regelveld, naast de tekst van het bericht. Een
+        antwoord dat alleen in de tekst staat moet het model opnieuw
+        interpreteren; als opgave is het toerekenbaar aan het veld.
         """
         payload: dict = {
             "message": bericht,
@@ -422,6 +528,8 @@ class Loop:
         }
         if toestemming is not None:
             payload["toestemming"] = toestemming
+        if opgaven:
+            payload["opgaven"] = opgaven
 
         events: list[dict] = []
         with httpx.Client(timeout=300.0) as client:
@@ -547,27 +655,52 @@ def draai(loop: Loop, persona: Persona) -> None:
     _controleer_wet_eerst(loop, "stap2", tools)
     _b1(loop, "stap2", antwoord)
 
-    print("\n=== 3. maatregelen opvragen: de twee feitelijke vragen ===")
+    print("\n=== 3. maatregelen opvragen: de vragen die de wet stelt ===")
+    # De orkestratielus draait beide regels op rij, dus het formulier kan al bij
+    # stap 2 zijn meegekomen. Dan is deze beurt er een die niets toevoegt - dat
+    # is een bevinding, geen reden om de vraag-spec te missen.
+    vraag = vraag_uit_events(events)
+    vraag_kwam_eerder = vraag is not None
     antwoord, tools, events = loop.beurt("Welke maatregelen gelden er voor mijn bedrijf?")
     loop.controleer("stap3", not _fouten(events), "geen foutmelding", "\n".join(_fouten(events)))
+    vraag = vraag_uit_events(events) or vraag
+    loop.controleer(
+        "stap3",
+        vraag is not None,
+        "het answer-event draagt een gestructureerde vraag-spec",
+        "zonder `vraag` op het event moet de frontend de tekst parsen; de "
+        "veldnamen van de wet gaan dan verloren.\n" + antwoord[:400],
+    )
+    loop.controleer(
+        "stap3",
+        not vraag_kwam_eerder,
+        "deze beurt voegt iets toe (het formulier stond er nog niet)",
+        "het formulier kwam al bij stap 2 mee; deze beurt kost de respondent "
+        "tijd zonder hem verder te helpen.",
+    )
     spec = parse_vraag(antwoord)
     loop.controleer(
         "stap3",
         spec is not None,
-        "de frontend kan hier een formulier van maken",
-        "parse_vraag gaf None: de respondent krijgt platte tekst in plaats van "
-        "radioknoppen.\n" + antwoord[:400],
+        "de frontend kan hier ook uit de tekst een formulier maken",
+        "parse_vraag gaf None: valt het `vraag`-veld weg, dan krijgt de "
+        "respondent platte tekst in plaats van radioknoppen.\n" + antwoord[:400],
     )
-    if spec:
-        loop.controleer(
-            "stap3", len(spec.velden) == 2, f"twee vragen als velden ({len(spec.velden)})", str(spec.velden)
-        )
     _controleer_wet_eerst(loop, "stap3", tools)
     _b1(loop, "stap3", antwoord)
 
-    print("\n=== 4. de twee vragen beantwoorden: het EML-formulier ===")
+    print("\n=== 4. het formulier invullen: de opgaven van de ondernemer ===")
+    bericht, opgaven, onbeantwoord = beantwoord_vraag(vraag or {})
+    loop.controleer(
+        "stap4",
+        vraag is not None and not onbeantwoord,
+        "dit script kent een antwoord op elk veld dat de wet vraagt",
+        f"geen antwoord voor: {onbeantwoord}. Vul `_OPGAVE_ANTWOORDEN` aan; "
+        "zonder antwoord blijft het formulier open en meten de stappen hierna "
+        "niets.",
+    )
     antwoord, tools, events = loop.beurt(
-        "Ja, we hebben een koelinstallatie. Een afzuiginstallatie hebben we niet."
+        bericht or "Ik weet niet welke gegevens u nodig hebt.", opgaven=opgaven
     )
     loop.controleer("stap4", not _fouten(events), "geen foutmelding", "\n".join(_fouten(events)))
     spec = parse_vraag(antwoord)
@@ -593,7 +726,7 @@ def draai(loop: Loop, persona: Persona) -> None:
 
     print("\n=== 5. maatregelen invullen: rapport, nog niet indienen ===")
     antwoord, tools, events = loop.beurt(
-        "GC1 is uitgevoerd, GC3 niet, GF4 is uitgevoerd, FD3 niet, FD7 is uitgevoerd."
+        status_per_maatregel(maatregelen_uit_events(events))
     )
     loop.controleer("stap5", not _fouten(events), "geen foutmelding", "\n".join(_fouten(events)))
     # rvo__indienen is de enige muterende tool en mag niet ongevraagd draaien.
