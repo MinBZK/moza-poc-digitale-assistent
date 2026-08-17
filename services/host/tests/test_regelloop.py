@@ -270,10 +270,13 @@ async def test_lus_stopt_meteen_als_een_ronde_geen_nieuw_feit_oplevert():
     )
     assert uit.klaar is False
     assert uit.wacht_op is None
-    # Eén ronde die wél vooruitgang boekt (BEDRIJFSNAAM is nieuw), daarna één
-    # ronde zonder vooruitgang (dezelfde KvK-data opnieuw) - dan stoppen, niet
-    # nog drie keer dezelfde twee aanroepen herhalen.
-    assert pogingen == {"execute_law": 2, "kvk": 2}
+    # Eén ronde, en dan stoppen. Eerder waren dit er twee: BEDRIJFSNAAM kwam
+    # als nieuwe sleutel binnen en telde toen als vooruitgang, ook al vroeg de
+    # regel om IS_WOONFUNCTIE en leverde de KvK dát niet. Sinds de
+    # voortgangsmaat naar "levert de bron het gevraagde veld" is gegaan, stopt
+    # de lus meteen: een tweede aanroep van dezelfde bron voor hetzelfde veld
+    # verloopt identiek en kost de respondent alleen tijd.
+    assert pogingen == {"execute_law": 1, "kvk": 1}
 
 
 async def test_bron_zonder_antwoord_laat_een_corrigeerbaar_veld_aan_de_ondernemer():
@@ -332,3 +335,107 @@ async def test_bron_zonder_antwoord_op_een_niet_corrigeerbaar_veld_blijft_onbeke
     )
     assert uit.wacht_op is None
     assert uit.velden == ()
+
+
+# --- Voortgang meten aan het gevraagde veld, niet aan de sleutelverzameling ---
+
+
+async def test_bron_levert_iets_anders_dan_het_gevraagde_veld():
+    """Nieuwe sleutels zijn geen voortgang als het gevraagde veld ontbreekt.
+
+    De lus mat voortgang met `set(feiten) == sleutels_voor`. Levert de wallet
+    wel elektriciteit maar niet het gevraagde gas, dan komen er nieuwe sleutels
+    bij (peiljaar, netbeheerder) en telde dat als vooruitgang: de volgende ronde
+    riep dezelfde bron nog een keer aan. Voor de respondent is dat een tweede
+    raadpleging van gegevens die hij net gedeeld heeft.
+    """
+    aanroepen = []
+
+    async def call_tool(naam, arguments):
+        aanroepen.append(naam)
+        if naam == "regelrecht__execute_law":
+            return json.dumps(
+                {"data": {"ontbrekende_gegevens": [{"naam": "JAARLIJKS_GASVERBRUIK_M3"}]}}
+            )
+        if naam == "netbeheerder__verbruik":
+            # Wel een geldige credential, maar zonder gas: alleen elektriciteit.
+            return json.dumps(
+                {
+                    "data": {
+                        "beschikbaar": True,
+                        "verbruik": {
+                            "totaal": {"jaarlijks_elektriciteitsverbruik_kwh": 420000}
+                        },
+                        "credential": {"peiljaar": 2025, "uitgegeven_door": "Stedin"},
+                    }
+                }
+            )
+        raise AssertionError(f"onverwachte tool: {naam}")
+
+    uit = await volg_regel(
+        law="omgevingswet/energiebesparing/informatieplicht",
+        service="RVO",
+        feiten={},
+        call_tool=call_tool,
+        toestemming=True,
+    )
+    assert uit.klaar is False
+    assert aanroepen.count("netbeheerder__verbruik") == 1, (
+        f"de wallet is meer dan een keer geraadpleegd: {aanroepen}"
+    )
+
+
+async def test_bron_levert_het_gevraagde_veld_als_overschrijving():
+    """Een bestaande sleutel bijwerken is wél voortgang.
+
+    Stond het gevraagde feit er al met een andere herkomst - een echo van de
+    engine bijvoorbeeld - dan verandert de sleutelverzameling niet als de
+    attestatie binnenkomt. De lus concludeerde dan 'gestopt zonder voortgang'
+    en meldde 'onbekend', terwijl de Business Wallet het antwoord net had
+    geleverd.
+    """
+    beurten = iter(
+        [
+            {"ontbrekende_gegevens": [{"naam": "JAARLIJKS_GASVERBRUIK_M3"}]},
+            {"voldoet_aan_voorwaarden": True, "uitkomsten": {"heeft_informatieplicht": True}},
+        ]
+    )
+
+    async def call_tool(naam, arguments):
+        if naam == "regelrecht__execute_law":
+            return json.dumps({"data": next(beurten)})
+        if naam == "netbeheerder__verbruik":
+            return json.dumps(
+                {
+                    "data": {
+                        "beschikbaar": True,
+                        "verbruik": {
+                            "totaal": {
+                                "jaarlijks_elektriciteitsverbruik_kwh": 420000,
+                                "jaarlijks_gasverbruik_m3": 140000,
+                            }
+                        },
+                        "credential": {"peiljaar": 2025, "uitgegeven_door": "Stedin"},
+                    }
+                }
+            )
+        raise AssertionError(f"onverwachte tool: {naam}")
+
+    # Alle sleutels die de wallet levert staan er al, met een andere herkomst.
+    feiten = {
+        naam: {"waarde": waarde, "bron": "RegelRecht (doorgegeven invoer)", "soort": "echo"}
+        for naam, waarde in (
+            ("ELEKTRICITEIT_KWH", 1),
+            ("GAS_M3", 1),
+            ("PEILJAAR", 1),
+            ("NETBEHEERDER", "x"),
+        )
+    }
+    uit = await volg_regel(
+        law="omgevingswet/energiebesparing/informatieplicht",
+        service="RVO",
+        feiten=feiten,
+        call_tool=call_tool,
+        toestemming=True,
+    )
+    assert uit.klaar is True, f"lus stopte onterecht: {uit.reden}"

@@ -143,10 +143,22 @@ async def volg_regel(
                 velden=openstaand,
             )
 
-        sleutels_voor = set(feiten)
+        # Voortgang is niet "er kwam een sleutel bij" maar "de bron leverde het
+        # veld waarvoor we hem aanriepen". Op de sleutelverzameling meten ging
+        # twee kanten op fout. Een wallet die alleen elektriciteit teruggeeft
+        # terwijl de regel om gas vroeg leverde wél nieuwe sleutels (peiljaar,
+        # netbeheerder), dus ging de lus door en raadpleegde dezelfde wallet nog
+        # een keer - voor de ondernemer een tweede deelverzoek voor gegevens die
+        # hij net gedeeld heeft. En een attestatie die een bestaand echofeit
+        # overschreef leverde géén nieuwe sleutel, waarna de lus "onbekend"
+        # meldde terwijl het antwoord er net was.
+        #
+        # `_parameters_uit_feiten` is hier de juiste maat: die zegt welke feiten
+        # als wetsinvoer kunnen dienen, en negeert daarbij echo's.
         tool_ruw = await call_tool(veld.tool, {})
         samenvoegen(feiten, feiten_uit_tool(veld.tool, tool_ruw))
-        if set(feiten) == sleutels_voor and veld.corrigeerbaar:
+        geen_voortgang = veldnaam not in _parameters_uit_feiten(feiten)
+        if geen_voortgang and veld.corrigeerbaar:
             # De bron leverde het niet, maar dit veld mág de ondernemer zeggen:
             # het is een afleiding van ons uit een registratie, geen waarneming
             # van die registratie zelf. Zonder deze uitweg loopt een bedrijf
@@ -159,8 +171,8 @@ async def volg_regel(
                 reden=f"{veld.bron} leverde {veldnaam} niet op; de ondernemer kan het zelf opgeven.",
                 velden=({"naam": veldnaam, "beschrijving": ontbrekend[0].get("beschrijving", "")},),
             )
-        if set(feiten) == sleutels_voor:
-            # Deze ronde leverde geen enkel nieuw feit op: `veld.bron` gaf
+        if geen_voortgang:
+            # Deze ronde leverde geen bruikbare wetsinvoer op: `veld.bron` gaf
             # niet het gevraagde veld terug (storing, lege BAG). Nog vier
             # rondes dezelfde twee aanroepen herhalen - elk met een eigen
             # timeout - helpt dan niet; de volgende ronde zou identiek
