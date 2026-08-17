@@ -78,9 +78,12 @@ MOCK_VERBRUIK: dict[str, dict] = {
             "kalenderjaar. Gedeeld met machtiging van de ondernemer."
         ),
     },
-    # Kwekerij De Bloesem (glastuinbouw) — ruim boven beide drempels, en het
-    # gasverbruik ligt ook boven de onderzoeksdrempel van 170.000 m3. Hier is
-    # gas de trigger, niet elektriciteit: een ander pad door dezelfde regel.
+    # Kwekerij De Bloesem (glastuinbouw) — elektriciteit boven drempel van 50.000
+    # kWh, gas boven drempel van 25.000 m3 (dus informatieplicht). 140.000 m3 is
+    # gekozen, niet gegroeid: boven de gasdrempel van 25.000 (dus de
+    # informatieplicht geldt) en onder de onderzoeksdrempel van 170.000. Die tweede
+    # grens geeft een verplichting waarvoor de assistent geen handelingsperspectief
+    # heeft; een respondent kan dat niet onderscheiden van een gat in het product.
     "62345681": {
         "kvk_nummer": "62345681",
         "netbeheerder": "Stedin (mock)",
@@ -90,12 +93,12 @@ MOCK_VERBRUIK: dict[str, dict] = {
                 "ean": "871685900023456789",
                 "adres": "Hoefweg 210, 2665KG Bleiswijk",
                 "jaarlijks_elektriciteitsverbruik_kwh": 420000,
-                "jaarlijks_gasverbruik_m3": 198000,
+                "jaarlijks_gasverbruik_m3": 140000,
             }
         ],
         "totaal": {
             "jaarlijks_elektriciteitsverbruik_kwh": 420000,
-            "jaarlijks_gasverbruik_m3": 198000,
+            "jaarlijks_gasverbruik_m3": 140000,
         },
         "toelichting": (
             "Verbruiksgegevens van de netbeheerder over het laatste volledige "

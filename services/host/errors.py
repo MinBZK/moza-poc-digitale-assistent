@@ -201,6 +201,15 @@ FOUTEN: dict[str, FoutMelding] = {
         herstelbaar=False,
         http_status=400,
     ),
+    "LLM_BUDGET_OP": FoutMelding(
+        code="LLM_BUDGET_OP",
+        bericht="Het tegoed voor de AI-assistent is op.",
+        actie=(
+            "Meld dit bij de begeleider van deze sessie. Uw vraag was in orde; "
+            "opnieuw proberen helpt pas als het tegoed is aangevuld."
+        ),
+        http_status=400,
+    ),
     "LLM_VERZOEK_ONGELDIG": FoutMelding(
         code="LLM_VERZOEK_ONGELDIG",
         bericht="Het AI-model kon dit verzoek niet verwerken.",
@@ -281,6 +290,13 @@ FOUTEN: dict[str, FoutMelding] = {
         bericht="Het AI-model gaf een onverwachte reactie.",
         actie="Probeer het opnieuw. Blijft het misgaan, meld het bij de beheerder.",
     ),
+    "ANTWOORD_ONVOLLEDIG": FoutMelding(
+        code="ANTWOORD_ONVOLLEDIG",
+        bericht="De assistent kon een gegeven niet ophalen bij de bron.",
+        actie="Stel uw vraag opnieuw. Blijft het misgaan, meld dit dan bij de "
+        "beheerder van deze omgeving.",
+        http_status=502,
+    ),
     "HOST_FOUT": FoutMelding(
         code="HOST_FOUT",
         # Apart van LLM_ONBEKEND: een fout in de assistent zelf toeschrijven aan
@@ -291,6 +307,21 @@ FOUTEN: dict[str, FoutMelding] = {
             "beheerder van deze omgeving."
         ),
         http_status=500,
+    ),
+    # --- Toestemming (PDR-008) ---
+    "TOESTEMMING_VEREIST": FoutMelding(
+        code="TOESTEMMING_VEREIST",
+        # De harde poort in `vlam_host._bron_aanroep_gated`: zonder vastgelegde
+        # toestemming (het `toestemming`-veld op het chat-contract, gevuld door
+        # de "Delen"-knop) komt `netbeheerder__verbruik` hier niet voorbij, wie
+        # de aanroep ook initieerde.
+        bericht="Voor {bron_label} is eerst akkoord van de ondernemer nodig.",
+        actie=(
+            "Vraag de ondernemer om toestemming te geven, bijvoorbeeld via de "
+            "'Delen'-knop, en verstuur uw vraag daarna opnieuw."
+        ),
+        bron="netbeheerder",
+        http_status=403,
     ),
     # --- De bronnen ---
     "SOURCE_UNAVAILABLE": FoutMelding(
@@ -603,6 +634,20 @@ _LLM_REGELS: tuple[tuple[tuple[type, ...], str], ...] = (
     ),
 )
 
+# Signalen in een 400-melding die zeggen dat het tegoed of de limiet op is.
+# Beide aanbieders sturen dit als een gewone BadRequestError, dus op type is het
+# niet te onderscheiden van een verzoek dat echt niet klopt - dezelfde reden
+# waarom "context te lang" hieronder ook op tekst wordt herkend. Zonder deze tak
+# krijgt de respondent te horen dat hij zijn vraag anders moet formuleren,
+# terwijl er niets mis is met zijn vraag.
+_BUDGET_SIGNALEN = (
+    "credit balance",
+    "insufficient_quota",
+    "exceeded your current quota",
+    "billing details",
+    "plans & billing",
+)
+
 # Signalen in een 400-melding die op een te lange context wijzen. Het type is
 # hier hetzelfde (BadRequestError), alleen de tekst verschilt per aanbieder.
 _CONTEXT_SIGNALEN = (
@@ -635,6 +680,8 @@ def classificeer_llm_fout(
         tekst = str(exc).lower()
         if any(signaal in tekst for signaal in _CONTEXT_SIGNALEN):
             return maak_fout("LLM_GESPREK_TE_LANG")
+        if any(signaal in tekst for signaal in _BUDGET_SIGNALEN):
+            return maak_fout("LLM_BUDGET_OP")
         return maak_fout("LLM_VERZOEK_ONGELDIG")
 
     # Overige APIStatusError: val terug op de statuscode.

@@ -28,6 +28,18 @@ from dataclasses import dataclass
 _KLINKERGROEP = re.compile(r"[aeiouyáéíóúàèìòùäëïöü]+", re.IGNORECASE)
 _WOORD = re.compile(r"[A-Za-zÀ-ÿ']+")
 
+# Een `{{SLOT}}` bestaat alleen in de prompt: bij verzending heeft `slots.py`
+# er al één waarde van gemaakt ("1 december 2027"). `_WOORD` splitst op de
+# underscore in de slotnaam, dus zonder normalisatie telt `{{VOLGENDE_DEADLINE}}`
+# als twee lange woorden - een tussenvorm die een respondent nooit ziet, en die
+# zowel de zinslengte als de lettergreepdichtheid optrekt.
+_SLOT = re.compile(r"\{\{[A-Z0-9_]+\}\}")
+
+
+def _zonder_slots(tekst: str) -> str:
+    return _SLOT.sub("X", tekst)
+
+
 # Einde van een zin: een leesteken, eventueel gevolgd door een sluitend
 # aanhalingsteken of haakje. Zonder die staart telt een geciteerde vraag
 # ('... kunt u vragen: "Hoeveel verbruikt mijn bedrijf?"') als onafgemaakt.
@@ -98,7 +110,11 @@ def meet(tekst: str, alleen_proza: bool = True) -> Leesbaarheid | None:
     de moduledocstring voor wat deze maat níét zegt.
     """
     zinnen = _zinnen_uit(tekst, alleen_proza)
-    woorden = _WOORD.findall(" ".join(zinnen))
+    # Slots normaliseren ná de zinssplitsing: die loopt op leestekens
+    # (`_EINDE`/`_SPLITS`), waar een slotnaam nooit een van bevat, dus dit
+    # verandert geen enkel splitspunt - alleen wat er als "woord" telt.
+    genormaliseerd = [_zonder_slots(z) for z in zinnen]
+    woorden = _WOORD.findall(" ".join(genormaliseerd))
     if not zinnen or not woorden:
         return None
     gemiddelde = len(woorden) / len(zinnen)
@@ -109,6 +125,8 @@ def meet(tekst: str, alleen_proza: bool = True) -> Leesbaarheid | None:
         gemiddelde_zinslengte=gemiddelde,
         score=206.84 - 0.77 * (per_woord * 100) - 0.93 * gemiddelde,
         te_lange_zinnen=[
-            z for z in zinnen if len(_WOORD.findall(z)) > MAX_WOORDEN_PER_ZIN
+            z
+            for z, g in zip(zinnen, genormaliseerd, strict=True)
+            if len(_WOORD.findall(g)) > MAX_WOORDEN_PER_ZIN
         ],
     )
