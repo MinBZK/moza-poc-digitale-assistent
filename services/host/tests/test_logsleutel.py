@@ -27,30 +27,43 @@ def conv_key():
     return VLAMHost._conv_key(KVK, SESSION, "vlam")
 
 
-def test_de_logsleutel_draagt_geen_kvk_nummer(conv_key):
-    assert KVK not in log_sleutel(conv_key)
+@pytest.fixture
+def merken():
+    """Het register waar de host de merken in bewaart."""
+    return {}
 
 
-def test_de_logsleutel_draagt_geen_session_id(conv_key):
+def test_de_logsleutel_draagt_geen_kvk_nummer(conv_key, merken):
+    assert KVK not in log_sleutel(conv_key, merken)
+
+
+def test_de_logsleutel_draagt_geen_session_id(conv_key, merken):
     """Het session_id komt van de client en identificeert de sessie.
 
     Samen met het KvK-nummer maakt het een logregel herleidbaar tot één
     ondernemer in één gesprek; los is het nog steeds een sessie-identificatie
     die niet in een log hoort.
     """
-    sleutel = log_sleutel(conv_key)
+    sleutel = log_sleutel(conv_key, merken)
     assert SESSION not in sleutel
     assert SESSION.split("-")[0] not in sleutel
 
 
-def test_de_logsleutel_noemt_de_modus_wel(conv_key):
-    """Zonder de modus is een logregel niet meer te plaatsen tussen de zes paden."""
-    assert "vlam" in log_sleutel(conv_key)
+def test_het_merk_komt_nergens_uit_de_sleutel_vandaan(conv_key, merken):
+    """Geen enkel deel van conv_key mag in het merk terugkomen.
+
+    Sterker dan "bevat het KvK-nummer niet": het merk wordt getrokken, niet
+    afgeleid. Daarmee bereikt er geen gevoelige waarde de logregel, ook niet
+    via een omweg die een statische analyse terecht niet vertrouwt.
+    """
+    merk = log_sleutel(conv_key, merken)
+    for deel in conv_key.split("|"):
+        assert deel not in merk
 
 
-def test_dezelfde_sessie_geeft_dezelfde_sleutel(conv_key):
+def test_dezelfde_sessie_geeft_dezelfde_sleutel(conv_key, merken):
     """Anders zijn twee regels van één gesprek niet meer aan elkaar te knopen."""
-    assert log_sleutel(conv_key) == log_sleutel(conv_key)
+    assert log_sleutel(conv_key, merken) == log_sleutel(conv_key, merken)
 
 
 def test_verschillende_sessies_geven_verschillende_sleutels():
@@ -65,16 +78,18 @@ def test_verschillende_sessies_geven_verschillende_sleutels():
     ander_bedrijf = VLAMHost._conv_key("85234567", SESSION, "vlam")
     andere_sessie = VLAMHost._conv_key(KVK, "een-ander-id", "vlam")
     andere_modus = VLAMHost._conv_key(KVK, SESSION, "claude")
+    merken = {}
     sleutels = {
-        log_sleutel(k) for k in (basis, ander_bedrijf, andere_sessie, andere_modus)
+        log_sleutel(k, merken)
+        for k in (basis, ander_bedrijf, andere_sessie, andere_modus)
     }
     assert len(sleutels) == 4
 
 
-def test_een_lege_sleutel_geeft_geen_crash():
+def test_een_lege_sleutel_geeft_geen_crash(merken):
     """Onbereikbaar via de hard-block, maar een logregel mag nooit de oorzaak
     van een tweede fout worden."""
-    assert log_sleutel("")
+    assert log_sleutel("", merken)
 
 
 def test_geen_logregel_geeft_conv_key_rechtstreeks_door():
@@ -132,3 +147,32 @@ def test_de_geweigerde_wallet_logt_geen_kvk(caplog):
     assert logtekst, "geen logregel geschreven; dan meet deze test niets"
     assert KVK not in logtekst
     assert SESSION not in logtekst
+
+
+def test_twee_processen_delen_geen_merken():
+    """Een merk hoort niet buiten zijn eigen register te bestaan.
+
+    Twee registers zijn twee processen: dezelfde sessie levert daar een ander
+    merk op. Dat is geen verlies maar het doel - logregels van twee runs zijn
+    niet meer aan dezelfde ondernemer te knopen.
+    """
+    conv = VLAMHost._conv_key(KVK, SESSION, "vlam")
+    assert log_sleutel(conv, {}) != log_sleutel(conv, {})
+
+
+def test_het_merk_blijft_kort_genoeg_om_te_scannen(conv_key, merken):
+    """Een logregel wordt gescand, niet gelezen."""
+    assert len(log_sleutel(conv_key, merken)) == 10
+
+
+def test_een_nieuw_gesprek_krijgt_een_nieuw_merk():
+    """`clear_session` hoort het merk mee op te ruimen.
+
+    Blijft het staan, dan draagt het volgende gesprek van dezelfde sessie
+    hetzelfde merk en lijken twee gesprekken er in de log een.
+    """
+    host = VLAMHost()
+    conv = VLAMHost._conv_key(KVK, SESSION, "vlam")
+    eerste = log_sleutel(conv, host._gespreksmerken)
+    host.clear_session(KVK, SESSION)
+    assert log_sleutel(conv, host._gespreksmerken) != eerste

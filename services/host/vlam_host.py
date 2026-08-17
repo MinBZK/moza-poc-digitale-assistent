@@ -6,10 +6,10 @@ De host fungeert als tussenstap:
 
 import asyncio
 import functools
-import hashlib
 import json
 import logging
 import re
+import secrets
 import ssl
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -597,23 +597,28 @@ def maatregelen_voor_event(tool_naam: str, resultaat: str) -> list[dict] | None:
         return None
 
 
-def log_sleutel(conv_key: str) -> str:
-    """Een logvriendelijke aanduiding van een gesprek, zonder de identiteit erin.
+def log_sleutel(conv_key: str, merken: dict[str, str]) -> str:
+    """Een ondoorzichtig merk voor dit gesprek, om logregels aan elkaar te knopen.
 
     `_conv_key` bevat het KvK-nummer en het client-gekozen session_id. Die
-    sleutel rechtstreeks logeren zet beide in platte tekst in de log en
-    ondermijnt de maskering die hier elders juist wel is aangebracht
-    (`_arg_keys`, `_loggable_cmd`, het `<kvk>`-pad in de KvK-server). PDR-009
-    sluit dat uit.
+    sleutel logeren zet beide in platte tekst in de log; PDR-009 sluit dat uit.
 
-    Wat een beheerder nodig heeft is twee dingen: regels van hetzelfde gesprek
-    aan elkaar kunnen knopen, en weten langs welk transport het liep. De hash
-    levert het eerste, de modus het tweede. De hash is niet omkeerbaar naar het
-    KvK-nummer zonder de sessie al te kennen.
+    Het merk wordt niet uit `conv_key` afgeleid maar getrokken. Een hash leek
+    genoeg, maar is het niet: een KvK-nummer is acht cijfers, dus wie een
+    sessie-id kent rekent een ongezouten hash terug. Zouten hielp daartegen,
+    maar liet de statische analyse nog steeds een gevoelige waarde tot in de
+    logregel volgen - en terecht, want dan hangt de veiligheid af van een
+    eigenschap van de hash in plaats van van de vorm van de code. Nu bereikt de
+    sleutel de log niet: er gaat een waarde in die nergens vandaan komt.
+
+    `merken` leeft op de host, naast de andere per-gesprek-state, zodat
+    `clear_session` het merk mee opruimt.
     """
-    modus = conv_key.rsplit("|", 1)[-1] if "|" in conv_key else "onbekend"
-    korte = hashlib.sha256(conv_key.encode("utf-8")).hexdigest()[:10]
-    return f"{korte}/{modus}"
+    merk = merken.get(conv_key)
+    if merk is None:
+        merk = secrets.token_hex(5)
+        merken[conv_key] = merk
+    return merk
 
 
 def _log_tool_error(tool_key: str, exc: Exception, code: str = "") -> None:
@@ -796,6 +801,8 @@ class VLAMHost:
         # hij eenmaal doorkwam. Eenmaal `True` blijft `True` binnen de sessie —
         # er is hier geen intrekking.
         self.toestemming: dict[str, bool] = {}
+        # Ondoorzichtige merken voor in de log; zie `log_sleutel`.
+        self._gespreksmerken: dict[str, str] = {}
         # Houdt bij welke servers gelukt/mislukt zijn
         self.server_status: dict[str, str] = {}
 
@@ -1141,7 +1148,10 @@ class VLAMHost:
                 # Een onverwachte fout hier (bv. onleesbare JSON van een bron)
                 # mag de generator niet eeuwig laten wachten op een item dat
                 # nooit komt: liever "onbekend" dan een hangende stream.
-                logger.exception("Regelloop onverwacht gefaald [gesprek=%s]", log_sleutel(conv_key))
+                logger.exception(
+                    "Regelloop onverwacht gefaald [gesprek=%s]",
+                    log_sleutel(conv_key, self._gespreksmerken),
+                )
                 uitkomst = Uitkomst(
                     klaar=False, resultaat=None, wacht_op="onbekend", reden=""
                 )
@@ -2009,7 +2019,7 @@ class VLAMHost:
             fout = maak_fout("TOESTEMMING_VEREIST", bron="netbeheerder")
             logger.warning(
                 "Business Wallet geweigerd zonder vastgelegde toestemming [gesprek=%s]",
-                log_sleutel(conv_key),
+                log_sleutel(conv_key, self._gespreksmerken),
             )
             return naar_llm(fout), fout, False
         resultaat, fout = await _bron_aanroep(aanroep, tool_key, arguments)
@@ -2087,4 +2097,9 @@ class VLAMHost:
         exact herbouwd i.p.v. geparsed, zodat een `|` in het session_id niet stoort.
         """
         for mode in ("vlam", "claude", "cli:vlam", "cli:claude"):
-            self.conversations.pop(self._conv_key(session_kvk, session_id, mode), None)
+            sleutel = self._conv_key(session_kvk, session_id, mode)
+            self.conversations.pop(sleutel, None)
+            # Het logmerk hoort bij dit gesprek en niet bij het volgende: laat
+            # je het staan, dan draagt een nieuw gesprek van dezelfde sessie
+            # hetzelfde merk en lijken twee gesprekken er in de log één.
+            self._gespreksmerken.pop(sleutel, None)
