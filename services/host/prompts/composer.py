@@ -233,12 +233,66 @@ def _maatregelen_status_tekst(maatregelen: dict | None) -> str | None:
         delen.append(
             "Het gaat om bijlage " + " en ".join(genoemd) + " van de Omgevingsregeling."
         )
+    invoer = _gebruikte_waarden_tekst(maatregelen.get("resultaat") or {})
+    if invoer:
+        delen.append(invoer)
+    delen.append("De maatregelen zijn: " + _maatregelen_opsomming(lijst) + ".")
     delen.append(
-        "Noem de maatregelen uit dit resultaat en verzin er geen bij. Elke "
+        "Noem de maatregelen uit deze lijst en verzin er geen bij. Elke "
         "maatregel geldt onder de randvoorwaarden die erbij staan; presenteer ze "
         "als voorwaarden om na te gaan, niet als vaststaand."
     )
     return " ".join(delen)
+
+
+# Hoe een regelveld van de maatregelenwet in gewone taal heet. De prompt noemt
+# nooit een rauwe veldnaam (zie `reden` hierboven); een veld dat hier niet
+# staat blijft dus weg in plaats van als jargon door te lekken.
+_INVOER_LABELS = {
+    "TEELT_GEWASSEN_IN_KAS": "teelt in kassen",
+    "TEELT_GEWASSEN_IN_GEBOUW_GEEN_KAS": "teelt in een gebouw dat geen kas is",
+    "MAAKT_GEBRUIK_VAN_VERLAAGD_ENERGIEBELASTINGTARIEF": (
+        "gebruikt het verlaagde energiebelastingtarief voor de glastuinbouw"
+    ),
+}
+
+
+def _gebruikte_waarden_tekst(resultaat: dict) -> str | None:
+    """Op welke antwoorden de maatregelentoets is gebaseerd.
+
+    Zonder deze zin ziet het model wel dát de toets klaar is, maar niet waarmee
+    gerekend is. Een feit dat de host uit een registratie heeft afgeleid - "teelt
+    in kassen", uit de SBI-omschrijving - las het model dan als een aanname die
+    het niet mocht doen, en het bleef de ondernemer die vraag stellen terwijl de
+    toets allang een antwoord had.
+    """
+    gebruikt = resultaat.get("gebruikte_waarden") or {}
+    delen = [
+        f"{label}: {'ja' if gebruikt[veld] else 'nee'}"
+        for veld, label in _INVOER_LABELS.items()
+        if isinstance(gebruikt.get(veld), bool)
+    ]
+    if not delen:
+        return None
+    return (
+        "De toets rekende met de antwoorden die er al zijn (" + "; ".join(delen)
+        + "). Vraag die niet opnieuw."
+    )
+
+
+def _maatregelen_opsomming(lijst: list) -> str:
+    """De maatregelen als `code - naam (categorie)`, gescheiden door puntkomma's."""
+    delen = []
+    for maatregel in lijst:
+        if not isinstance(maatregel, dict):
+            continue
+        code, naam = maatregel.get("code", ""), maatregel.get("naam", "")
+        categorie = maatregel.get("categorie", "")
+        tekst = f"{code} - {naam}".strip(" -")
+        if categorie:
+            tekst = f"{tekst} ({categorie})"
+        delen.append(tekst)
+    return "; ".join(delen)
 
 
 def _geoogste_feiten_tekst(feiten: dict | None) -> str | None:

@@ -139,6 +139,71 @@ def test_status_blok_zonder_feiten_blijft_werken():
     assert "Al opgehaald" not in blok
 
 
+def _maatregelen_status(aantal: int = 2) -> dict:
+    """Een afgeronde maatregelentoets zoals `_regel_status_dict` hem oplevert."""
+    lijst = [
+        {"code": "FA1", "naam": "Vergroot de persluchtbuffer.", "categorie": "Perslucht"},
+        {"code": "GB3", "naam": "Vervang de verlichting door led.", "categorie": "Binnenverlichting"},
+    ][:aantal]
+    return {
+        "klaar": True,
+        "wacht_op": None,
+        "reden": "",
+        "resultaat": {
+            "voldoet_aan_voorwaarden": True,
+            "uitkomsten": {
+                "maatregelen": lijst,
+                "bijlage_milieubelastende_activiteiten": "VIIaa",
+                "bijlage_gebouwen": "XIVa",
+            },
+            "gebruikte_waarden": {
+                "TEELT_GEWASSEN_IN_KAS": True,
+                "TEELT_GEWASSEN_IN_GEBOUW_GEEN_KAS": False,
+                "AANWEZIGE_CATEGORIEEN": ["Perslucht", "Binnenverlichting"],
+            },
+        },
+    }
+
+
+def test_maatregelenblok_noemt_de_maatregelen_zelf():
+    """Het model kan alleen maatregelen noemen die het ook krijgt.
+
+    Het blok droeg alleen een telling ("23 erkende maatregelen") plus de
+    opdracht ze te noemen. Omdat de orkestratielus de tool buiten de
+    modeldispatch om aanroept, staat het resultaat nergens in de context: op de
+    codes uit het formulier antwoordde de assistent "dat zijn geen codes die ik
+    herken".
+    """
+    blok = _blok({**_maatregelen_status(0), "maatregelen": _maatregelen_status()})
+    assert "FA1" in blok
+    assert "Vergroot de persluchtbuffer." in blok
+    assert "GB3" in blok
+    assert "Vervang de verlichting door led." in blok
+
+
+def test_maatregelenblok_noemt_de_waarden_waarop_de_toets_rekende():
+    """Anders vraagt het model een afgeleid feit alsnog aan de ondernemer.
+
+    `TEELT_IN_KAS` leidt de host af uit de SBI-omschrijving. Zag het model
+    alleen de naam van dat feit en niet de waarde, dan behandelde het de
+    afleiding als een aanname die het niet mocht doen ("ik neem geen
+    aannames") en bleef het de vraag stellen, beurt na beurt.
+    """
+    blok = _blok({**_maatregelen_status(0), "maatregelen": _maatregelen_status()})
+    assert "in kassen" in blok.lower()
+    assert "ja" in blok.lower()
+    # Geen rauwe regelveldnaam in de prompttekst, net als bij `reden` (I3/I4).
+    assert "TEELT_GEWASSEN_IN_KAS" not in blok
+
+
+def test_maatregelenblok_zonder_lijst_blijft_werken():
+    """Een afgeronde toets zonder maatregelen mag geen lege opsomming geven."""
+    status = _maatregelen_status(0)
+    status["resultaat"]["uitkomsten"]["maatregelen"] = []
+    blok = _blok({**status, "maatregelen": status})
+    assert "geen erkende maatregelen" in blok
+
+
 def test_klaar_negatief_meldt_dat_de_verplichting_niet_geldt():
     """C4: `voldoet_aan_voorwaarden: False` zonder ontbrekende gegevens is een
     definitief "nee", geen onbekende toestand — en dat moet het model ook zo
