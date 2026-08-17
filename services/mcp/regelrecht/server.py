@@ -145,7 +145,14 @@ async def _definities_voor(law: str, service: str) -> dict:
         # anders legt één tijdelijke hik de drempelwaarden blijvend plat.
         logger.warning("Definities ophalen mislukt (%s): %s", law, e)
         return {}
-    _definities_cache[sleutel] = definities
+    # Een leeg resultaat is net zomin "weten dat het leeg is" als een mislukte
+    # ophaal: de RPC kan technisch slagen zonder bruikbare inhoud (geen
+    # `structuredContent`, of een wet die de constante anders noemt). De cache
+    # is procesbreed en kent geen invalidatie, dus dat zou blijven staan tot een
+    # herstart - en dan meldt de host "RegelRecht niet beschikbaar" terwijl de
+    # engine gewoon draait.
+    if definities:
+        _definities_cache[sleutel] = definities
     return definities
 
 
@@ -154,7 +161,9 @@ async def _definities_voor(law: str, service: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _simplify_result(structured: dict, definities: dict | None = None) -> dict:
+def _simplify_result(
+    structured: dict, definities: dict | None = None, law: str = ""
+) -> dict:
     """Extraheer de relevante velden uit de uitgebreide RegelRecht response.
 
     `definities` komt van `_definities_voor`, omdat de engine
@@ -207,8 +216,16 @@ def _simplify_result(structured: dict, definities: dict | None = None) -> dict:
 
     # Constanten van de regel. Meegegeven wint van wat er in deze respons zit:
     # bij gevulde parameters geeft de engine hier niets terug.
+    #
+    # Het terugvalpad gaat door hetzelfde filter als `_definities_voor`. Zonder
+    # dat sloop de maatregelenwet haar twee volledige bijlagen - 255 maatregelen
+    # met randvoorwaarden - alsnog als constantenblok de respons in zodra
+    # `definities` leeg is, bijvoorbeeld omdat de tweede RPC omviel. Precies wat
+    # `_bruikbare_definities` moet voorkomen.
     rule_spec = structured.get("rule_spec", {})
-    uit_respons = rule_spec.get("properties", {}).get("definitions", {})
+    uit_respons = _bruikbare_definities(
+        law, rule_spec.get("properties", {}).get("definitions", {}) or {}
+    )
     drempels = definities or uit_respons
     if drempels:
         result["drempelwaarden"] = drempels
@@ -430,7 +447,7 @@ async def _engine_execute(
         return {"resultaat": text}
 
     definities = await _definities_voor(law, service)
-    data = _simplify_result(structured, definities)
+    data = _simplify_result(structured, definities, law)
     return data
 
 
