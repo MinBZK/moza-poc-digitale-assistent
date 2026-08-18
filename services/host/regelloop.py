@@ -158,7 +158,14 @@ async def volg_regel(
         tool_ruw = await call_tool(veld.tool, {})
         samenvoegen(feiten, feiten_uit_tool(veld.tool, tool_ruw))
         geen_voortgang = veldnaam not in _parameters_uit_feiten(feiten)
-        if geen_voortgang and veld.corrigeerbaar:
+        # Levert de bron het gevraagde veld niet, dan is de ondernemer soms nog
+        # een weg: bij een afleiding van ons (`corrigeerbaar`) weet hij het
+        # beter, en bij een bron die hij niet wil of kan raadplegen
+        # (`zelf_op_te_geven`) weet hij het gewoon zelf. Zonder die uitweg loopt
+        # de keten dood op een bron die er niet is - een uitgeschakelde wallet,
+        # een storing, een ontbrekende credential - en komt hij niet tot een
+        # rapportage.
+        if geen_voortgang and (veld.corrigeerbaar or veld.zelf_op_te_geven):
             # De bron leverde het niet, maar dit veld mág de ondernemer zeggen:
             # het is een afleiding van ons uit een registratie, geen waarneming
             # van die registratie zelf. Zonder deze uitweg loopt een bedrijf

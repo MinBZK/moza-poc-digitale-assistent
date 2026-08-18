@@ -376,7 +376,9 @@ def _opgaven_als_feiten(opgaven: dict[str, object] | None) -> dict[str, dict]:
         if waarde is None:
             continue
         veld = regelrouting.route(str(naam))
-        if veld is None or not (veld.soort == "opgave" or veld.corrigeerbaar):
+        if veld is None or not (
+            veld.soort == "opgave" or veld.corrigeerbaar or veld.zelf_op_te_geven
+        ):
             continue
         sleutel = veld.feitnaam or str(naam)
         if veld.soort == "opgave":
