@@ -108,3 +108,56 @@ async def test_lus_vraagt_de_ondernemer_als_de_wallet_niets_levert():
     )
     assert uit.wacht_op == "opgave", f"lus stopte op {uit.wacht_op!r}: {uit.reden}"
     assert any(v["naam"] == ELEKTRA for v in uit.velden)
+
+
+async def test_geen_deelverzoek_voor_een_bron_die_er_niet_is():
+    """Staat de wallet uit, dan is toestemming vragen zinloos en verwarrend.
+
+    De toestemmingscontrole stond vóór de aanroep, dus een uitgeschakelde
+    netbeheerder leverde eerst een deelverzoek op voor een bron die niet
+    bestaat. De ondernemer zegt ja, de aanroep faalt alsnog, en pas daarna komt
+    de vraag die meteen gesteld had kunnen worden.
+    """
+    import json
+
+    from regelloop import volg_regel
+
+    async def call_tool(naam, argumenten):
+        if naam == "regelrecht__execute_law":
+            return json.dumps(
+                {"data": {"ontbrekende_gegevens": [{"naam": ELEKTRA, "beschrijving": "Jaarverbruik"}]}}
+            )
+        raise AssertionError(f"{naam} had niet aangeroepen mogen worden")
+
+    uit = await volg_regel(
+        law="omgevingswet/energiebesparing/informatieplicht",
+        service="RVO",
+        feiten={},
+        call_tool=call_tool,
+        toestemming=False,
+        beschikbare_tools=set(),
+    )
+    assert uit.wacht_op == "opgave", f"kreeg {uit.wacht_op!r}: {uit.reden}"
+    assert any(v["naam"] == ELEKTRA for v in uit.velden)
+
+
+async def test_met_wallet_blijft_toestemming_gewoon_gelden():
+    """De tegenproef: is de bron er wel, dan eerst akkoord vragen (PDR-008)."""
+    import json
+
+    from regelloop import volg_regel
+
+    async def call_tool(naam, argumenten):
+        if naam == "regelrecht__execute_law":
+            return json.dumps({"data": {"ontbrekende_gegevens": [{"naam": ELEKTRA}]}})
+        raise AssertionError("de wallet mag niet geraadpleegd worden zonder akkoord")
+
+    uit = await volg_regel(
+        law="omgevingswet/energiebesparing/informatieplicht",
+        service="RVO",
+        feiten={},
+        call_tool=call_tool,
+        toestemming=False,
+        beschikbare_tools={"netbeheerder__verbruik", "kvk__mijn_bedrijf"},
+    )
+    assert uit.wacht_op == "toestemming"

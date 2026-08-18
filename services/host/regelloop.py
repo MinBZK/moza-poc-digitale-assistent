@@ -76,6 +76,7 @@ async def volg_regel(
     feiten: dict,
     call_tool: CallTool,
     toestemming: bool,
+    beschikbare_tools: set[str] | None = None,
 ) -> Uitkomst:
     """Voer `law` uit en haal ontbrekende gegevens op zolang de lus dat zelf kan."""
     feiten = dict(feiten)
@@ -115,6 +116,34 @@ async def volg_regel(
                 resultaat=None,
                 wacht_op="onbekend",
                 reden=f"{veldnaam} heeft geen bekende herkomst.",
+            )
+        # Bestaat de bron niet in deze omgeving - de wallet staat uit voor dit
+        # onderzoek, of de server kwam niet op - dan is toestemming vragen
+        # zinloos en verwarrend: de ondernemer zegt ja voor iets dat er niet is,
+        # de aanroep faalt alsnog, en pas daarna komt de vraag die meteen
+        # gesteld had kunnen worden. Weet hij het antwoord zelf, dan vragen we
+        # het meteen.
+        bron_ontbreekt = (
+            beschikbare_tools is not None
+            and veld.tool is not None
+            and veld.tool not in beschikbare_tools
+        )
+        if bron_ontbreekt and (veld.zelf_op_te_geven or veld.corrigeerbaar):
+            return Uitkomst(
+                klaar=False,
+                resultaat=None,
+                wacht_op="opgave",
+                reden=f"{veld.bron} is hier niet beschikbaar; de ondernemer geeft {veldnaam} zelf op.",
+                velden=tuple(
+                    {"naam": item["naam"], "beschrijving": item.get("beschrijving", "")}
+                    for item in ontbrekend
+                    if (route := regelrouting.route(item["naam"])) is not None
+                    and (
+                        route.tool is None
+                        or route.zelf_op_te_geven
+                        or route.corrigeerbaar
+                    )
+                ),
             )
         if veld.toestemming and not toestemming:
             return Uitkomst(

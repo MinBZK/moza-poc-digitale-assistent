@@ -14,8 +14,15 @@ BRONNEN = ("kvk", "koop", "regelrecht", "rvo", "netbeheerder")
 
 
 def _host_met_status(status: dict) -> vlam_host.VLAMHost:
+    """Een host met deze bronstatus; wat niet genoemd is, staat verbonden.
+
+    Sinds een niet-ingerichte bron óók als weg telt (zie
+    `test_bron_uitgeschakeld.py`) is een half gevulde status niet meer hetzelfde
+    als "alles draait". Deze tests gaan over de doorgifte naar de prompt, dus
+    vullen we de rest expliciet aan.
+    """
     host = vlam_host.VLAMHost()
-    host.server_status = status
+    host.server_status = {naam: "verbonden" for naam in BRONNEN} | status
     return host
 
 
