@@ -204,7 +204,56 @@ def _plicht_geldt(uitkomst: Uitkomst) -> bool:
 _CATEGORIEVELD = "AANWEZIGE_CATEGORIEEN"
 
 
-def _vraag_uit_uitkomst(uitkomst: Uitkomst, definities: dict | None) -> dict | None:
+# Hoe een afgeleid veld heet en waar de afleiding op berust. Alleen velden die
+# `regelrouting` als `corrigeerbaar` markeert komen hier: dat zijn precies de
+# gevallen waarin wij een juridisch begrip uit een registratie afleiden die dat
+# begrip zelf niet kent.
+_AFLEIDING_TEKST = {
+    "TEELT_GEWASSEN_IN_KAS": (
+        "Teelt uw bedrijf gewassen in kassen?",
+        "Wij leiden dit af uit uw SBI-omschrijving in het Handelsregister "
+        "(\u201conder glas\u201d). Klopt dat niet, corrigeer het dan hier.",
+    ),
+}
+
+
+def _afgeleide_velden(feiten: dict | None) -> list[dict]:
+    """Velden die de host zelf heeft afgeleid, zichtbaar en corrigeerbaar.
+
+    De lus vraagt deze velden niet aan de ondernemer - de KvK leverde ze al, via
+    een afleiding van ons. Daardoor stonden ze buiten beeld: van de vier velden
+    die de maatregelenwet vraagt was er één ingevuld op grond van een aanname die
+    de ondernemer niet zag en dus niet kon weerspreken. Terwijl juist dat veld
+    bepaalt welke bijlage van de maatregelenlijst geldt.
+
+    Voorgevuld meesturen, met de herkomst erbij. `feiten.samenvoegen` laat een
+    opgave daarna niet meer overschrijven door een volgende ophaling, dus een
+    correctie van de ondernemer blijft staan.
+    """
+    velden = []
+    for veldnaam, (label, toelichting) in _AFLEIDING_TEKST.items():
+        veld = regelrouting.route(veldnaam)
+        if veld is None or not veld.corrigeerbaar:
+            continue
+        feit = (feiten or {}).get(veld.feitnaam or veldnaam)
+        if feit is None or not isinstance(feit.get("waarde"), bool):
+            continue
+        velden.append(
+            {
+                "naam": veldnaam,
+                "label": label,
+                "type": "radio",
+                "opties": ["Ja", "Nee"],
+                "waarde": "Ja" if feit["waarde"] else "Nee",
+                "toelichting": toelichting,
+            }
+        )
+    return velden
+
+
+def _vraag_uit_uitkomst(
+    uitkomst: Uitkomst, definities: dict | None, feiten: dict | None = None
+) -> dict | None:
     """Bouw het formulier dat de wet nodig heeft, uit de wet zelf.
 
     De veldnamen en de vraagteksten komen uit `ontbrekende_gegevens`; dat is de
@@ -257,6 +306,7 @@ def _vraag_uit_uitkomst(uitkomst: Uitkomst, definities: dict | None) -> dict | N
 
     if not velden:
         return None
+    velden.extend(_afgeleide_velden(feiten))
     return {
         "titel": "Gegevens voor de erkende maatregelenlijst",
         "tekst": (
@@ -1183,7 +1233,9 @@ class VLAMHost:
                 # op de tekst van het model — onnauwkeuriger, maar nooit een
                 # zelfbedachte lijst categorieën.
                 definities = await self.get_definities(_MAATREGELEN_LAW)
-                vraag = _vraag_uit_uitkomst(maatregelen, definities.get("definities"))
+                vraag = _vraag_uit_uitkomst(
+                    maatregelen, definities.get("definities"), feiten
+                )
                 if vraag:
                     status["vraag"] = vraag
             await queue.put({"type": "regel_status", "status": status})
