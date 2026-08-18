@@ -58,6 +58,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -491,6 +492,7 @@ class Loop:
     session_id: str | None = None
     uitkomsten: list[Uitkomst] = field(default_factory=list)
     transcript: list[dict] = field(default_factory=list)
+    api_key: str = ""
 
     def controleer(self, stap: str, ok: bool, reden: str, detail: str = "") -> None:
         self.uitkomsten.append(Uitkomst(stap, ok, reden, detail))
@@ -499,6 +501,20 @@ class Loop:
         if not ok and detail:
             for regel in detail.splitlines():
                 print(f"         {regel}")
+
+    def _headers(self) -> dict[str, str]:
+        """Sessie-identiteit, en de LLM-sleutel als de host er zelf geen heeft.
+
+        Een deployment draait bewust zonder server-side sleutel (PDR-010): die
+        komt van de gebruiker, via een header. Zonder deze meting kun je zo'n
+        omgeving dus niet meten - en juist die omgeving is degene waarop de
+        respondent straks werkt.
+        """
+        headers = {"X-Test-User": self.kvk}
+        if self.api_key:
+            veld = "X-Claude-API-Key" if "claude" in self.mode else "X-VLAM-API-Key"
+            headers[veld] = self.api_key
+        return headers
 
     def beurt(
         self,
@@ -536,7 +552,7 @@ class Loop:
             with client.stream(
                 "POST",
                 f"{self.host}/chat/stream",
-                headers={"X-Test-User": self.kvk},
+                headers=self._headers(),
                 json=payload,
             ) as respons:
                 respons.raise_for_status()
@@ -808,7 +824,16 @@ def main() -> int:
     p.add_argument("--mode", default="vlam", choices=["vlam", "claude", "cli:vlam", "cli:claude"])
     p.add_argument("--runs", type=int, default=1, help="aantal doorlopen")
     p.add_argument("--json", help="schrijf een machineleesbare samenvatting hierheen")
+    p.add_argument(
+        "--api-key",
+        default="",
+        help="LLM-sleutel voor een host zonder eigen sleutel (PDR-010); "
+        "valt terug op ANTHROPIC_API_KEY / VLAM_API_KEY uit de omgeving",
+    )
     a = p.parse_args()
+    sleutel = a.api_key or os.getenv(
+        "ANTHROPIC_API_KEY" if "claude" in a.mode else "VLAM_API_KEY", ""
+    )
 
     persona = PERSONAS[a.kvk]
     print(f"Persona: {persona.naam} ({persona.kvk}), modus {a.mode}, host {a.host}")
@@ -816,7 +841,9 @@ def main() -> int:
     alle_runs: list[list[Uitkomst]] = []
     for nummer in range(1, a.runs + 1):
         print(f"\n{'#' * 70}\n# RUN {nummer} van {a.runs}\n{'#' * 70}")
-        loop = Loop(host=a.host, kvk=a.kvk, mode=a.mode)
+        loop = Loop(host=a.host, kvk=a.kvk, mode=a.mode,
+            api_key=sleutel,
+        )
         try:
             draai(loop, persona)
         except httpx.HTTPError as e:
