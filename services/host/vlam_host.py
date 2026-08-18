@@ -591,6 +591,99 @@ def _extract_lopende_zaak(tool_name: str, result: str) -> dict | None:
         return None
 
 
+# Welke feiten de onderbouwing van een zaak vormen, en onder welk kopje. De
+# indeling volgt wat de ondernemer in het rapport las: waarmee is gerekend,
+# waartegen is dat afgezet, en wat weten we over het bedrijf.
+_ZAAK_VERBRUIK = ("ELEKTRICITEIT_KWH", "GAS_M3", "PEILJAAR", "NETBEHEERDER")
+_ZAAK_DREMPELS = (
+    "DREMPEL_ELEKTRICITEIT_KWH",
+    "DREMPEL_GAS_M3",
+    "DREMPEL_ONDERZOEK_ELEKTRICITEIT_KWH",
+    "DREMPEL_ONDERZOEK_GAS_M3",
+)
+_ZAAK_BEDRIJF = (
+    "BEDRIJFSNAAM",
+    "VESTIGINGSADRES",
+    "RECHTSVORM",
+    "WOONFUNCTIE",
+    "GEBRUIKSDOEL",
+    "TEELT_IN_KAS",
+)
+
+
+def _met_herkomst_uit_feiten(feiten: dict, namen: tuple[str, ...]) -> dict:
+    """Feiten met hun bron en soort, zodat de zaak niet alleen het getal draagt.
+
+    Het onderscheid tussen een attestatie van de netbeheerder en een opgave van
+    de ondernemer zelf is precies waar herleidbaarheid over gaat: het eerste is
+    verklaard door een derde, het tweede gezegd door de aanvrager. Wie later
+    naar de zaak kijkt moet dat verschil kunnen zien.
+    """
+    uit = {}
+    for naam in namen:
+        feit = feiten.get(naam)
+        if not isinstance(feit, dict) or feit.get("waarde") is None:
+            continue
+        uit[naam] = {
+            "waarde": feit["waarde"],
+            "bron": feit.get("bron", ""),
+            "soort": feit.get("soort", ""),
+        }
+    return uit
+
+
+def _grondslag(resultaat: str) -> list:
+    """De wettelijke grondslag uit een tool-resultaat, of een lege lijst.
+
+    RegelRecht levert `wettelijke_grondslag` bij de toets en RVO geeft hem door
+    in de indiening. Ontbreekt hij, dan blijft het blok weg in plaats van een
+    lege belofte te wekken.
+    """
+    try:
+        data = json.loads(resultaat)
+        data = data.get("data", data)
+    except (ValueError, AttributeError):
+        return []
+    grondslag = data.get("wettelijke_grondslag") or (data.get("lopende_zaak") or {}).get(
+        "wettelijke_grondslag"
+    )
+    return grondslag if isinstance(grondslag, list) else []
+
+
+def verrijk_zaak(zaak: dict, feiten: dict, grondslag: list | None = None) -> dict:
+    """Geef de zaak de onderbouwing mee die de ondernemer in het rapport zag.
+
+    De zaak droeg alleen zijn uitkomst: referentienummer, status, maatregelen.
+    Alles waarmee die uitkomst tot stand kwam - het verbruik, de drempels
+    waartegen dat is afgezet, wie wat verklaarde, het artikel waarop het berust -
+    verdween op het moment van indienen. Juist daar hoort het te blijven: het
+    gesprek is vluchtig, het dossier niet.
+
+    De onderbouwing komt uit de feitenkaart van de host, niet uit de argumenten
+    die het model meegaf. De host weet welke bron geraadpleegd is; het model
+    geeft door wat het denkt te weten.
+    """
+    verbruik = _met_herkomst_uit_feiten(feiten or {}, _ZAAK_VERBRUIK)
+    bedrijf = _met_herkomst_uit_feiten(feiten or {}, _ZAAK_BEDRIJF)
+    drempels = {
+        naam: feit["waarde"]
+        for naam in _ZAAK_DREMPELS
+        if isinstance((feit := (feiten or {}).get(naam)), dict) and feit.get("waarde") is not None
+    }
+    onderbouwing = {}
+    if verbruik:
+        onderbouwing["verbruik"] = verbruik
+    if drempels:
+        onderbouwing["drempelwaarden"] = drempels
+    if bedrijf:
+        onderbouwing["bedrijfsgegevens"] = bedrijf
+    if grondslag:
+        onderbouwing["wettelijke_grondslag"] = grondslag
+    if onderbouwing:
+        zaak["onderbouwing"] = onderbouwing
+    return zaak
+
+
 def _maatregelen_uit_lijst(maatregelen: object) -> list[dict] | None:
     """Map de maatregelen uit de wet naar de vorm die het formulier leest.
 
@@ -1566,7 +1659,7 @@ class VLAMHost:
                 )
                 zaak = _extract_lopende_zaak(tu.name, inhoud)
                 if zaak:
-                    yield {"type": "case", "data": zaak}
+                    yield {"type": "case", "data": verrijk_zaak(zaak, feiten, _grondslag(inhoud))}
             messages.append({"role": "user", "content": tool_results})
             yield {"type": "status", "message": "Antwoord opstellen..."}
 
@@ -1692,7 +1785,7 @@ class VLAMHost:
                 )
                 zaak = _extract_lopende_zaak(tool_key, result)
                 if zaak:
-                    yield {"type": "case", "data": zaak}
+                    yield {"type": "case", "data": verrijk_zaak(zaak, feiten, _grondslag(result))}
 
                 openai_messages.append(
                     {"role": "tool", "tool_call_id": tc.id, "content": result}
@@ -1782,7 +1875,7 @@ class VLAMHost:
                 samenvoegen(feiten, feiten_uit_tool(tu.name, result))
                 zaak = _extract_lopende_zaak(tu.name, result)
                 if zaak:
-                    yield {"type": "case", "data": zaak}
+                    yield {"type": "case", "data": verrijk_zaak(zaak, feiten, _grondslag(result))}
 
                 tool_results.append(
                     {
@@ -1890,7 +1983,7 @@ class VLAMHost:
                 samenvoegen(feiten, feiten_uit_tool(tool_key, result))
                 zaak = _extract_lopende_zaak(tool_key, result)
                 if zaak:
-                    yield {"type": "case", "data": zaak}
+                    yield {"type": "case", "data": verrijk_zaak(zaak, feiten, _grondslag(result))}
 
                 openai_messages.append(
                     {"role": "tool", "tool_call_id": tc.id, "content": result}
