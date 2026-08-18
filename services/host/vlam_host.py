@@ -803,6 +803,10 @@ class VLAMHost:
         self.toestemming: dict[str, bool] = {}
         # Ondoorzichtige merken voor in de log; zie `log_sleutel`.
         self._gespreksmerken: dict[str, str] = {}
+        # Of het oordeel over de informatieplicht in dit gesprek al is gemeld.
+        # Zolang dat niet zo is, houdt de host het maatregelenformulier vast:
+        # eerst de uitkomst en waar die vandaan komt, dan pas de vragenlijst.
+        self._oordeel_gemeld: dict[str, bool] = {}
         # Houdt bij welke servers gelukt/mislukt zijn
         self.server_status: dict[str, str] = {}
 
@@ -1157,7 +1161,23 @@ class VLAMHost:
                 )
                 maatregelen = None
             status = _regel_status_dict(uitkomst, maatregelen)
-            if maatregelen is not None and maatregelen.wacht_op == "opgave":
+            # Het formulier wacht tot de ondernemer het oordeel heeft gezien.
+            # De maatregelenregel draait wél gewoon door - de wet vraagt die
+            # rapportage (artikel 5.15d Bal) en de host houdt de uitkomst vast -
+            # maar de vragenlijst reed mee op hetzelfde antwoord als de uitkomst.
+            # Daarmee vielen drie dingen samen in één scherm: een uitkomst waar de
+            # ondernemer toestemming voor gaf, een tweede toets die over hem nog
+            # niets had vastgesteld, en achtentwintig categorieën. Eerst uitleggen
+            # wat er is gebeurd en waar het vandaan komt; het formulier komt op de
+            # beurt daarna.
+            oordeel_stond_er_al = self.oordeel_al_gemeld(conv_key)
+            if uitkomst.klaar:
+                self.markeer_oordeel_gemeld(conv_key)
+            if (
+                maatregelen is not None
+                and maatregelen.wacht_op == "opgave"
+                and oordeel_stond_er_al
+            ):
                 # De keuzelijst komt uit de wet, niet uit de frontend. Lukt het
                 # ophalen niet, dan blijft `vraag` weg en valt de frontend terug
                 # op de tekst van het model — onnauwkeuriger, maar nooit een
@@ -2078,6 +2098,14 @@ class VLAMHost:
                 openai_msgs.append({"role": msg["role"], "content": content})
         return openai_msgs
 
+    def oordeel_al_gemeld(self, conv_key: str) -> bool:
+        """Of dit gesprek de uitkomst van de informatieplicht al heeft gezien."""
+        return self._oordeel_gemeld.get(conv_key, False)
+
+    def markeer_oordeel_gemeld(self, conv_key: str) -> None:
+        """Leg vast dat het oordeel deze beurt de deur uit gaat."""
+        self._oordeel_gemeld[conv_key] = True
+
     @staticmethod
     def _conv_key(session_kvk: str, session_id: str, mode: str) -> str:
         """Bucketsleutel voor de gespreksgeschiedenis.
@@ -2103,3 +2131,4 @@ class VLAMHost:
             # je het staan, dan draagt een nieuw gesprek van dezelfde sessie
             # hetzelfde merk en lijken twee gesprekken er in de log één.
             self._gespreksmerken.pop(sleutel, None)
+            self._oordeel_gemeld.pop(sleutel, None)
