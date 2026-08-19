@@ -172,6 +172,11 @@ async def test_feitenkaart_vult_zich_via_publieke_ingang(mode, kind, transport, 
     else:
         host.claude_client = _fake_claude_client()
 
+    # Akkoord voor het Handelsregister is al gegeven: deze test meet de
+    # bedrading van de feitenkaart, niet de toestemmingspoort - zonder akkoord
+    # stopt de lus tegenwoordig vóór de eerste persoonsbron en is er niets om
+    # te bedraden.
+    host.toestemming[host._conv_key(SESSIE, "sess", mode)] = {"kvk", "netbeheerder"}
     if kind == "stream":
         await _drain(host.chat_stream("sess", "hoi", mode=mode, session_kvk=SESSIE))
     else:

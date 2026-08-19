@@ -21,9 +21,28 @@ def _answer(events: list[dict]) -> dict:
 
 
 def test_wachten_op_toestemming_levert_een_deelverzoek_op():
-    verzoek = toestemming_uit_status({"klaar": False, "wacht_op": "toestemming"})
+    verzoek = toestemming_uit_status({
+        "klaar": False,
+        "wacht_op": "toestemming",
+        "toestemming_bron": "Business Wallet",
+        "toestemming_scope": "netbeheerder",
+    })
     assert verzoek is not None
     assert verzoek["bron"] == "Business Wallet"
+    assert "netbeheerder" in verzoek["omschrijving"]
+
+
+def test_deelverzoek_benoemt_de_kvk_als_daar_op_gewacht_wordt():
+    """Toestemming is per bron; de kaart hoort te zeggen wélke."""
+    verzoek = toestemming_uit_status({
+        "klaar": False,
+        "wacht_op": "toestemming",
+        "toestemming_bron": "KvK Handelsregister",
+        "toestemming_scope": "kvk",
+    })
+    assert verzoek is not None
+    assert verzoek["bron"] == "KvK Handelsregister"
+    assert "Handelsregister" in verzoek["omschrijving"]
 
 
 def test_zonder_wachten_geen_deelverzoek():

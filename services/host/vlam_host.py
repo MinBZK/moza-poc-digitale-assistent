@@ -318,6 +318,17 @@ def _vraag_uit_uitkomst(
     }
 
 
+# Welke bronnen akkoord van de ondernemer vergen, afgeleid uit de
+# routeringstabel: één bron van waarheid. Elke tool van zo'n bron valt onder de
+# poort, ook tools die geen veld in de tabel hebben (kvk__eigenaar,
+# kvk__vestigingen) - het akkoord gaat over de bron, niet over één endpoint.
+TOESTEMMINGSPLICHTIGE_SCOPES: frozenset[str] = frozenset(
+    (veld.tool or "").split("__", 1)[0]
+    for veld in regelrouting.HERKOMST.values()
+    if veld.toestemming and veld.tool
+)
+
+
 def _regel_status_dict(uitkomst: Uitkomst, maatregelen: Uitkomst | None = None) -> dict:
     """Vertaal `Uitkomst` naar wat de systeemprompt nodig heeft.
 
@@ -341,6 +352,11 @@ def _regel_status_dict(uitkomst: Uitkomst, maatregelen: Uitkomst | None = None) 
         "reden": uitkomst.reden,
         "resultaat": uitkomst.resultaat,
     }
+    if wacht_op == "toestemming":
+        # Welke bron akkoord vergt: voor het deelverzoek in de frontend, en om
+        # het akkoord straks aan precies deze scope te koppelen.
+        status["toestemming_bron"] = uitkomst.bron
+        status["toestemming_scope"] = uitkomst.scope
     if maatregelen is not None:
         status["maatregelen"] = {
             "klaar": maatregelen.klaar,
@@ -402,6 +418,23 @@ def _geen_sleutel_fout(backend: str = ""):
     return maak_fout("LLM_NIET_INGESTELD")
 
 
+# Wat de respondent deelt als hij akkoord geeft, per bronscope. De frontend
+# toont dit in de deelverzoek-kaart; zonder deze tekst valt zij terug op haar
+# eigen (wallet-specifieke) omschrijving.
+_DEELVERZOEK_OMSCHRIJVING: dict[str, str] = {
+    "kvk": (
+        "De assistent wil uw bedrijfsgegevens uit het Handelsregister "
+        "raadplegen: naam, vestigingsadres en geregistreerde activiteit. "
+        "Er wordt niets opgehaald voordat u hier akkoord geeft."
+    ),
+    "netbeheerder": (
+        "De assistent wil uw energieverbruik-attestatie gebruiken "
+        "(afgegeven door uw netbeheerder). Er wordt niets opgehaald "
+        "voordat u hier akkoord geeft."
+    ),
+}
+
+
 def toestemming_uit_status(regel_status: dict | None) -> dict | None:
     """Het deelverzoek dat bij deze stand van de regelloop hoort, of None.
 
@@ -417,10 +450,20 @@ def toestemming_uit_status(regel_status: dict | None) -> dict | None:
     """
     if not regel_status or regel_status.get("wacht_op") != "toestemming":
         return None
-    bronnen = sorted(
-        {veld.bron for veld in regelrouting.HERKOMST.values() if veld.toestemming}
-    )
-    return {"bron": " en ".join(bronnen)} if bronnen else None
+    bron = regel_status.get("toestemming_bron")
+    scope = regel_status.get("toestemming_scope")
+    if not bron:
+        # Oudere status zonder bronveld: val terug op alle plichtige bronnen,
+        # liever een te breed benoemd verzoek dan geen verzoek.
+        bronnen = sorted(
+            {veld.bron for veld in regelrouting.HERKOMST.values() if veld.toestemming}
+        )
+        return {"bron": " en ".join(bronnen)} if bronnen else None
+    verzoek = {"bron": bron}
+    omschrijving = _DEELVERZOEK_OMSCHRIJVING.get(scope or "")
+    if omschrijving:
+        verzoek["omschrijving"] = omschrijving
+    return verzoek
 
 
 def _antwoord_events(
@@ -945,7 +988,13 @@ class VLAMHost:
         # nodig heeft om door de poort te komen, kon 'm ook zelf zetten zodra
         # hij eenmaal doorkwam. Eenmaal `True` blijft `True` binnen de sessie —
         # er is hier geen intrekking.
-        self.toestemming: dict[str, bool] = {}
+        # Toestemming per bronscope ("kvk", "netbeheerder"), niet als één vlag:
+        # het deelverzoek benoemt een bron, dus het akkoord is niet breder dan
+        # de vraag. `_toestemming_gevraagd` onthoudt welke scope het laatste
+        # deelverzoek betrof; het `toestemming`-veld op het chat-contract slaat
+        # op dát verzoek en op niets anders.
+        self.toestemming: dict[str, set[str]] = {}
+        self._toestemming_gevraagd: dict[str, str] = {}
         # Ondoorzichtige merken voor in de log; zie `log_sleutel`.
         self._gespreksmerken: dict[str, str] = {}
         # Of het oordeel over de informatieplicht in dit gesprek al is gemeld.
@@ -1292,7 +1341,7 @@ class VLAMHost:
                     service=REGELRECHT_DEFINITIES_ALLOWLIST[_INFORMATIEPLICHT_LAW]["service"],
                     feiten=feiten,
                     call_tool=call_tool,
-                    toestemming=self.toestemming.get(conv_key, False),
+                    toestemming=self.toestemming.get(conv_key, set()),
                     beschikbare_tools=set(self.registry.tool_map),
                 )
                 # De maatregelenregel volgt uit de uitkomst van de eerste, niet
@@ -1308,7 +1357,7 @@ class VLAMHost:
                         service=REGELRECHT_DEFINITIES_ALLOWLIST[_MAATREGELEN_LAW]["service"],
                         feiten=feiten,
                         call_tool=call_tool,
-                        toestemming=self.toestemming.get(conv_key, False),
+                        toestemming=self.toestemming.get(conv_key, set()),
                         beschikbare_tools=set(self.registry.tool_map),
                     )
             except Exception:
@@ -1351,6 +1400,10 @@ class VLAMHost:
                 )
                 if vraag:
                     status["vraag"] = vraag
+            if status.get("toestemming_scope"):
+                # Het deelverzoek gaat deze beurt de deur uit; een
+                # `toestemming: true` op de vólgende beurt slaat hierop.
+                self._toestemming_gevraagd[conv_key] = status["toestemming_scope"]
             await queue.put({"type": "regel_status", "status": status})
 
         taak = asyncio.create_task(draai())
@@ -1409,7 +1462,7 @@ class VLAMHost:
         messages = self.conversations[conv_key]
         feiten = self.feiten.setdefault(conv_key, {})
         if toestemming:
-            self.toestemming[conv_key] = True
+            self._leg_toestemming_vast(conv_key)
         samenvoegen(feiten, _opgaven_als_feiten(opgaven))
         use_cli = mode.startswith("cli:")
         # Zie chat_stream: bij een leeg of onvolledig modelantwoord draaien we
@@ -1505,7 +1558,7 @@ class VLAMHost:
                 messages = self.conversations[conv_key]
                 feiten = self.feiten.setdefault(conv_key, {})
                 if toestemming:
-                    self.toestemming[conv_key] = True
+                    self._leg_toestemming_vast(conv_key)
                 samenvoegen(feiten, _opgaven_als_feiten(opgaven))
                 # Beginstand van deze beurt. Loopt de beurt stuk op een leeg of
                 # onvolledig modelantwoord (_HERSTEL_CODES), dan draaien we
@@ -2224,10 +2277,14 @@ class VLAMHost:
         en de aanroeper mag daar geen `tool`-event voor tonen - dat zou de
         client iets laten zien dat niet gebeurd is.
         """
-        if tool_key == "netbeheerder__verbruik" and not self.toestemming.get(conv_key, False):
-            fout = maak_fout("TOESTEMMING_VEREIST", bron="netbeheerder")
+        scope = str(tool_key or "").split("__", 1)[0]
+        if scope in TOESTEMMINGSPLICHTIGE_SCOPES and scope not in self.toestemming.get(
+            conv_key, set()
+        ):
+            fout = maak_fout("TOESTEMMING_VEREIST", bron=scope)
             logger.warning(
-                "Business Wallet geweigerd zonder vastgelegde toestemming [gesprek=%s]",
+                "Bron %s geweigerd zonder vastgelegde toestemming [gesprek=%s]",
+                scope,
                 log_sleutel(conv_key, self._gespreksmerken),
             )
             return naar_llm(fout), fout, False
@@ -2295,6 +2352,24 @@ class VLAMHost:
         """Leg vast dat het oordeel deze beurt de deur uit gaat."""
         self._oordeel_gemeld[conv_key] = True
 
+    def _leg_toestemming_vast(self, conv_key: str) -> None:
+        """Registreer akkoord voor de bron waar het laatste deelverzoek om vroeg.
+
+        Zonder openstaand deelverzoek legt een `toestemming: true` niets vast:
+        akkoord hoort op een vraag te volgen, anders is het een blanco cheque
+        die elke poort opent (PDR-008). Dat er dan niets gebeurt is zichtbaar
+        in het log, niet stil.
+        """
+        scope = self._toestemming_gevraagd.pop(conv_key, None)
+        if scope is None:
+            logger.warning(
+                "toestemming ontvangen zonder openstaand deelverzoek; genegeerd "
+                "[gesprek=%s]",
+                log_sleutel(conv_key, self._gespreksmerken),
+            )
+            return
+        self.toestemming.setdefault(conv_key, set()).add(scope)
+
     def maatregelen_al_gemeld(self, conv_key: str) -> bool:
         """Of dit gesprek de maatregelenlijst al op het scherm heeft gehad."""
         return self._maatregelen_gemeld.get(conv_key, False)
@@ -2330,3 +2405,4 @@ class VLAMHost:
             self._gespreksmerken.pop(sleutel, None)
             self._oordeel_gemeld.pop(sleutel, None)
             self._maatregelen_gemeld.pop(sleutel, None)
+            self._toestemming_gevraagd.pop(sleutel, None)

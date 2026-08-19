@@ -57,8 +57,12 @@ class Veld:
 
 HERKOMST: dict[str, Veld] = {
     "KVK_NUMMER": Veld("sessie", "identiteit", None, False),
+    # Het Handelsregister is sinds de wens van het gebruikersonderzoek net zo
+    # toestemmingsplichtig als de Business Wallet: de assistent belooft in de
+    # intro dat er niets wordt opgehaald zonder akkoord, dus de code hoort die
+    # belofte waar te maken - niet andersom.
     "IS_WOONFUNCTIE": Veld(
-        "KvK Handelsregister", "registratie", "kvk__mijn_bedrijf", False,
+        "KvK Handelsregister", "registratie", "kvk__mijn_bedrijf", True,
         feitnaam="WOONFUNCTIE"
     ),
     "JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": Veld(
@@ -78,7 +82,7 @@ HERKOMST: dict[str, Veld] = {
     # verlaagde energiebelastingtarief gebruikt wordt is een fiscaal gegeven dat
     # geen van onze bronnen draagt.
     "TEELT_GEWASSEN_IN_KAS": Veld(
-        "KvK Handelsregister", "registratie", "kvk__mijn_bedrijf", False,
+        "KvK Handelsregister", "registratie", "kvk__mijn_bedrijf", True,
         feitnaam="TEELT_IN_KAS", corrigeerbaar=True
     ),
     "TEELT_GEWASSEN_IN_GEBOUW_GEEN_KAS": Veld("de ondernemer", "opgave", None, False),

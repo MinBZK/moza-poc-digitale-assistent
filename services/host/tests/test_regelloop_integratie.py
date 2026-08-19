@@ -170,7 +170,12 @@ async def test_wet_altijd_eerst_en_geen_netbeheerder_zonder_toestemming(
         assert aanroepen[0] == "regelrecht__execute_law", (
             f"de wet moet vóór elke andere bron aangeroepen zijn, kreeg: {aanroepen}"
         )
-        assert "kvk__mijn_bedrijf" in aanroepen, "de KvK-tool levert IS_WOONFUNCTIE zonder toestemming"
+        # Sinds de KvK toestemmingsplichtig is, raakt beurt 1 geen enkele
+        # persoonsbron: de lus stopt bij het deelverzoek voor het
+        # Handelsregister. De wet zelf (regelrecht) is geen persoonsbron.
+        assert "kvk__mijn_bedrijf" not in aanroepen, (
+            "de KvK is geraadpleegd zonder akkoord van de ondernemer"
+        )
         assert "netbeheerder__verbruik" not in aanroepen
         assert "STATUS VAN DE REGELTOETS" in system_prompts[0]
         assert "bestaat in deze instelling NIET" not in system_prompts[0]
@@ -194,8 +199,10 @@ async def test_toestemming_expliciet_true_ontsluit_de_wallet():
     async def _call_tool_met_wallet(tool_key, arguments):
         registry.aanroepen.append(tool_key)
         if tool_key == "regelrecht__execute_law":
-            registry._wet_ronde += 1
-            if registry._wet_ronde == 1:
+            # Op parameters reageren, niet op rondenummer: sinds het akkoord een
+            # eigen beurt heeft, roept de lus de wet vaker aan en zegt de ronde
+            # niets meer over de stand.
+            if "JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH" not in (arguments.get("parameters") or {}):
                 return json.dumps(
                     {"data": {"ontbrekende_gegevens": [{"naam": "JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH"}]}}
                 )
@@ -211,16 +218,29 @@ async def test_toestemming_expliciet_true_ontsluit_de_wallet():
     host.registry = registry
     host.claude_client = _fake_claude_client()
 
+    # Beurt 1 zonder akkoord: de lus stopt bij het deelverzoek voor de
+    # netbeheerder en registreert wat er gevraagd is.
     await _drain(
         host.chat_stream(
             "sess",
             "Geldt de informatieplicht voor mij?",
             mode="claude",
             session_kvk=SESSIE,
+        )
+    )
+    assert "netbeheerder__verbruik" not in registry.aanroepen
+
+    # Beurt 2 mét akkoord: het contract-veld slaat op dat verzoek, en de lus
+    # loopt door naar de Business Wallet.
+    await _drain(
+        host.chat_stream(
+            "sess",
+            "Ja, ga je gang.",
+            mode="claude",
+            session_kvk=SESSIE,
             toestemming=True,
         )
     )
-
     assert "netbeheerder__verbruik" in registry.aanroepen
 
 
@@ -316,7 +336,7 @@ async def test_netbeheerder_met_vastgelegde_toestemming_bereikt_de_bron():
     registry = _NetbeheerderRegistry()
     host.registry = registry
     conv_key = "conv-met-toestemming"
-    host.toestemming[conv_key] = True
+    host.toestemming[conv_key] = {"kvk", "netbeheerder"}
     tool_use = types.SimpleNamespace(
         type="tool_use", name="netbeheerder__verbruik", input={}, id="tu1"
     )
@@ -458,6 +478,10 @@ async def test_toestemming_op_het_verzoek_ontsluit_een_modelgestuurde_aanroep():
     host.claude_client = types.SimpleNamespace(
         api_key="x", messages=types.SimpleNamespace(create=_create)
     )
+    # Toestemming slaat op een openstaand deelverzoek (PDR-008): een kaal
+    # `toestemming: true` zonder voorafgaande vraag legt niets meer vast.
+    # De vorige beurt heeft hier om de netbeheerder gevraagd.
+    host._toestemming_gevraagd[host._conv_key(SESSIE, "sess", "claude")] = "netbeheerder"
 
     events = [
         e
@@ -523,6 +547,10 @@ async def test_regelloop_yieldt_tool_events_terwijl_hij_raadpleegt():
     host = vlam_host.VLAMHost()
     host.registry = _RolRegistry()
     host.claude_client = _fake_claude_client()
+    # Akkoord voor het Handelsregister is al gegeven; anders stopt de lus
+    # tegenwoordig vóór de eerste persoonsbron en zijn er geen tool-events om
+    # te meten.
+    host.toestemming[host._conv_key(SESSIE, "sess", "claude")] = {"kvk"}
 
     events = [
         e
@@ -566,6 +594,8 @@ async def test_regelloop_yieldt_bron_fout_bij_een_falende_aanroep():
 
     host.registry = _FalendeKvkRegistry()
     host.claude_client = _fake_claude_client()
+    # Met akkoord voor de KvK; anders komt de lus nooit bij de falende aanroep.
+    host.toestemming[host._conv_key(SESSIE, "sess", "claude")] = {"kvk"}
 
     events = [
         e

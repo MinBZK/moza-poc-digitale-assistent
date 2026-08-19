@@ -104,7 +104,7 @@ async def test_lus_vraagt_de_ondernemer_als_de_wallet_niets_levert():
         service="RVO",
         feiten={},
         call_tool=call_tool,
-        toestemming=True,
+        toestemming={"kvk", "netbeheerder"},
     )
     assert uit.wacht_op == "opgave", f"lus stopte op {uit.wacht_op!r}: {uit.reden}"
     assert any(v["naam"] == ELEKTRA for v in uit.velden)
@@ -134,7 +134,7 @@ async def test_geen_deelverzoek_voor_een_bron_die_er_niet_is():
         service="RVO",
         feiten={},
         call_tool=call_tool,
-        toestemming=False,
+        toestemming=frozenset(),
         beschikbare_tools=set(),
     )
     assert uit.wacht_op == "opgave", f"kreeg {uit.wacht_op!r}: {uit.reden}"
@@ -157,7 +157,7 @@ async def test_met_wallet_blijft_toestemming_gewoon_gelden():
         service="RVO",
         feiten={},
         call_tool=call_tool,
-        toestemming=False,
+        toestemming=frozenset(),
         beschikbare_tools={"netbeheerder__verbruik", "kvk__mijn_bedrijf"},
     )
     assert uit.wacht_op == "toestemming"

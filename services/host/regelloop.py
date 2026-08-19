@@ -45,6 +45,13 @@ class Uitkomst:
     wacht_op: str | None
     reden: str
     velden: tuple[dict, ...] = ()
+    # Alleen gevuld bij `wacht_op == "toestemming"`: welke bron akkoord vergt.
+    # `bron` is het label voor de respondent ("KvK Handelsregister"), `scope`
+    # de sleutel waaronder de host het akkoord vastlegt ("kvk"). Toestemming
+    # geldt per bron, niet per gesprek: een akkoord voor het Handelsregister
+    # zet niet stilzwijgend ook de Business Wallet open.
+    bron: str | None = None
+    scope: str | None = None
 
 
 def _parameters_uit_feiten(feiten: dict) -> dict:
@@ -75,10 +82,16 @@ async def volg_regel(
     service: str,
     feiten: dict,
     call_tool: CallTool,
-    toestemming: bool,
+    toestemming: frozenset[str] | set[str],
     beschikbare_tools: set[str] | None = None,
 ) -> Uitkomst:
-    """Voer `law` uit en haal ontbrekende gegevens op zolang de lus dat zelf kan."""
+    """Voer `law` uit en haal ontbrekende gegevens op zolang de lus dat zelf kan.
+
+    `toestemming` is de verzameling bronscopes waarvoor de ondernemer akkoord
+    heeft gegeven ("kvk", "netbeheerder"). Per bron, niet als één vlag: het
+    deelverzoek benoemt een bron, dus het akkoord hoort niet breder te zijn
+    dan wat er gevraagd is.
+    """
     feiten = dict(feiten)
 
     for _ in range(MAX_RONDES):
@@ -145,12 +158,15 @@ async def volg_regel(
                     )
                 ),
             )
-        if veld.toestemming and not toestemming:
+        scope = (veld.tool or "").split("__", 1)[0] or None
+        if veld.toestemming and scope not in toestemming:
             return Uitkomst(
                 klaar=False,
                 resultaat=None,
                 wacht_op="toestemming",
                 reden=f"{veldnaam} komt uit {veld.bron}; dat vergt akkoord van de ondernemer.",
+                bron=veld.bron,
+                scope=scope,
             )
         if veld.tool is None:
             # Alle openstaande velden die de ondernemer moet opgeven, niet alleen

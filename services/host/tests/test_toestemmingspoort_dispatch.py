@@ -121,7 +121,7 @@ async def test_vlam_laat_de_wallet_door_met_vastgelegde_toestemming(streamend):
     Een poort die álles weigert zou de twee tests hierboven ook laten slagen.
     """
     host = _host()
-    host.toestemming[CONV] = True
+    host.toestemming[CONV] = {"netbeheerder"}
     vlam = _fake_vlam([_vlam_wallet_toolcall(), _vlam_final()])
     argumenten = ([{"role": "user", "content": "hoi"}], SESSIE, vlam, {}, None, CONV)
     if streamend:

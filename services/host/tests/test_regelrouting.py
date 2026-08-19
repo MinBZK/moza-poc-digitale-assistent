@@ -21,11 +21,14 @@ def test_elk_veld_van_de_informatieplicht_is_gerouteerd():
         assert route(veld) is not None, f"{veld} heeft geen bron"
 
 
-def test_verbruik_vraagt_toestemming_bedrijfsgegevens_niet():
-    """PDR-008: geen bron vóór akkoord. Alleen het verbruik valt daaronder."""
+def test_elke_persoonsbron_vraagt_toestemming():
+    """PDR-008: geen bron vóór akkoord - sinds het gebruikersonderzoek ook de
+    KvK. De intro belooft dat er niets wordt opgehaald zonder akkoord; de
+    tabel maakt die belofte waar."""
     assert route("JAARLIJKS_GASVERBRUIK_M3").toestemming is True
     assert route("JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH").toestemming is True
-    assert route("IS_WOONFUNCTIE").toestemming is False
+    assert route("IS_WOONFUNCTIE").toestemming is True
+    assert route("TEELT_GEWASSEN_IN_KAS").toestemming is True
     assert route("KVK_NUMMER").toestemming is False
 
 

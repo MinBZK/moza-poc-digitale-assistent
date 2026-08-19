@@ -627,33 +627,37 @@ def draai(loop: Loop, persona: Persona) -> None:
         "de assistent vraagt om toestemming",
         antwoord[:300],
     )
-    # `kvk__mijn_bedrijf` is toestemmingsvrij (regelrouting.HERKOMST:
-    # IS_WOONFUNCTIE heeft toestemming=False), dus de orkestratielus
-    # (regelloop.volg_regel) haalt hem al op in DEZE beurt, vóórdat het model
-    # om toestemming vraagt - niet meer pas nadat het model erom vraagt in
-    # stap 2. Deze controle stond tot en met de eindmeting op stap 2 en
-    # verwachtte dat het model de aanroep zelf startte; sinds de
-    # regelgestuurde flow (taak 4) doet de host dat hier, in stap 1, en het
-    # feit blijft daarna in de feitenkaart van het gesprek staan, dus stap 2
-    # roept `kvk__mijn_bedrijf` niet nogmaals aan. Verplaatst in plaats van
-    # verwijderd: dat de KvK ook echt geraadpleegd wordt staat verder alleen
-    # nog indirect vast via "regelrecht__execute_law vóór elke andere bron"
-    # (die impliceert een andere bron, maar noemt hem niet bij naam).
+    # Sinds toestemming-per-bron raadpleegt de host óók de KvK niet meer
+    # zonder akkoord: stap 1 eindigt in het deelverzoek voor het
+    # Handelsregister, en er is nog geen enkele persoonsbron aangeraakt.
     loop.controleer(
         "stap1",
-        "kvk__mijn_bedrijf" in tools,
-        "kvk__mijn_bedrijf is aangeroepen (door de host, vóór toestemming)",
+        "kvk__mijn_bedrijf" not in tools,
+        "de KvK is niet geraadpleegd vóór akkoord",
         f"aangeroepen: {tools}",
     )
     _controleer_wet_eerst(loop, "stap1", tools)
     _b1(loop, "stap1", antwoord)
 
-    print("\n=== 2. toestemming geven ===")
+    print("\n=== 2a. akkoord voor het Handelsregister ===")
     antwoord, tools, events = loop.beurt("Ja, ga je gang.", toestemming=True)
     loop.controleer("stap2", not _fouten(events), "geen foutmelding", "\n".join(_fouten(events)))
-    # `kvk__mijn_bedrijf` staat hier bewust niet meer bij: die is al in stap 1
-    # opgehaald (zie hierboven) en zit dan al in de feitenkaart van het
-    # gesprek, dus de orkestratielus haalt hem in deze beurt niet nogmaals op.
+    loop.controleer(
+        "stap2",
+        "kvk__mijn_bedrijf" in tools,
+        "kvk__mijn_bedrijf is aangeroepen (ná akkoord voor de KvK)",
+        f"aangeroepen: {tools}",
+    )
+    loop.controleer(
+        "stap2",
+        "netbeheerder__verbruik" not in tools,
+        "het KvK-akkoord opent de Business Wallet niet",
+        f"aangeroepen: {tools}",
+    )
+
+    print("\n=== 2b. akkoord voor de Business Wallet ===")
+    antwoord, tools, events = loop.beurt("Ja, dat mag ook.", toestemming=True)
+    loop.controleer("stap2", not _fouten(events), "geen foutmelding", "\n".join(_fouten(events)))
     for verwacht in ("netbeheerder__verbruik", "regelrecht__execute_law"):
         loop.controleer(
             "stap2", verwacht in tools, f"{verwacht} is aangeroepen", f"aangeroepen: {tools}"

@@ -25,7 +25,7 @@ def _engine(stappen):
 
 
 async def test_lus_haalt_op_wat_hij_zelf_kan():
-    """Woonfunctie komt uit de KvK; daar is geen toestemming voor nodig."""
+    """Woonfunctie komt uit de KvK; met akkoord voor die bron haalt de lus hem op."""
     call_tool = _engine([
         {"ontbrekende_gegevens": [{"naam": "IS_WOONFUNCTIE"}]},
         {"voldoet_aan_voorwaarden": True, "uitkomsten": {"heeft_informatieplicht": True}},
@@ -35,10 +35,51 @@ async def test_lus_haalt_op_wat_hij_zelf_kan():
         service="RVO",
         feiten={},
         call_tool=call_tool,
-        toestemming=False,
+        toestemming={"kvk"},
     )
     assert uit.klaar is True
     assert uit.resultaat["uitkomsten"]["heeft_informatieplicht"] is True
+
+
+async def test_lus_stopt_ook_voor_de_kvk_zonder_akkoord():
+    """Het Handelsregister is net zo toestemmingsplichtig als de wallet.
+
+    De intro belooft dat er niets wordt opgehaald zonder akkoord; sinds die
+    belofte geldt hij ook voor de KvK. Het deelverzoek benoemt de bron, zodat
+    de respondent weet waar hij ja tegen zegt.
+    """
+    call_tool = _engine([
+        {"ontbrekende_gegevens": [{"naam": "IS_WOONFUNCTIE"}]},
+    ])
+    uit = await volg_regel(
+        law="omgevingswet/energiebesparing/informatieplicht",
+        service="RVO",
+        feiten={},
+        call_tool=call_tool,
+        toestemming=frozenset(),
+    )
+    assert uit.klaar is False
+    assert uit.wacht_op == "toestemming"
+    assert uit.bron == "KvK Handelsregister"
+    assert uit.scope == "kvk"
+
+
+async def test_akkoord_voor_de_kvk_opent_de_wallet_niet():
+    """Toestemming is per bron: ja tegen het Handelsregister is geen ja tegen
+    de netbeheerder."""
+    call_tool = _engine([
+        {"ontbrekende_gegevens": [{"naam": "JAARLIJKS_GASVERBRUIK_M3"}]},
+    ])
+    uit = await volg_regel(
+        law="omgevingswet/energiebesparing/informatieplicht",
+        service="RVO",
+        feiten={},
+        call_tool=call_tool,
+        toestemming={"kvk"},
+    )
+    assert uit.klaar is False
+    assert uit.wacht_op == "toestemming"
+    assert uit.scope == "netbeheerder"
 
 
 async def test_lus_stopt_bij_een_bron_die_toestemming_vraagt():
@@ -51,7 +92,7 @@ async def test_lus_stopt_bij_een_bron_die_toestemming_vraagt():
         service="RVO",
         feiten={},
         call_tool=call_tool,
-        toestemming=False,
+        toestemming=frozenset(),
     )
     assert uit.klaar is False
     assert uit.wacht_op == "toestemming"
@@ -66,7 +107,7 @@ async def test_lus_stopt_bij_iets_dat_alleen_de_ondernemer_weet():
         service="RVO",
         feiten={},
         call_tool=call_tool,
-        toestemming=True,
+        toestemming={"kvk", "netbeheerder"},
     )
     assert uit.klaar is False
     assert uit.wacht_op == "opgave"
@@ -94,7 +135,7 @@ async def test_alle_openstaande_opgaven_gaan_in_een_keer_mee():
         service="RVO",
         feiten={},
         call_tool=call_tool,
-        toestemming=True,
+        toestemming={"kvk", "netbeheerder"},
     )
     assert uit.wacht_op == "opgave"
     assert [v["naam"] for v in uit.velden] == [
@@ -125,7 +166,7 @@ async def test_een_veld_met_een_bron_hoort_niet_in_het_formulier():
         service="RVO",
         feiten={},
         call_tool=call_tool,
-        toestemming=True,
+        toestemming={"kvk", "netbeheerder"},
     )
     assert uit.wacht_op == "opgave"
     assert [v["naam"] for v in uit.velden] == ["AANWEZIGE_CATEGORIEEN"]
@@ -140,7 +181,7 @@ async def test_onbekend_veld_stopt_de_lus_in_plaats_van_te_raden():
         service="RVO",
         feiten={},
         call_tool=call_tool,
-        toestemming=True,
+        toestemming={"kvk", "netbeheerder"},
     )
     assert uit.klaar is False
     assert uit.wacht_op == "onbekend"
@@ -162,7 +203,7 @@ async def test_definitieve_negatieve_uitkomst_is_klaar_niet_onbekend():
         service="RVO",
         feiten={},
         call_tool=call_tool,
-        toestemming=True,
+        toestemming={"kvk", "netbeheerder"},
     )
     assert uit.klaar is True
     assert uit.wacht_op is None
@@ -180,7 +221,7 @@ async def test_ontbrekend_missing_required_blijft_voorzichtig_onbekend():
         service="RVO",
         feiten={},
         call_tool=call_tool,
-        toestemming=True,
+        toestemming={"kvk", "netbeheerder"},
     )
     assert uit.klaar is False
     assert uit.wacht_op == "onbekend"
@@ -213,7 +254,7 @@ async def test_lus_loopt_niet_eindeloos_als_een_bron_niets_oplevert():
         service="RVO",
         feiten={},
         call_tool=_leeg_kvk,
-        toestemming=True,
+        toestemming={"kvk", "netbeheerder"},
     )
     assert uit.klaar is False
 
@@ -266,7 +307,7 @@ async def test_lus_stopt_meteen_als_een_ronde_geen_nieuw_feit_oplevert():
         service="RVO",
         feiten={},
         call_tool=_telt_aanroepen,
-        toestemming=True,
+        toestemming={"kvk", "netbeheerder"},
     )
     assert uit.klaar is False
     assert uit.wacht_op is None
@@ -305,7 +346,7 @@ async def test_bron_zonder_antwoord_laat_een_corrigeerbaar_veld_aan_de_onderneme
         service="RVO",
         feiten={},
         call_tool=call_tool,
-        toestemming=True,
+        toestemming={"kvk", "netbeheerder"},
     )
     assert uit.wacht_op == "opgave"
     assert [v["naam"] for v in uit.velden] == ["TEELT_GEWASSEN_IN_KAS"]
@@ -331,7 +372,7 @@ async def test_bron_zonder_antwoord_op_een_niet_corrigeerbaar_veld_blijft_onbeke
         service="RVO",
         feiten={},
         call_tool=call_tool,
-        toestemming=True,
+        toestemming={"kvk", "netbeheerder"},
     )
     assert uit.wacht_op is None
     assert uit.velden == ()
@@ -377,7 +418,7 @@ async def test_bron_levert_iets_anders_dan_het_gevraagde_veld():
         service="RVO",
         feiten={},
         call_tool=call_tool,
-        toestemming=True,
+        toestemming={"kvk", "netbeheerder"},
     )
     assert uit.klaar is False
     assert aanroepen.count("netbeheerder__verbruik") == 1, (
@@ -436,6 +477,6 @@ async def test_bron_levert_het_gevraagde_veld_als_overschrijving():
         service="RVO",
         feiten=feiten,
         call_tool=call_tool,
-        toestemming=True,
+        toestemming={"kvk", "netbeheerder"},
     )
     assert uit.klaar is True, f"lus stopte onterecht: {uit.reden}"
