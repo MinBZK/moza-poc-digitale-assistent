@@ -301,6 +301,10 @@ def _vraag_uit_uitkomst(
                     ],
                 }
             )
+        elif (route := regelrouting.route(naam)) is not None and route.invoer == "getal":
+            # Geen opties meesturen: de frontend maakt van een veld zonder
+            # opties een invulveld, precies wat een verbruikscijfer nodig heeft.
+            velden.append({"naam": naam, "label": label, "type": "getal"})
         else:
             velden.append({"naam": naam, "label": label, "type": "radio", "opties": ["Ja", "Nee"]})
 
@@ -368,6 +372,37 @@ def _regel_status_dict(uitkomst: Uitkomst, maatregelen: Uitkomst | None = None) 
     return status
 
 
+def _als_getal(waarde: object) -> int | float | None:
+    """Lees een getal zoals een ondernemer het typt.
+
+    "250.000" is in Nederland tweehonderdvijftigduizend; de regelengine leest
+    het als tweehonderdvijftig. Dat verschil beslist of de plicht geldt, dus
+    de host normaliseert vóórdat de waarde de wet in gaat: punten als
+    duizendtallen, komma als decimaalteken. Onleesbaar -> None, dan blijft het
+    veld gewoon open in plaats van dat er stil een verkeerd getal doorgaat.
+    """
+    if isinstance(waarde, bool):
+        return None
+    if isinstance(waarde, (int, float)):
+        return waarde
+    tekst = str(waarde).strip().replace(" ", "")
+    if not tekst:
+        return None
+    # "250.000,5" -> "250000.5"; een losse punt gevolgd door precies drie
+    # cijfers is een duizendtal ("250.000"), anders een decimaalteken.
+    if "," in tekst:
+        tekst = tekst.replace(".", "").replace(",", ".")
+    elif tekst.count(".") == 1 and len(tekst.split(".")[1]) != 3:
+        pass  # één punt, geen drietal cijfers erachter: decimaalteken, laat staan
+    else:
+        tekst = tekst.replace(".", "")
+    try:
+        getal = float(tekst)
+    except ValueError:
+        return None
+    return int(getal) if getal.is_integer() else getal
+
+
 def _opgaven_als_feiten(opgaven: dict[str, object] | None) -> dict[str, dict]:
     """Verpak de formulierantwoorden van de frontend tot feiten met herkomst.
 
@@ -396,6 +431,10 @@ def _opgaven_als_feiten(opgaven: dict[str, object] | None) -> dict[str, dict]:
             veld.soort == "opgave" or veld.corrigeerbaar or veld.zelf_op_te_geven
         ):
             continue
+        if veld.invoer == "getal":
+            waarde = _als_getal(waarde)
+            if waarde is None:
+                continue
         sleutel = veld.feitnaam or str(naam)
         if veld.soort == "opgave":
             bron, soort = veld.bron, veld.soort

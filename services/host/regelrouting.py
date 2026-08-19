@@ -53,6 +53,12 @@ class Veld:
     feitnaam: str | None = None
     corrigeerbaar: bool = False
     zelf_op_te_geven: bool = False
+    # Hoe de ondernemer dit veld invult als het bij hem terechtkomt: "keuze"
+    # wordt een ja/nee-vraag, "getal" een invulveld. Zonder dit onderscheid
+    # kreeg elk veld dat niet de categorievraag was ja/nee-knoppen - ook
+    # "Jaarlijks elektriciteitsverbruik in kWh", waarop ja noch nee een
+    # antwoord is.
+    invoer: str = "keuze"
 
 
 HERKOMST: dict[str, Veld] = {
@@ -67,11 +73,11 @@ HERKOMST: dict[str, Veld] = {
     ),
     "JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": Veld(
         "Business Wallet", "attestatie", "netbeheerder__verbruik", True,
-        feitnaam="ELEKTRICITEIT_KWH", zelf_op_te_geven=True
+        feitnaam="ELEKTRICITEIT_KWH", zelf_op_te_geven=True, invoer="getal"
     ),
     "JAARLIJKS_GASVERBRUIK_M3": Veld(
         "Business Wallet", "attestatie", "netbeheerder__verbruik", True,
-        feitnaam="GAS_M3", zelf_op_te_geven=True
+        feitnaam="GAS_M3", zelf_op_te_geven=True, invoer="getal"
     ),
     # Bepaalt welke bijlage van de erkende maatregelenlijst geldt (artikel 4.14,
     # tweede lid, en artikel 5.29, tweede lid, Omgevingsregeling). Het
