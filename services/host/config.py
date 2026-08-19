@@ -41,16 +41,31 @@ VLAM_MODEL_ID = os.getenv(
 
 # MCP-servers: naam → pad naar server.py
 # Relatieve paden uit .env worden opgelost t.o.v. de host-directory (BASE_DIR)
-def _resolve_server_path(env_key: str, default: Path) -> Path:
+# Waarden waarmee een bron bewust wordt uitgezet. Een lege of afwezige waarde
+# betekende "gebruik het standaardpad", dus een bron weglaten uit de configuratie
+# schakelde hem niet uit - hij startte gewoon. De enige uitweg was hem laten
+# falen, en dan staat er een fout in de log voor iets dat je expres deed.
+_UIT = frozenset({"", "uit", "off", "none", "geen"})
+
+
+def _resolve_server_path(env_key: str, default: Path) -> Path | None:
+    """Het pad naar een MCP-server, of None als die bewust uitstaat.
+
+    Uitzetten is een besluit en hoort er ook zo uit te zien: `MCP_SERVER_X=` (of
+    `uit`) laat de bron weg, terwijl de variabele helemaal weglaten het
+    standaardpad houdt. Zo verdwijnt een bron nooit door een vergeten regel.
+    """
     raw = os.getenv(env_key)
     if raw is None:
         return default
+    if raw.strip().lower() in _UIT:
+        return None
     p = Path(raw)
     if not p.is_absolute():
         p = (BASE_DIR / p).resolve()
     return p
 
-MCP_SERVERS: dict[str, Path] = {
+_MCP_SERVERS_RUW: dict[str, Path | None] = {
     "kvk": _resolve_server_path("MCP_SERVER_KVK", SERVERS_DIR / "kvk" / "server.py"),
     "koop": _resolve_server_path("MCP_SERVER_KOOP", SERVERS_DIR / "koop" / "server.py"),
     "regelrecht": _resolve_server_path("MCP_SERVER_REGELRECHT", SERVERS_DIR / "regelrecht" / "server.py"),
@@ -58,6 +73,14 @@ MCP_SERVERS: dict[str, Path] = {
     "netbeheerder": _resolve_server_path(
         "MCP_SERVER_NETBEHEERDER", SERVERS_DIR / "netbeheerder" / "server.py"
     ),
+}
+
+# Alleen de bronnen die aanstaan. Een uitgezette bron is geen storing: hij hoort
+# niet in `server_status` als "niet beschikbaar" te belanden, maar simpelweg
+# afwezig te zijn - `bronnen_offline` telt hem dan mee en de assistent belooft
+# hem niet meer.
+MCP_SERVERS: dict[str, Path] = {
+    naam: pad for naam, pad in _MCP_SERVERS_RUW.items() if pad is not None
 }
 
 # Host
