@@ -1692,6 +1692,7 @@ class VLAMHost:
         feiten: dict,
         regel_status: dict | None = None,
         conv_key: str = "",
+        model: str = VLAM_MODEL_ID,
     ) -> AsyncGenerator[dict, None]:
         """VLAM agentic loop (native OpenAI tool-calling) die status-events yieldt.
 
@@ -1717,7 +1718,7 @@ class VLAMHost:
         max_iterations = 10
         for _ in range(max_iterations):
             api_kwargs = {
-                "model": VLAM_MODEL_ID,
+                "model": model,
                 "max_tokens": 4096,
                 "messages": openai_messages,
             }
@@ -2088,6 +2089,7 @@ class VLAMHost:
         feiten: dict,
         regel_status: dict | None = None,
         conv_key: str = "",
+        model: str = VLAM_MODEL_ID,
     ) -> str:
         """`vlam` is de client van dít verzoek (MVP-02), verplicht meegegeven.
 
@@ -2105,7 +2107,7 @@ class VLAMHost:
         max_iterations = 10
         for _ in range(max_iterations):
             api_kwargs = {
-                "model": VLAM_MODEL_ID,
+                "model": model,
                 "max_tokens": 4096,
                 "messages": openai_messages,
             }
