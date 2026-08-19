@@ -952,6 +952,7 @@ class VLAMHost:
         # Zolang dat niet zo is, houdt de host het maatregelenformulier vast:
         # eerst de uitkomst en waar die vandaan komt, dan pas de vragenlijst.
         self._oordeel_gemeld: dict[str, bool] = {}
+        self._maatregelen_gemeld: dict[str, bool] = {}
         # Houdt bij welke servers gelukt/mislukt zijn
         self.server_status: dict[str, str] = {}
 
@@ -1616,6 +1617,18 @@ class VLAMHost:
         # Beginwaarde uit de regelloop: die draait de maatregelenregel zelf, dus
         # zonder deze regel draagt het answer-event geen maatregelen meer.
         maatregelen_deze_beurt = maatregelen_uit_status(regel_status)
+        # Eén keer per gesprek. De regelloop draait elke beurt opnieuw en levert
+        # de lijst dus elke beurt opnieuw; de frontend maakt van iedere
+        # `maatregelen`-lijst een formulier. Zonder deze poort kreeg de
+        # respondent de 23 maatregelen bij elke volgende beurt weer voor zich -
+        # ook nadat hij ze had ingevuld, en zelfs bij "dien maar in". Het
+        # formulier dat hij al kreeg blijft in het gesprek staan en blijft
+        # invulbaar; alleen de herhaling verdwijnt.
+        if maatregelen_deze_beurt:
+            if self.maatregelen_al_gemeld(conv_key):
+                maatregelen_deze_beurt = None
+            else:
+                self.markeer_maatregelen_gemeld(conv_key)
         max_iterations = 10
         for _ in range(max_iterations):
             api_kwargs = {
@@ -1714,6 +1727,18 @@ class VLAMHost:
         # Beginwaarde uit de regelloop: die draait de maatregelenregel zelf, dus
         # zonder deze regel draagt het answer-event geen maatregelen meer.
         maatregelen_deze_beurt = maatregelen_uit_status(regel_status)
+        # Eén keer per gesprek. De regelloop draait elke beurt opnieuw en levert
+        # de lijst dus elke beurt opnieuw; de frontend maakt van iedere
+        # `maatregelen`-lijst een formulier. Zonder deze poort kreeg de
+        # respondent de 23 maatregelen bij elke volgende beurt weer voor zich -
+        # ook nadat hij ze had ingevuld, en zelfs bij "dien maar in". Het
+        # formulier dat hij al kreeg blijft in het gesprek staan en blijft
+        # invulbaar; alleen de herhaling verdwijnt.
+        if maatregelen_deze_beurt:
+            if self.maatregelen_al_gemeld(conv_key):
+                maatregelen_deze_beurt = None
+            else:
+                self.markeer_maatregelen_gemeld(conv_key)
         max_iterations = 10
         for _ in range(max_iterations):
             api_kwargs = {
@@ -2270,6 +2295,14 @@ class VLAMHost:
         """Leg vast dat het oordeel deze beurt de deur uit gaat."""
         self._oordeel_gemeld[conv_key] = True
 
+    def maatregelen_al_gemeld(self, conv_key: str) -> bool:
+        """Of dit gesprek de maatregelenlijst al op het scherm heeft gehad."""
+        return self._maatregelen_gemeld.get(conv_key, False)
+
+    def markeer_maatregelen_gemeld(self, conv_key: str) -> None:
+        """Leg vast dat de maatregelenlijst deze beurt de deur uit gaat."""
+        self._maatregelen_gemeld[conv_key] = True
+
     @staticmethod
     def _conv_key(session_kvk: str, session_id: str, mode: str) -> str:
         """Bucketsleutel voor de gespreksgeschiedenis.
@@ -2296,3 +2329,4 @@ class VLAMHost:
             # hetzelfde merk en lijken twee gesprekken er in de log één.
             self._gespreksmerken.pop(sleutel, None)
             self._oordeel_gemeld.pop(sleutel, None)
+            self._maatregelen_gemeld.pop(sleutel, None)
