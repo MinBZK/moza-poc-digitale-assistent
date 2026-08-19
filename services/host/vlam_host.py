@@ -376,7 +376,9 @@ def _opgaven_als_feiten(opgaven: dict[str, object] | None) -> dict[str, dict]:
         if waarde is None:
             continue
         veld = regelrouting.route(str(naam))
-        if veld is None or not (veld.soort == "opgave" or veld.corrigeerbaar):
+        if veld is None or not (
+            veld.soort == "opgave" or veld.corrigeerbaar or veld.zelf_op_te_geven
+        ):
             continue
         sleutel = veld.feitnaam or str(naam)
         if veld.soort == "opgave":
@@ -984,9 +986,24 @@ class VLAMHost:
 
     @property
     def bronnen_offline(self) -> list[str]:
-        """MCP-bronnen die bij het starten niet beschikbaar kwamen."""
+        """Bronnen die het model niet kan gebruiken: niet opgekomen óf niet ingericht.
+
+        Een bron die helemaal niet geconfigureerd is, is voor het model even weg
+        als een bron die niet startte - alleen stond hij nergens als "weg", en
+        bleef de prompt hem beloven ("uw energieverbruik haal ik op uit uw
+        Business Wallet"). Dat is erger dan een storing melden: de gebruiker
+        heeft geen enkele aanwijzing dat er iets mist.
+
+        Zo is een bron uitschakelen een kwestie van configuratie: haal hem uit
+        `MCP_SERVERS` en de assistent belooft hem niet meer, de domeinblokken en
+        voorbeelden die erop leunen vallen weg, en de regelloop vraagt de
+        ondernemer om wat hij zelf weet (`zelf_op_te_geven`).
+        """
+        from errors import BRON_LABELS
+
+        bekend = set(BRON_LABELS) | set(self.server_status)
         return sorted(
-            naam for naam, status in self.server_status.items() if status != "verbonden"
+            naam for naam in bekend if self.server_status.get(naam) != "verbonden"
         )
 
     @property
@@ -1275,6 +1292,7 @@ class VLAMHost:
                     feiten=feiten,
                     call_tool=call_tool,
                     toestemming=self.toestemming.get(conv_key, False),
+                    beschikbare_tools=set(self.registry.tool_map),
                 )
                 # De maatregelenregel volgt uit de uitkomst van de eerste, niet
                 # uit de vraag van de ondernemer of een keuze van het model.
@@ -1290,6 +1308,7 @@ class VLAMHost:
                         feiten=feiten,
                         call_tool=call_tool,
                         toestemming=self.toestemming.get(conv_key, False),
+                        beschikbare_tools=set(self.registry.tool_map),
                     )
             except Exception:
                 # Een onverwachte fout hier (bv. onleesbare JSON van een bron)
