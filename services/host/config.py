@@ -39,6 +39,15 @@ VLAM_MODEL_ID = os.getenv(
     "ubiops-deployment/bzk-dig-mistralmedium-flexibel//chat-model",
 )
 
+# Mistral (eigen API, OpenAI-compatibel). Een derde backend naast VLAM en Claude,
+# bewust via dezelfde OpenAI-compatibele weg als VLAM: dan gelden de bestaande
+# waarborgen - sleutel per verzoek, redactie in de logs, foutclassificatie per
+# SDK-exceptie, de PDR-008-poort - zonder dat er iets van gedupliceerd hoeft te
+# worden. Met de eigen mistralai-SDK zou dat allemaal opnieuw moeten.
+MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY", "")
+MISTRAL_BASE_URL = os.getenv("MISTRAL_BASE_URL", "https://api.mistral.ai/v1")
+MISTRAL_MODEL_ID = os.getenv("MISTRAL_MODEL_ID", "mistral-large-latest")
+
 # MCP-servers: naam → pad naar server.py
 # Relatieve paden uit .env worden opgelost t.o.v. de host-directory (BASE_DIR)
 # Waarden waarmee een bron bewust wordt uitgezet. Een lege of afwezige waarde
@@ -167,6 +176,9 @@ __all__ = [
     "ANTHROPIC_API_KEY",
     "CLAUDE_MODEL",
     "MAX_VRAAG_TEKENS",
+    "MISTRAL_API_KEY",
+    "MISTRAL_BASE_URL",
+    "MISTRAL_MODEL_ID",
     "MCP_SERVERS",
     "TOOL_TIMEOUT",
     "TEST_KVK_NUMMERS",
