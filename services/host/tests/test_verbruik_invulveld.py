@@ -86,3 +86,9 @@ def test_categorievraag_valt_niet_stil_uit_het_formulier():
     veld = per_naam["AANWEZIGE_CATEGORIEEN"]
     assert veld["type"] == "tekst"
     assert "opties" not in veld and "groepen" not in veld
+
+
+@pytest.mark.parametrize("invoer", ["-5000", "-0,5"])
+def test_negatief_verbruik_wordt_geen_feit(invoer):
+    """Een tikfout mag de plicht niet onterecht laten vervallen."""
+    assert _als_getal(invoer) is None

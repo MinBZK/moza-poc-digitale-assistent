@@ -404,6 +404,11 @@ def _als_getal(waarde: object) -> int | float | None:
         getal = float(tekst)
     except ValueError:
         return None
+    if getal < 0:
+        # Verbruik kan niet negatief zijn. Een tikfout als "-5000" zou anders
+        # als feit de wet in gaan en de plicht onterecht laten vervallen -
+        # een verkeerd oordeel uit een typo. Liever het veld open laten.
+        return None
     return int(getal) if getal.is_integer() else getal
 
 
