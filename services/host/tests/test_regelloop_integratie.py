@@ -89,8 +89,11 @@ class _RolRegistry:
     async def call_tool(self, tool_key, arguments):
         self.aanroepen.append(tool_key)
         if tool_key == "regelrecht__execute_law":
-            self._wet_ronde += 1
-            if self._wet_ronde == 1:
+            # Op parameters reageren, niet op rondenummer: de lus mag binnen één
+            # beurt vaker langskomen (bv. de herkansing na een zwevend akkoord)
+            # en dan zegt de ronde niets meer over de stand.
+            parameters = arguments.get("parameters") or {}
+            if "IS_WOONFUNCTIE" not in parameters:
                 missend = "IS_WOONFUNCTIE"
             else:
                 missend = "JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH"
@@ -658,3 +661,41 @@ def test_regel_status_dict_normaliseert_de_rondegrens_expliciet():
     uitkomst = Uitkomst(klaar=False, resultaat=None, wacht_op=None, reden="rondegrens overschreden")
     status = vlam_host._regel_status_dict(uitkomst)
     assert status["wacht_op"] == "onbekend"
+
+
+async def test_akkoord_overleeft_een_herstart_van_de_host():
+    """De pod herstart terwijl het deelverzoek op het scherm staat.
+
+    Het openstaande verzoek leeft in het geheugen van de host; een uitrol of
+    configuratiewijziging wist het. De respondent klikt daarna op "Delen":
+    zijn beurt draagt `toestemming: true`, maar de nieuwe host kent geen
+    openstaand verzoek. Vóór deze fix werd dat akkoord genegeerd en vroeg de
+    assistent opnieuw om dezelfde toestemming - op de onderzoeksomgeving echt
+    gebeurd, vlak vóór een sessie.
+
+    Het akkoord hoort dan te gelden voor de bron waar de lus nú op wacht:
+    dezelfde bron die de kaart benoemde, want de lus is deterministisch.
+    """
+    host = vlam_host.VLAMHost()  # verse host: geen _toestemming_gevraagd
+    host.registry = _RolRegistry()
+    host.claude_client = _fake_claude_client()
+
+    await _drain(
+        host.chat_stream(
+            "sess",
+            "Ja, ik geef toestemming.",
+            mode="claude",
+            session_kvk=SESSIE,
+            toestemming=True,
+        )
+    )
+
+    aanroepen = host.registry.aanroepen
+    assert "kvk__mijn_bedrijf" in aanroepen, (
+        f"het akkoord is verloren gegaan bij de herstart: {aanroepen}"
+    )
+    # En niet breder dan gevraagd: de wallet blijft dicht.
+    assert "netbeheerder__verbruik" not in aanroepen
+    conv = host._conv_key(SESSIE, "sess", "claude")
+    assert host.toestemming.get(conv) == {"kvk"}
+    assert host._toestemming_zwevend.get(conv) is None

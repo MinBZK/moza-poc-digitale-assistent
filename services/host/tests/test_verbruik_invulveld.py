@@ -68,3 +68,21 @@ def test_alleen_getalvelden_worden_genormaliseerd():
     assert regelrouting.route("AANWEZIGE_CATEGORIEEN").invoer == "keuze"
     feiten = _opgaven_als_feiten({"AANWEZIGE_CATEGORIEEN": ["Binnenverlichting"]})
     assert feiten["AANWEZIGE_CATEGORIEEN"]["waarde"] == ["Binnenverlichting"]
+
+
+def test_categorievraag_valt_niet_stil_uit_het_formulier():
+    """Geen CATEGORIEEN uit de wet -> vrije invoer, geen weggelaten vraag.
+
+    Weglaten leek netjes (nooit een zelfbedachte lijst), maar op de
+    onderzoeksomgeving betekende het: het model somt de 28 categorieen in
+    proza op en de respondent typt los in de chat, buiten het formulier om.
+    """
+    uitkomst = Uitkomst(
+        klaar=False, resultaat=None, wacht_op="opgave", reden="",
+        velden=({"naam": "AANWEZIGE_CATEGORIEEN", "beschrijving": "Welke categorieen?"},),
+    )
+    vraag = _vraag_uit_uitkomst(uitkomst, {}, {})  # geen definities
+    per_naam = {v["naam"]: v for v in vraag["velden"]}
+    veld = per_naam["AANWEZIGE_CATEGORIEEN"]
+    assert veld["type"] == "tekst"
+    assert "opties" not in veld and "groepen" not in veld

@@ -285,10 +285,14 @@ def _vraag_uit_uitkomst(
         label = veld.get("beschrijving") or naam
         if naam == _CATEGORIEVELD:
             if not per_onderdeel:
-                # Zonder de indeling uit de wet is er geen keuzelijst te tonen.
-                # Dan liever geen formulier dan een formulier met een lijst die
-                # wij zelf verzonnen hebben.
-                logger.warning("Geen CATEGORIEEN in de wet; formulier zonder categorievraag")
+                # Zonder de indeling uit de wet is er geen keuzelijst te tonen -
+                # en een lijst zelf verzinnen doen we niet. Maar de vraag
+                # weglaten bleek erger: het model somt de categorieen dan in
+                # proza op en de respondent typt los in de chat, buiten het
+                # formulier om (op de onderzoeksomgeving echt gebeurd). Vrije
+                # invoer houdt de vraag in het formulier, zonder eigen lijst.
+                logger.warning("Geen CATEGORIEEN in de wet; categorievraag als vrije invoer")
+                velden.append({"naam": naam, "label": label, "type": "tekst"})
                 continue
             velden.append(
                 {
@@ -1034,6 +1038,7 @@ class VLAMHost:
         # op dát verzoek en op niets anders.
         self.toestemming: dict[str, set[str]] = {}
         self._toestemming_gevraagd: dict[str, str] = {}
+        self._toestemming_zwevend: dict[str, bool] = {}
         # Ondoorzichtige merken voor in de log; zie `log_sleutel`.
         self._gespreksmerken: dict[str, str] = {}
         # Of het oordeel over de informatieplicht in dit gesprek al is gemeld.
@@ -1383,6 +1388,25 @@ class VLAMHost:
                     toestemming=self.toestemming.get(conv_key, set()),
                     beschikbare_tools=set(self.registry.tool_map),
                 )
+                if (
+                    uitkomst.wacht_op == "toestemming"
+                    and uitkomst.scope
+                    and self._toestemming_zwevend.pop(conv_key, False)
+                ):
+                    # Het akkoord van deze beurt vond geen openstaand verzoek
+                    # (zie _leg_toestemming_vast) en hoort bij de bron waar de
+                    # lus nu op stuit. Eén herkansing; wacht de lus daarna op
+                    # een vólgende bron, dan is dat een nieuw deelverzoek met
+                    # een nieuw akkoord.
+                    self.toestemming.setdefault(conv_key, set()).add(uitkomst.scope)
+                    uitkomst = await volg_regel(
+                        law=_INFORMATIEPLICHT_LAW,
+                        service=REGELRECHT_DEFINITIES_ALLOWLIST[_INFORMATIEPLICHT_LAW]["service"],
+                        feiten=feiten,
+                        call_tool=call_tool,
+                        toestemming=self.toestemming.get(conv_key, set()),
+                        beschikbare_tools=set(self.registry.tool_map),
+                    )
                 # De maatregelenregel volgt uit de uitkomst van de eerste, niet
                 # uit de vraag van de ondernemer of een keuze van het model.
                 # Artikel 5.15d Bal draagt op te rapporteren over de getroffen
@@ -1439,10 +1463,25 @@ class VLAMHost:
                 )
                 if vraag:
                     status["vraag"] = vraag
+            elif uitkomst.wacht_op == "opgave" and uitkomst.velden:
+                # De eerste regel kan ook op een opgave wachten: met de wallet
+                # uitgezet levert de ondernemer zijn verbruik zelf aan. Zonder
+                # dit formulier vraagt het model die cijfers in proza en typt de
+                # respondent los in de chat - geen invulveld, geen normalisatie.
+                vraag = _vraag_uit_uitkomst(uitkomst, {}, feiten)
+                if vraag:
+                    vraag["titel"] = "Gegevens voor de toets"
+                    vraag["tekst"] = (
+                        "Deze gegevens bepalen of de energiebesparingsplicht "
+                        "voor uw bedrijf geldt. De vragen komen uit de "
+                        "regeling zelf."
+                    )
+                    status["vraag"] = vraag
             if status.get("toestemming_scope"):
                 # Het deelverzoek gaat deze beurt de deur uit; een
                 # `toestemming: true` op de vólgende beurt slaat hierop.
                 self._toestemming_gevraagd[conv_key] = status["toestemming_scope"]
+            self._toestemming_zwevend.pop(conv_key, None)
             await queue.put({"type": "regel_status", "status": status})
 
         taak = asyncio.create_task(draai())
@@ -2401,9 +2440,18 @@ class VLAMHost:
         """
         scope = self._toestemming_gevraagd.pop(conv_key, None)
         if scope is None:
-            logger.warning(
-                "toestemming ontvangen zonder openstaand deelverzoek; genegeerd "
-                "[gesprek=%s]",
+            # Geen openstaand verzoek in het geheugen. Dat is niet per se een
+            # akkoord uit het niets: het deelverzoek leeft in de pod, en een
+            # herstart (nieuwe uitrol, gewijzigde configuratie) wist het terwijl
+            # de respondent de kaart nog op zijn scherm heeft. Zijn "Delen" mag
+            # daar niet op stranden. Het akkoord blijft zweven en wordt door de
+            # regelloop gekoppeld aan de bron waar die nú op wacht - dezelfde
+            # bron die de kaart benoemde, want de lus is deterministisch. Nog
+            # steeds één bron per akkoord, nooit een blanco cheque (PDR-008).
+            self._toestemming_zwevend[conv_key] = True
+            logger.info(
+                "toestemming ontvangen zonder openstaand deelverzoek; wordt "
+                "gekoppeld aan de eerstvolgende wachtende bron [gesprek=%s]",
                 log_sleutel(conv_key, self._gespreksmerken),
             )
             return
@@ -2445,3 +2493,4 @@ class VLAMHost:
             self._oordeel_gemeld.pop(sleutel, None)
             self._maatregelen_gemeld.pop(sleutel, None)
             self._toestemming_gevraagd.pop(sleutel, None)
+            self._toestemming_zwevend.pop(sleutel, None)

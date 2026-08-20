@@ -41,9 +41,20 @@ def test_akkoord_landt_op_de_gevraagde_bron_en_alleen_daar(host):
     assert CONV not in host._toestemming_gevraagd, "het verzoek is beantwoord"
 
 
-def test_akkoord_zonder_openstaand_verzoek_legt_niets_vast(host):
+def test_akkoord_zonder_openstaand_verzoek_legt_direct_niets_vast(host):
+    """Maar het gaat niet verloren: het blijft zweven tot de regelloop het aan
+    de wachtende bron koppelt. Het deelverzoek leeft in de pod; een herstart
+    (uitrol, configuratiewijziging) wist het terwijl de respondent de kaart
+    nog ziet - zijn "Delen" mag daar niet op stranden."""
     host._leg_toestemming_vast(CONV)
     assert host.toestemming.get(CONV, set()) == set()
+    assert host._toestemming_zwevend.get(CONV) is True
+
+
+def test_zwevend_akkoord_vervalt_bij_een_nieuw_gesprek(host):
+    host._leg_toestemming_vast(CONV)
+    host.clear_session(KVK, "sessie-a")
+    assert CONV not in host._toestemming_zwevend
 
 
 def test_tweede_akkoord_komt_naast_het_eerste(host):

@@ -67,16 +67,23 @@ def test_onderdelen_staan_in_een_vaste_volgorde():
     assert [g["onderdeel"] for g in veld["groepen"]] == ["Faciliteiten", "Gebouwen", "Processen"]
 
 
-def test_zonder_categorieen_uit_de_wet_geen_categorievraag():
-    """Liever geen keuzelijst dan een lijst die wij zelf verzonnen hebben."""
+def test_zonder_categorieen_uit_de_wet_wordt_de_categorievraag_vrije_invoer():
+    """Geen zelfbedachte keuzelijst - maar de vraag weglaten bleek erger: het
+    model somt de categorieen dan in proza op en de respondent typt los in
+    de chat, buiten het formulier om (op de onderzoeksomgeving gebeurd)."""
     vraag = _vraag_uit_uitkomst(_wacht_op_opgave(), {})
-    assert [v["naam"] for v in vraag["velden"]] == ["TEELT_GEWASSEN_IN_GEBOUW_GEEN_KAS"]
+    per_naam = {v["naam"]: v for v in vraag["velden"]}
+    assert set(per_naam) == {"TEELT_GEWASSEN_IN_GEBOUW_GEEN_KAS", "AANWEZIGE_CATEGORIEEN"}
+    assert per_naam["AANWEZIGE_CATEGORIEEN"]["type"] == "tekst"
+    assert "groepen" not in per_naam["AANWEZIGE_CATEGORIEEN"]
 
 
-def test_zonder_enig_bruikbaar_veld_geen_formulier():
-    """Alleen de categorievraag, en geen categorieën: dan valt er niets te vragen."""
+def test_ook_met_alleen_de_categorievraag_komt_er_een_formulier():
+    """Voorheen viel het formulier dan helemaal weg; zie hierboven waarom niet."""
     alleen_categorieen = ({"naam": "AANWEZIGE_CATEGORIEEN", "beschrijving": "x"},)
-    assert _vraag_uit_uitkomst(_wacht_op_opgave(alleen_categorieen), None) is None
+    vraag = _vraag_uit_uitkomst(_wacht_op_opgave(alleen_categorieen), None)
+    assert vraag is not None
+    assert vraag["velden"][0]["type"] == "tekst"
 
 
 def test_veld_zonder_beschrijving_valt_terug_op_de_naam():
