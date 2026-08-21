@@ -301,8 +301,9 @@ class InvalidApiKey(Exception):
 
 # Bewust generiek: de melding mag nooit (een deel van) de waarde bevatten.
 INVALID_API_KEY_MESSAGE = (
-    "De meegegeven API-sleutel heeft een ongeldige vorm. Controleer of u de "
-    "sleutel volledig hebt geplakt, zonder spaties of regeleinden."
+    "De ingevulde toegangssleutel heeft een ongeldige vorm. Controleer bij "
+    "Instellingen of u de sleutel volledig hebt geplakt, zonder spaties of "
+    "regeleinden."
 )
 
 # Eén gedeelde ondergrens met het log-vangnet, en bewust niet los gekozen: wat de

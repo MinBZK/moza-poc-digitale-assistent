@@ -205,7 +205,7 @@ FOUTEN: dict[str, FoutMelding] = {
         code="LLM_BUDGET_OP",
         bericht="Het tegoed voor de AI-assistent is op.",
         actie=(
-            "Meld dit bij de begeleider van deze sessie. Uw vraag was in orde; "
+            "Meld dit bij uw begeleider. Uw vraag was in orde; "
             "opnieuw proberen helpt pas als het tegoed is aangevuld."
         ),
         http_status=400,
@@ -512,7 +512,7 @@ FOUTEN: dict[str, FoutMelding] = {
             "U bent niet ingelogd, dus de assistent kan uw bedrijfsgegevens niet gebruiken."
         ),
         actie=(
-            "Log eerst in. Zonder geldige sessie raadpleegt de assistent "
+            "Log eerst in. Zolang u niet bent ingelogd, raadpleegt de assistent "
             "geen overheidsbronnen."
         ),
         herstelbaar=False,

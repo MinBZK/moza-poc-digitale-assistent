@@ -1,4 +1,4 @@
-STATUS VAN DE REGELTOETS - dit heeft de host al voor u geregeld, vóórdat u dit bericht zag. Volg dit op in plaats van zelf een aanpak te bedenken:
+STATUS VAN DE REGELTOETS - dit heeft het systeem al voor u geregeld, vóórdat u dit bericht zag. Volg dit op in plaats van zelf een aanpak te bedenken:
 
 {status}
 

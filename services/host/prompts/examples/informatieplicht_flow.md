@@ -4,13 +4,13 @@
 
 Gebruiker: "Ik kreeg een melding dat de informatieplicht energiebesparing binnenkort voor mijn bedrijf geldt. Wat moet ik doen?"
 
-Assistent (de host heeft de toets al vóór dit antwoord uitgevoerd - "STATUS VAN DE REGELTOETS" zegt dat er toestemming nodig is voor de Business Wallet; de assistent roept zelf NOG GEEN tools aan en vraagt dat EXPLICIET):
+Assistent (het systeem heeft de toets al vóór dit antwoord uitgevoerd - "STATUS VAN DE REGELTOETS" zegt dat er toestemming nodig is voor de Business Wallet; de assistent roept zelf NOG GEEN tools aan en vraagt dat EXPLICIET):
 
 "Dat kan ik voor u uitzoeken. Daarvoor heb ik uw energieverbruik nodig uit uw Business Wallet. Dat is een attestatie, afgegeven door uw netbeheerder. Mag ik dat voor u ophalen en gebruiken?"
 
 Gebruiker: "Ja, ga je gang." (verstuurd via de "Delen"-knop, die toestemming op dit verzoek vastlegt)
 
-Assistent (de host heeft, zodra de toestemming vastlag, vóór dit antwoord zelf netbeheerder__verbruik aangeroepen en de toets daarmee meteen afgerond - "STATUS VAN DE REGELTOETS" zegt dat de uitkomst er al is; de assistent roept zelf geen tools meer aan en wacht niet op een volgende vraag):
+Assistent (het systeem heeft, zodra de toestemming vastlag, vóór dit antwoord zelf netbeheerder__verbruik aangeroepen en de toets daarmee meteen afgerond - "STATUS VAN DE REGELTOETS" zegt dat de uitkomst er al is; de assistent roept zelf geen tools meer aan en wacht niet op een volgende vraag):
 
 "Op basis van uw gegevens is de toets afgerond:
 
@@ -26,11 +26,11 @@ Assistent (de host heeft, zodra de toestemming vastlag, vóór dit antwoord zelf
 
 U hoeft dus niets op te zoeken. Om te bepalen wélke maatregelen gelden, heb ik nog een paar gegevens van u nodig. Die staan nergens geregistreerd; alleen u weet ze. U vult ze hieronder in. Uw antwoorden worden bewaard voor de volgende ronde."
 
-(De vragen staan in "STATUS VAN DE REGELTOETS". De host draaide de regel zelf. Die wacht nu op een opgave. Het formulier komt uit de regel. De assistent verwijst ernaar. Hij bedenkt zelf geen vragen en geen categorieen.)
+(De vragen staan in "STATUS VAN DE REGELTOETS". Het systeem draaide de regel zelf. Die wacht nu op een opgave. Het formulier komt uit de regel. De assistent verwijst ernaar. Hij bedenkt zelf geen vragen en geen categorieen.)
 
 Gebruiker: (vult het formulier in en verstuurt het)
 
-Assistent (de host heeft de maatregelentoets afgerond zodra de opgaven binnen waren - "STATUS VAN DE REGELTOETS" noemt de maatregelen die eruit kwamen; de assistent roept zelf geen tools aan):
+Assistent (het systeem heeft de maatregelentoets afgerond zodra de opgaven binnen waren - "STATUS VAN DE REGELTOETS" noemt de maatregelen die eruit kwamen; de assistent roept zelf geen tools aan):
 
 "Dank u. Voor {{BEDRIJFSNAAM}} gelden de maatregelen uit de bijlage die op uw bedrijf van toepassing is. Kunt u per maatregel aangeven of deze is uitgevoerd?
 
