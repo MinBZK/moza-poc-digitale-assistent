@@ -26,6 +26,9 @@ from config import (
     ANTHROPIC_API_KEY,
     CLAUDE_MODEL,
     CLAUDE_TIMEOUT,
+    LLM_HARTSLAG_INTERVAL,
+    LLM_HERKANSING_WACHT,
+    LLM_MAX_TOKENS,
     MCP_SERVERS,
     TOOL_TIMEOUT,
     VLAM_API_KEY,
@@ -890,6 +893,82 @@ def _log_tokens(backend: str, response) -> None:
     )
 
 
+# Fouten waarbij een tweede poging kans van slagen heeft: het model is druk,
+# tijdelijk weg of onbereikbaar. Een geweigerde sleutel of een ongeldig verzoek
+# gaat niet over door te wachten.
+_HERKANSBAAR = frozenset({"LLM_TE_DRUK", "LLM_OVERBELAST", "LLM_ONBEREIKBAAR"})
+_HARTSLAG_STATUS = "Antwoord opstellen..."
+_HERKANSING_STATUS = "Het AI-model is druk. Ik probeer het nog een keer..."
+
+
+async def _llm_aanroep(
+    maak_aanroep,
+    backend: str,
+    timeout: float,
+    *,
+    interval: float | None = None,
+    wacht: float | None = None,
+    label: str = "",
+) -> AsyncGenerator[dict, None]:
+    """Eén LLM-aanroep binnen één grens, met levensteken en één herkansing.
+
+    Yieldt `status`-events zolang de aanroep loopt (elke `interval` seconden),
+    en sluit af met `{"type": "_resultaat", "resultaat": ...}` of met een
+    `error`-event uit de catalogus. `maak_aanroep` is een nul-argument callable
+    die de coroutine maakt: bij een herkansing moet de aanroep opnieuw
+    opgebouwd worden.
+
+    De SDK-clients staan op `max_retries=0`. Hun eigen retry zit binnen de
+    grens en is voor de gebruiker onzichtbaar: een model dat 'te druk' is werd
+    daardoor als time-out gemeld. Hier krijgt de herkansing een status-event, en
+    deelt hij de grens met de eerste poging, zodat de gebruiker nooit langer
+    wacht dan de grens belooft.
+    """
+    interval = LLM_HARTSLAG_INTERVAL if interval is None else interval
+    wacht = LLM_HERKANSING_WACHT if wacht is None else wacht
+    label = label or backend
+    lus = asyncio.get_running_loop()
+    deadline = lus.time() + timeout
+    herkanst = False
+    while True:
+        taak = asyncio.ensure_future(maak_aanroep())
+        try:
+            while True:
+                rest = deadline - lus.time()
+                if rest <= 0:
+                    raise TimeoutError
+                try:
+                    resultaat = await asyncio.wait_for(
+                        asyncio.shield(taak), timeout=min(interval, rest)
+                    )
+                except TimeoutError:
+                    if lus.time() >= deadline:
+                        raise
+                    yield {"type": "status", "message": _HARTSLAG_STATUS}
+                    continue
+                _log_tokens(backend, resultaat)
+                yield {"type": "_resultaat", "resultaat": resultaat}
+                return
+        except Exception as e:
+            fout = classificeer_llm_fout(e, backend, timeout)
+            if (
+                fout.code in _HERKANSBAAR
+                and not herkanst
+                and lus.time() + wacht < deadline
+            ):
+                herkanst = True
+                logger.warning("%s-call [%s], één herkansing: %s", label, fout.code, e)
+                yield {"type": "status", "message": _HERKANSING_STATUS}
+                await asyncio.sleep(wacht)
+                continue
+            logger.error("%s-call mislukt [%s]: %s", label, fout.code, e)
+            yield naar_event(fout)
+            return
+        finally:
+            if not taak.done():
+                taak.cancel()
+
+
 # Tool-definities voor CLI-modus (onafhankelijk van MCP-registry)
 #
 # `fields` is overal optioneel: als het LLM een lijst velden meegeeft, vertaalt
@@ -1013,11 +1092,16 @@ class VLAMHost:
         # ze bij naam kennen.
         redact_always(ANTHROPIC_API_KEY)
         redact_always(VLAM_API_KEY)
-        self.claude_client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+        # max_retries=0: de herkansing doet `_llm_aanroep`, zichtbaar en binnen
+        # de grens.
+        self.claude_client = anthropic.AsyncAnthropic(
+            api_key=ANTHROPIC_API_KEY, max_retries=0
+        )
         self.vlam_client = (
             openai.AsyncOpenAI(
                 api_key=VLAM_API_KEY,
                 base_url=VLAM_BASE_URL,
+                max_retries=0,
             )
             if VLAM_API_KEY and VLAM_BASE_URL
             else None
@@ -1311,6 +1395,7 @@ class VLAMHost:
                     claude = anthropic.AsyncAnthropic(
                         api_key=claude_api_key_override,
                         http_client=httpx.AsyncClient(verify=_shared_ssl_context()),
+                        max_retries=0,
                     )
                     own_clients.append(claude)
                 if vlam_api_key_override and wants_vlam:
@@ -1327,6 +1412,7 @@ class VLAMHost:
                             api_key=vlam_api_key_override,
                             base_url=VLAM_BASE_URL,
                             http_client=httpx.AsyncClient(verify=_shared_ssl_context()),
+                            max_retries=0,
                         )
                         own_clients.append(vlam)
                 yield claude, vlam
@@ -1769,23 +1855,25 @@ class VLAMHost:
         for _ in range(max_iterations):
             api_kwargs = {
                 "model": CLAUDE_MODEL,
-                "max_tokens": 4096,
+                "max_tokens": LLM_MAX_TOKENS,
                 "system": system_prompt,
                 "messages": messages,
             }
             if tools:
                 api_kwargs["tools"] = tools
 
-            try:
-                response = await asyncio.wait_for(
-                    claude.messages.create(**api_kwargs),
-                    timeout=CLAUDE_TIMEOUT,
-                )
-                _log_tokens("claude", response)
-            except Exception as e:
-                fout = classificeer_llm_fout(e, "claude", CLAUDE_TIMEOUT)
-                logger.error("Claude-call mislukt [%s]: %s", fout.code, e)
-                yield naar_event(fout)
+            response = None
+            async for event in _llm_aanroep(
+                partial(claude.messages.create, **api_kwargs),
+                "claude",
+                CLAUDE_TIMEOUT,
+                label="Claude",
+            ):
+                if event["type"] == "_resultaat":
+                    response = event["resultaat"]
+                else:
+                    yield event
+            if response is None:
                 return
 
             assistant_content = response.content
@@ -1879,22 +1967,24 @@ class VLAMHost:
         for _ in range(max_iterations):
             api_kwargs = {
                 "model": VLAM_MODEL_ID,
-                "max_tokens": 4096,
+                "max_tokens": LLM_MAX_TOKENS,
                 "messages": openai_messages,
             }
             if tools_openai:
                 api_kwargs["tools"] = tools_openai
 
-            try:
-                response = await asyncio.wait_for(
-                    vlam.chat.completions.create(**api_kwargs),
-                    timeout=VLAM_TIMEOUT,
-                )
-                _log_tokens("vlam", response)
-            except Exception as e:
-                fout = classificeer_llm_fout(e, "vlam", VLAM_TIMEOUT)
-                logger.error("VLAM-call mislukt [%s]: %s", fout.code, e)
-                yield naar_event(fout)
+            response = None
+            async for event in _llm_aanroep(
+                partial(vlam.chat.completions.create, **api_kwargs),
+                "vlam",
+                VLAM_TIMEOUT,
+                label="VLAM",
+            ):
+                if event["type"] == "_resultaat":
+                    response = event["resultaat"]
+                else:
+                    yield event
+            if response is None:
                 return
 
             # Een OpenAI-compatibele proxy kan een respons zonder choices geven
@@ -1998,23 +2088,25 @@ class VLAMHost:
         for _ in range(max_iterations):
             api_kwargs = {
                 "model": CLAUDE_MODEL,
-                "max_tokens": 4096,
+                "max_tokens": LLM_MAX_TOKENS,
                 "system": system_prompt,
                 "messages": messages,
             }
             if tools:
                 api_kwargs["tools"] = tools
 
-            try:
-                response = await asyncio.wait_for(
-                    claude.messages.create(**api_kwargs),
-                    timeout=CLAUDE_TIMEOUT,
-                )
-                _log_tokens("claude", response)
-            except Exception as e:
-                fout = classificeer_llm_fout(e, "claude", CLAUDE_TIMEOUT)
-                logger.error("Claude-call (CLI-modus) mislukt [%s]: %s", fout.code, e)
-                yield naar_event(fout)
+            response = None
+            async for event in _llm_aanroep(
+                partial(claude.messages.create, **api_kwargs),
+                "claude",
+                CLAUDE_TIMEOUT,
+                label="Claude-call (CLI-modus)",
+            ):
+                if event["type"] == "_resultaat":
+                    response = event["resultaat"]
+                else:
+                    yield event
+            if response is None:
                 return
 
             assistant_content = response.content
@@ -2092,21 +2184,24 @@ class VLAMHost:
 
         max_iterations = 10
         for _ in range(max_iterations):
-            try:
-                response = await asyncio.wait_for(
-                    vlam.chat.completions.create(
-                        model=VLAM_MODEL_ID,
-                        max_tokens=4096,
-                        messages=openai_messages,
-                        tools=tools_openai,
-                    ),
-                    timeout=VLAM_TIMEOUT,
-                )
-                _log_tokens("vlam", response)
-            except Exception as e:
-                fout = classificeer_llm_fout(e, "vlam", VLAM_TIMEOUT)
-                logger.error("VLAM CLI-call mislukt [%s]: %s", fout.code, e)
-                yield naar_event(fout)
+            response = None
+            async for event in _llm_aanroep(
+                partial(
+                    vlam.chat.completions.create,
+                    model=VLAM_MODEL_ID,
+                    max_tokens=LLM_MAX_TOKENS,
+                    messages=openai_messages,
+                    tools=tools_openai,
+                ),
+                "vlam",
+                VLAM_TIMEOUT,
+                label="VLAM CLI",
+            ):
+                if event["type"] == "_resultaat":
+                    response = event["resultaat"]
+                else:
+                    yield event
+            if response is None:
                 return
 
             if not response.choices:
@@ -2204,7 +2299,7 @@ class VLAMHost:
         for _ in range(max_iterations):
             api_kwargs = {
                 "model": CLAUDE_MODEL,
-                "max_tokens": 4096,
+                "max_tokens": LLM_MAX_TOKENS,
                 "system": system_prompt,
                 "messages": messages,
             }
@@ -2267,7 +2362,7 @@ class VLAMHost:
         for _ in range(max_iterations):
             api_kwargs = {
                 "model": VLAM_MODEL_ID,
-                "max_tokens": 4096,
+                "max_tokens": LLM_MAX_TOKENS,
                 "messages": openai_messages,
             }
             if tools_openai:
