@@ -35,7 +35,7 @@ MOCK_DATA=$(cat <<'MOCK_EOF'
     "id": "EBR-2026",
     "naam": "Informatieplicht Energiebesparing",
     "status": "open",
-    "deadline": "2027-12-01",
+    "deadline": "2026-12-01",
     "beschrijving": "Bedrijven en instellingen die meer dan 50.000 kWh elektriciteit of 25.000 m3 aardgas per jaar verbruiken, moeten vierjaarlijks rapporteren welke energiebesparende maatregelen zij hebben genomen.",
     "wettelijke_grondslag": "art. 5.15d Besluit activiteiten leefomgeving",
     "eherkenning_niveau": "2+",
