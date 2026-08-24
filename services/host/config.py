@@ -87,9 +87,26 @@ MCP_SERVERS: dict[str, Path] = {
 VLAM_HOST = os.getenv("VLAM_HOST", "0.0.0.0")
 VLAM_PORT = int(os.getenv("VLAM_PORT", "8000"))
 
-# Timeouts (seconden) — per LLM-call, niet per sessie
-VLAM_TIMEOUT = int(os.getenv("VLAM_TIMEOUT", "30"))
-CLAUDE_TIMEOUT = int(os.getenv("CLAUDE_TIMEOUT", "60"))
+# Grenzen per LLM-aanroep (seconden), niet per sessie. Op basis van meting
+# (PDR-013): de zwaarste beurt in de informatieplicht-flow kost 20 s op Claude
+# (30k tokens in, 1.400 uit). De grens draagt een staart van 3x plus één
+# herkansing; een lagere grens brak tijdens het gebruikersonderzoek beurten af
+# die gewoon nog liepen. Herijken zodra de prompt of het antwoord groeit.
+VLAM_TIMEOUT = int(os.getenv("VLAM_TIMEOUT", "120"))
+CLAUDE_TIMEOUT = int(os.getenv("CLAUDE_TIMEOUT", "180"))
+
+# Bovengrens op het antwoord. Het langste gemeten antwoord is 1.400 tokens;
+# de grens laat daar ruimte boven, maar begrenst een model dat doorpraat vóórdat
+# de time-out dat doet.
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
+
+# Levensteken tijdens een lange aanroep: elke zoveel seconden een status-event,
+# zodat de client een stille verbinding kan onderscheiden van een dode. Moet
+# ruim onder de stilte-grens van de frontend blijven.
+LLM_HARTSLAG_INTERVAL = float(os.getenv("LLM_HARTSLAG_INTERVAL", "10"))
+
+# Wachttijd vóór de ene herkansing als het model 'te druk' meldt.
+LLM_HERKANSING_WACHT = float(os.getenv("LLM_HERKANSING_WACHT", "2"))
 
 # Time-out per bron-aanroep (seconden), voor MCP én CLI. Zonder deze grens kan
 # een bron die
@@ -178,5 +195,8 @@ __all__ = [
     "VLAM_PORT",
     "VLAM_TIMEOUT",
     "CLAUDE_TIMEOUT",
+    "LLM_MAX_TOKENS",
+    "LLM_HARTSLAG_INTERVAL",
+    "LLM_HERKANSING_WACHT",
     "get_system_prompt",
 ]

@@ -14,6 +14,7 @@ Beslissingen rond de Digitale Assistent. Lees de PDRs in volgorde — elke nieuw
 | [PDR-009](PDR-009-sessie-identiteit-host-side.md) | Bedrijfsidentiteit server-side bepaald door de host-sessie (MVP-01) | Geaccepteerd |
 | [PDR-010](PDR-010-sleutel-van-de-gebruiker.md) | De LLM-sleutel komt van de gebruiker, niet van de server (MVP-02) | Geaccepteerd |
 | [PDR-011](PDR-011-foutmeldingen-catalogus.md) | Foutmeldingen uit één catalogus, met wat er misging én wat je kunt doen | Geaccepteerd |
+| [PDR-013](PDR-013-timeoutgrenzen-op-basis-van-meting.md) | Time-outgrenzen op basis van meting, met levensteken en één herkansing | Geaccepteerd |
 
 ## Vervangen of ongeldig verklaarde beslissingen
 
@@ -21,7 +22,7 @@ Bewust bewaard voor audit-trail; niet meer van toepassing op de codebase.
 
 | # | Onderwerp | Status | Toelichting |
 |---|---|---|---|
-| [PDR-002](PDR-002-vlam-timeout-fallback.md) | VLAM timeout en graceful fallback | **Ongeldig** sinds 15 april 2026 | VLAM tool-calling stabiliseerde; fallback-logica is verwijderd uit `vlam_host.py`. |
+| [PDR-002](PDR-002-vlam-timeout-fallback.md) | VLAM timeout en graceful fallback | **Ongeldig** sinds 15 april 2026 | VLAM tool-calling stabiliseerde; fallback-logica is verwijderd uit `vlam_host.py`. De grenzen (30/60 s) zijn op 24 augustus vervangen door [PDR-013](PDR-013-timeoutgrenzen-op-basis-van-meting.md). |
 | [PDR-003](PDR-003-vlam-orchestrated-tool-use.md) | VLAM host-gestuurde tool-aanroepen | **Ongeldig** sinds 15 april 2026 | VLAM ondersteunt nu native tool-calling stabiel; orchestratie-modus geschrapt. |
 | [PDR-004](PDR-004-cli-profiel-voor-overheidsstandaard.md) | CLI-profiel voor overheidsstandaard | **Vervangen** op 9 mei 2026 | Inhoud verplaatst naar het standaard-voorstel in [`moza-mcp-standaard-poc`](https://github.com/MinBZK/moza-mcp-standaard-poc) (buiten scope van deze repo). |
 

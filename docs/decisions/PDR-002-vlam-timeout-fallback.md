@@ -23,8 +23,10 @@
 > zonder bronverwijzing. De disclaimer was een functioneel compromis dat
 > we niet langer nodig hebben.
 >
-> `VLAM_TIMEOUT` (30s) en `CLAUDE_TIMEOUT` (60s) blijven bestaan; alleen
-> de fallback-logica bij die timeouts is geschrapt.
+> `VLAM_TIMEOUT` (30s) en `CLAUDE_TIMEOUT` (60s) bleven toen bestaan; alleen
+> de fallback-logica bij die timeouts is geschrapt. Op 24 augustus 2026 zijn
+> ook die grenzen vervangen, op basis van meting: zie
+> [PDR-013](PDR-013-timeoutgrenzen-op-basis-van-meting.md).
 >
 > **Dit document blijft bewaard voor context en audit-trail. De beslissing
 > is niet meer van toepassing op de huidige codebase.**
