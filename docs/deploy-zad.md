@@ -50,6 +50,42 @@ Een 502 vanaf de frontend kwam voort uit de nginx-resolver die de kale hostnaam
 http://dabackend.<namespace>.svc.cluster.local:8000
 ```
 
+## Onderzoeksomgeving
+
+Een tweede link, los van `poc`, voor de sessies van het gebruikersonderzoek.
+Gedefinieerd in [`.github/workflows/onderzoek.yml`](../.github/workflows/onderzoek.yml)
+(backend) en `onderzoek.yml` in `MinBZK/moza-poc` (frontend). Beide alleen via
+`workflow_dispatch` met een `ref`-input: een uitrol tijdens een sessie wist de
+sessiestate van de respondent, dus uitrollen is een besluit, geen bijvangst.
+
+| Veld | Waarde |
+|---|---|
+| Deployment | `gebruikersonderzoek` |
+| Componenten | `dabackend-onderzoek` (backend, internal-only) en `proef-onderzoek` (frontend) |
+| Link | `https://proef-onderzoek-gebruikersonderzoek-pm-5sj.rig.prd1.gn2.quattro.rijksapps.nl` |
+
+Waarom eigen componenten: env staat op ZAD **per component, projectbreed**. Een
+variabele op `dabackend` geldt dus in élke deployment waar dat component draait
+(`poc`, alle previews). De onderzoeksomgeving wijkt op twee punten af, en die
+afwijking hoort niet op `poc` te belanden:
+
+- `dabackend-onderzoek` draagt tijdens de sessies een `ANTHROPIC_API_KEY`, zodat
+  respondenten geen sleutel hoeven in te vullen. Dat is een bewuste, tijdelijke
+  afwijking van PDR-010, beperkt tot deze niet-gepubliceerde link. **Na het
+  onderzoek gaat de sleutel er weer af.** Verder dezelfde env als `dabackend`
+  (`TEST_KVK_NUMMERS`, `MCP_SERVER_NETBEHEERDER`; `ALLOWED_ORIGINS` leeg).
+- `proef-onderzoek` heeft `BACKEND_ORIGIN` op
+  `http://dabackend-onderzoek.<namespace van gebruikersonderzoek>.svc.cluster.local:8000`
+  (FQDN, zie de valkuil hierboven).
+
+De frontend staat default op mode `claude`; zonder sleutel in de UI gebruikt de
+host de server-env-sleutel. Meer is er niet nodig.
+
+**Inrichten (eenmalig, in de ZAD-UI):** de twee componenten aanmaken in project
+`pm-5sj` met bovenstaande env en dezelfde poorten/resources als `dabackend` en
+`proef`; `dabackend-onderzoek` niet publiceren. Daarna in beide repo's de
+workflow "Onderzoek deploy" starten met de gewenste `ref`.
+
 ## Platformgedrag
 
 ZAD draait op **Argo CD GitOps**: de bron van waarheid is Git, niet de cluster en

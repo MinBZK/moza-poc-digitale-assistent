@@ -1,0 +1,88 @@
+name: Onderzoek deploy
+
+# Zet een gekozen commit op de onderzoeksomgeving: deployment `gebruikersonderzoek`,
+# component `dabackend-onderzoek`. Alleen op verzoek (workflow_dispatch), nooit
+# automatisch: een uitrol tijdens een sessie wist de sessiestate van de respondent.
+#
+# Waarom een eigen component naast `dabackend` (zie docs/deploy-zad.md):
+#   - op ZAD staat env per component, projectbreed. Een sleutel op `dabackend`
+#     zou dus ook op `poc` en op elke PR-preview belanden;
+#   - op `dabackend-onderzoek` mag tijdens de sessies tijdelijk een
+#     ANTHROPIC_API_KEY staan, zodat respondenten niets hoeven in te vullen.
+#     Dat is een bewuste, tijdelijke afwijking van PDR-010, beperkt tot deze
+#     ene, niet-gepubliceerde link. Na het onderzoek gaat de sleutel er weer af.
+# De rest is gelijk aan production.yml: internal-only, ALLOWED_ORIGINS leeg.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit, branch of tag om uit te rollen"
+        required: true
+        default: main
+        type: string
+
+permissions: read-all
+
+concurrency:
+  group: onderzoek
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # nodig om de image naar GHCR te pushen
+    outputs:
+      image: ${{ steps.image.outputs.ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Bepaal image-ref (GHCR vereist lowercase)
+        id: image
+        shell: bash
+        env:
+          REPO: ${{ github.repository }}
+          GEVRAAGD: ${{ inputs.ref }}
+        run: |
+          IMAGE="${REGISTRY}/${REPO,,}"
+          SHA="$(git rev-parse HEAD)"
+          echo "ref=${IMAGE}:onderzoek-${SHA}" >> "$GITHUB_OUTPUT"
+          echo "Uitgerold wordt ${SHA} (${GEVRAAGD})" >> "$GITHUB_STEP_SUMMARY"
+      - name: Log in bij GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build en push image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: services/host/Dockerfile
+          push: true
+          tags: ${{ steps.image.outputs.ref }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment:
+      name: gebruikersonderzoek
+    steps:
+      - name: Deploy naar ZAD (gebruikersonderzoek)
+        uses: RijksICTGilde/zad-actions/deploy@v4
+        with:
+          api-key: ${{ secrets.ZAD_API_KEY }}
+          project-id: pm-5sj
+          deployment-name: gebruikersonderzoek
+          component: dabackend-onderzoek
+          image: ${{ needs.build.outputs.image }}
+          # Internal-only: geen publieke URL, dus geen externe readiness-poll.
+          wait-for-ready: "false"
