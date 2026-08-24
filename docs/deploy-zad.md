@@ -47,8 +47,10 @@ Een 502 vanaf de frontend kwam voort uit de nginx-resolver die de kale hostnaam
 `dabackend` niet oploste. Zet `BACKEND_ORIGIN` op de FQDN:
 
 ```
-http://dabackend.<namespace>.svc.cluster.local:8000
+http://<deployment>-dabackend.rig-prd-pm-5sj.svc.cluster.local:8000
 ```
+
+De namespace is per project; de servicenaam draagt de deployment als prefix.
 
 ## Onderzoeksomgeving
 
@@ -75,8 +77,11 @@ afwijking hoort niet op `poc` te belanden:
   onderzoek gaat de sleutel er weer af.** Verder dezelfde env als `dabackend`
   (`TEST_KVK_NUMMERS`, `MCP_SERVER_NETBEHEERDER`; `ALLOWED_ORIGINS` leeg).
 - `proef-onderzoek` heeft `BACKEND_ORIGIN` op
-  `http://dabackend-onderzoek.<namespace van gebruikersonderzoek>.svc.cluster.local:8000`
-  (FQDN, zie de valkuil hierboven).
+  `http://gebruikersonderzoek-dabackend-onderzoek.rig-prd-pm-5sj.svc.cluster.local:8000`.
+  De namespace is per **project** (`rig-prd-pm-5sj`), en de service heet
+  `<deployment>-<component>` — op `poc` is dat `poc-dabackend`. Daarom wijzen
+  alle frontends met de `proef`-component (ook de `pr*`-previews) naar de
+  `poc`-backend zolang `BACKEND_ORIGIN` daar hardgecodeerd staat.
 
 De frontend staat default op mode `claude`; zonder sleutel in de UI gebruikt de
 host de server-env-sleutel. Meer is er niet nodig.
