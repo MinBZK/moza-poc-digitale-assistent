@@ -1545,54 +1545,27 @@ class VLAMHost:
                     klaar=False, resultaat=None, wacht_op="onbekend", reden=""
                 )
                 maatregelen = None
-            status = _regel_status_dict(uitkomst, maatregelen)
-            # Het formulier wacht tot de ondernemer het oordeel heeft gezien.
-            # De maatregelenregel draait wél gewoon door - de wet vraagt die
-            # rapportage (artikel 5.15d Bal) en de host houdt de uitkomst vast -
-            # maar de vragenlijst reed mee op hetzelfde antwoord als de uitkomst.
-            # Daarmee vielen drie dingen samen in één scherm: een uitkomst waar de
-            # ondernemer toestemming voor gaf, een tweede toets die over hem nog
-            # niets had vastgesteld, en achtentwintig categorieën. Eerst uitleggen
-            # wat er is gebeurd en waar het vandaan komt; het formulier komt op de
-            # beurt daarna.
-            oordeel_stond_er_al = self.oordeel_al_gemeld(conv_key)
-            if uitkomst.klaar:
-                self.markeer_oordeel_gemeld(conv_key)
-            if (
-                maatregelen is not None
-                and maatregelen.wacht_op == "opgave"
-                and oordeel_stond_er_al
-            ):
-                # De keuzelijst komt uit de wet, niet uit de frontend. Lukt het
-                # ophalen niet, dan blijft `vraag` weg en valt de frontend terug
-                # op de tekst van het model — onnauwkeuriger, maar nooit een
-                # zelfbedachte lijst categorieën.
-                definities = await self.get_definities(_MAATREGELEN_LAW)
-                vraag = _vraag_uit_uitkomst(
-                    maatregelen, definities.get("definities"), feiten
+            # De consument hieronder wacht op precies één `regel_status`-item.
+            # Alles wat hierna misgaat mag dat item niet tegenhouden: zonder
+            # sentinel blijft de stream open tot de frontend afbreekt.
+            status = None
+            try:
+                status = _regel_status_dict(uitkomst, maatregelen)
+                await self._verrijk_regel_status(
+                    status, uitkomst, maatregelen, feiten, conv_key
                 )
-                if vraag:
-                    status["vraag"] = vraag
-            elif uitkomst.wacht_op == "opgave" and uitkomst.velden:
-                # De eerste regel kan ook op een opgave wachten: met de wallet
-                # uitgezet levert de ondernemer zijn verbruik zelf aan. Zonder
-                # dit formulier vraagt het model die cijfers in proza en typt de
-                # respondent los in de chat - geen invulveld, geen normalisatie.
-                vraag = _vraag_uit_uitkomst(uitkomst, {}, feiten)
-                if vraag:
-                    vraag["titel"] = "Gegevens voor de toets"
-                    vraag["tekst"] = (
-                        "Deze gegevens bepalen of de energiebesparingsplicht "
-                        "voor uw bedrijf geldt. De vragen komen uit de "
-                        "regeling zelf."
+            except Exception:
+                logger.exception(
+                    "Regelstatus afronden onverwacht gefaald [gesprek=%s]",
+                    log_sleutel(conv_key, self._gespreksmerken),
+                )
+                if status is None:
+                    status = _regel_status_dict(
+                        Uitkomst(klaar=False, resultaat=None, wacht_op="onbekend", reden=""),
+                        None,
                     )
-                    status["vraag"] = vraag
-            if status.get("toestemming_scope"):
-                # Het deelverzoek gaat deze beurt de deur uit; een
-                # `toestemming: true` op de vólgende beurt slaat hierop.
-                self._toestemming_gevraagd[conv_key] = status["toestemming_scope"]
-            self._toestemming_zwevend.pop(conv_key, None)
-            await queue.put({"type": "regel_status", "status": status})
+            finally:
+                await queue.put({"type": "regel_status", "status": status})
 
         taak = asyncio.create_task(draai())
         try:
@@ -1604,6 +1577,67 @@ class VLAMHost:
         finally:
             if not taak.done():
                 taak.cancel()
+
+    async def _verrijk_regel_status(
+        self,
+        status: dict,
+        uitkomst: Uitkomst,
+        maatregelen: Uitkomst | None,
+        feiten: dict,
+        conv_key: str,
+    ) -> None:
+        """Vul de regelstatus aan met het formulier en de toestemmingsstand.
+
+        Losgetrokken uit `draai()` zodat de sentinel daar in een `finally`
+        kan staan: dit deel praat met een bron (`get_definities`) en met de
+        uitkomst-structuur, en beide kunnen falen.
+        """
+        # Het formulier wacht tot de ondernemer het oordeel heeft gezien.
+        # De maatregelenregel draait wél gewoon door - de wet vraagt die
+        # rapportage (artikel 5.15d Bal) en de host houdt de uitkomst vast -
+        # maar de vragenlijst reed mee op hetzelfde antwoord als de uitkomst.
+        # Daarmee vielen drie dingen samen in één scherm: een uitkomst waar de
+        # ondernemer toestemming voor gaf, een tweede toets die over hem nog
+        # niets had vastgesteld, en achtentwintig categorieën. Eerst uitleggen
+        # wat er is gebeurd en waar het vandaan komt; het formulier komt op de
+        # beurt daarna.
+        oordeel_stond_er_al = self.oordeel_al_gemeld(conv_key)
+        if uitkomst.klaar:
+            self.markeer_oordeel_gemeld(conv_key)
+        if (
+            maatregelen is not None
+            and maatregelen.wacht_op == "opgave"
+            and oordeel_stond_er_al
+        ):
+            # De keuzelijst komt uit de wet, niet uit de frontend. Lukt het
+            # ophalen niet, dan blijft `vraag` weg en valt de frontend terug
+            # op de tekst van het model — onnauwkeuriger, maar nooit een
+            # zelfbedachte lijst categorieën.
+            definities = await self.get_definities(_MAATREGELEN_LAW)
+            vraag = _vraag_uit_uitkomst(
+                maatregelen, definities.get("definities"), feiten
+            )
+            if vraag:
+                status["vraag"] = vraag
+        elif uitkomst.wacht_op == "opgave" and uitkomst.velden:
+            # De eerste regel kan ook op een opgave wachten: met de wallet
+            # uitgezet levert de ondernemer zijn verbruik zelf aan. Zonder
+            # dit formulier vraagt het model die cijfers in proza en typt de
+            # respondent los in de chat - geen invulveld, geen normalisatie.
+            vraag = _vraag_uit_uitkomst(uitkomst, {}, feiten)
+            if vraag:
+                vraag["titel"] = "Gegevens voor de toets"
+                vraag["tekst"] = (
+                    "Deze gegevens bepalen of de energiebesparingsplicht "
+                    "voor uw bedrijf geldt. De vragen komen uit de "
+                    "regeling zelf."
+                )
+                status["vraag"] = vraag
+        if status.get("toestemming_scope"):
+            # Het deelverzoek gaat deze beurt de deur uit; een
+            # `toestemming: true` op de vólgende beurt slaat hierop.
+            self._toestemming_gevraagd[conv_key] = status["toestemming_scope"]
+        self._toestemming_zwevend.pop(conv_key, None)
 
     async def _regel_status_zonder_events(
         self, feiten: dict, session_kvk: str, conv_key: str

@@ -135,3 +135,33 @@ def test_een_gezonde_kvk_respons_levert_nog_steeds_feiten():
     }
     feiten = feiten_uit_tool("kvk__mijn_bedrijf", json.dumps(payload))
     assert feiten["BEDRIJFSNAAM"]["waarde"] == "Kwekerij De Bloesem"
+
+
+# --- 5. de regelstatus komt altijd, ook als het afronden faalt ---------------
+
+
+@pytest.mark.asyncio
+async def test_regel_status_sentinel_komt_ook_als_het_afronden_faalt(monkeypatch):
+    """Zonder sentinel wacht de stream op een item dat nooit komt; de frontend
+    breekt dan na 90 s af met "reageerde te lang niet"."""
+    from regelloop import Uitkomst
+
+    async def volg_regel_stub(**_kw):
+        return Uitkomst(klaar=True, resultaat={"voldoet_aan_voorwaarden": True}, wacht_op=None, reden="")
+
+    async def kapot(*_a, **_k):
+        raise TypeError("'<' not supported between instances of 'str' and 'int'")
+
+    host = vlam_host.VLAMHost()
+    host.registry.tool_map = {"regelrecht__execute_law": object()}
+    monkeypatch.setattr(vlam_host, "volg_regel", volg_regel_stub)
+    monkeypatch.setattr(vlam_host.VLAMHost, "_verrijk_regel_status", kapot)
+    events = []
+
+    async def verzamel():
+        async for e in host._regel_status({}, "62345681", "62345681:test"):
+            events.append(e)
+
+    await asyncio.wait_for(verzamel(), timeout=2)
+    assert events[-1]["type"] == "regel_status"
+    assert events[-1]["status"]["klaar"] is True
