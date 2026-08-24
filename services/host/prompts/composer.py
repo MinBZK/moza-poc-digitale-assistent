@@ -27,7 +27,7 @@ def _load_if_exists(relative_path: str) -> str | None:
     return None
 
 
-def _load_domain_blocks(bronnen_offline: list[str]) -> list[str]:
+def _load_domain_blocks(onbereikbaar: set[str]) -> list[str]:
     """Load the domain knowledge blocks for sources that are reachable.
 
     Same reasoning as the example filter: a block explaining what KOOP can do,
@@ -39,7 +39,6 @@ def _load_domain_blocks(bronnen_offline: list[str]) -> list[str]:
     domain_dir = BLOCKS_DIR / "shared" / "domain"
     if not domain_dir.exists():
         return []
-    onbereikbaar = set(bronnen_offline)
     blokken = []
     for pad in sorted(domain_dir.glob("*.md")):
         tekst = pad.read_text(encoding="utf-8").strip()
@@ -88,7 +87,9 @@ def _optionele_bronnen(tekst: str) -> set[str]:
     return _marker_inhoud(_OPTIONEEL_MARKER, tekst)
 
 
-def _load_examples(has_tools: bool, bronnen_offline: list[str]) -> list[str]:
+def _load_examples(
+    has_tools: bool, bronnen_offline: list[str], bronnen_uit: list[str]
+) -> list[str]:
     """Load the few-shot example blocks that still make sense right now.
 
     Examples are the strongest steering signal in this prompt, which cuts both
@@ -98,7 +99,8 @@ def _load_examples(has_tools: bool, bronnen_offline: list[str]) -> list[str]:
     """
     if not EXAMPLES_DIR.exists():
         return []
-    onbereikbaar = set(bronnen_offline)
+    storing = set(bronnen_offline)
+    onbereikbaar = storing | set(bronnen_uit)
     bruikbaar = []
     for pad in sorted(EXAMPLES_DIR.glob("*.md")):
         tekst = pad.read_text(encoding="utf-8").strip()
@@ -109,7 +111,10 @@ def _load_examples(has_tools: bool, bronnen_offline: list[str]) -> list[str]:
             continue
         # Een aangestipte bron die eruit ligt maakt het voorbeeld niet onbruikbaar,
         # maar de stap die 'm gebruikt moet er wel uit.
-        kwijt = _optionele_bronnen(tekst) & onbereikbaar
+        # Alleen een storing krijgt een waarschuwing. Een bron die uitstaat
+        # verdwijnt stil: de waarschuwing hier is precies de zin die het model
+        # tegen de gebruiker naspreekt ("de Business Wallet is niet beschikbaar").
+        kwijt = _optionele_bronnen(tekst) & storing
         schoon = _OPTIONEEL_MARKER.sub("", _BRONNEN_MARKER.sub("", tekst)).strip()
         if kwijt:
             schoon = (
@@ -145,6 +150,23 @@ def _compose_bronnen_status(bronnen_offline: list[str], has_tools: bool) -> str 
     ]
     bestand = "shared/bronnen_status.md" if has_tools else "shared/geen_bronnen.md"
     return _load(bestand).replace("{bronnen}", "\n".join(regels))
+
+
+def _compose_bronnen_uit(bronnen_uit: list[str]) -> str | None:
+    """Het blok voor bronnen die bewust uitstaan: zwijgen, niet melden.
+
+    Het storingsblok zegt "meld welke bron niet beschikbaar is". Voor een bron
+    die uitstaat is dat verkeerd: de gebruiker ervaart dan een storing in iets
+    dat in zijn omgeving nooit heeft bestaan, midden in een flow die verder
+    werkt. Zonder dit blok noemt het model de bron toch, want de routeringstabel
+    en `tool_usage.md` schrijven hem voor.
+    """
+    if not bronnen_uit:
+        return None
+    from errors import BRON_LABELS
+
+    regels = [f"- {BRON_LABELS.get(bron, bron)}" for bron in bronnen_uit]
+    return _load("shared/bronnen_uit.md").replace("{bronnen}", "\n".join(regels))
 
 
 def _regel_status_klaar_tekst(resultaat: dict) -> str:
@@ -395,6 +417,7 @@ def compose_system_prompt(
     cli_transport: bool = False,
     regel_status: dict | None = None,
     feiten: dict | None = None,
+    bronnen_uit: list[str] | None = None,
 ) -> str:
     """Assemble the system prompt from modular blocks.
 
@@ -402,6 +425,10 @@ def compose_system_prompt(
         mode: "vlam" or "claude".
         has_tools: Whether MCP tools are available.
         bronnen_offline: Sources that failed to start, by server name.
+        bronnen_uit: Sources deliberately left out of this environment, by
+            server name. Like `bronnen_offline` they drop the blocks and
+            examples that lean on them, but the model is told to never
+            mention them instead of reporting them as unavailable.
         cli_transport: True for the `cli:*` modes, which offer a smaller set of
             tools than the shared routing table describes.
         regel_status: What the rule loop (`regelloop.volg_regel`) already
@@ -426,12 +453,14 @@ def compose_system_prompt(
 
     # 3. Tool instructions OR no-tools fallback
     status = _compose_bronnen_status(bronnen_offline or [], has_tools)
+    uit = _compose_bronnen_uit(bronnen_uit or [])
+    onbereikbaar = set(bronnen_offline or []) | set(bronnen_uit or [])
     if has_tools:
         # Vóór tool_usage: de slotregel geldt voor élk antwoord, ook voor
         # antwoorden die geen tool gebruiken maar wel een eerder feit noemen.
         blocks.append(_load("shared/slots.md"))
         blocks.append(_load("shared/tool_usage.md"))
-        blocks.extend(_load_domain_blocks(bronnen_offline or []))
+        blocks.extend(_load_domain_blocks(onbereikbaar))
         if cli_transport:
             # De routeringstabel is gedeeld met het MCP-transport en noemt tools
             # die hier anders heten of ontbreken. Dat is een naamprobleem, geen
@@ -443,6 +472,8 @@ def compose_system_prompt(
             blocks.append(regel)  # wat de regelloop deze beurt al bepaalde
         if status:
             blocks.append(status)  # welke bronnen nu uitliggen
+        if uit:
+            blocks.append(uit)  # welke bronnen hier niet bestaan
     elif status:
         # Geen enkele tool én bronnen die hadden moeten draaien: eerlijk melden
         # dat het nu niet lukt, in plaats van op eigen kennis antwoorden.
@@ -456,7 +487,7 @@ def compose_system_prompt(
         blocks.append(hint)
 
     # 5. Few-shot examples (strongest consistency signal)
-    examples = _load_examples(has_tools, bronnen_offline or [])
+    examples = _load_examples(has_tools, bronnen_offline or [], bronnen_uit or [])
     if examples:
         blocks.append("Hieronder volgen voorbeelden van goede antwoorden:")
         blocks.extend(examples)

@@ -19,8 +19,8 @@ passen: "De informatieplicht geldt {{OORDEEL_INFORMATIEPLICHT}} voor uw bedrijf.
 Gebruik ALLEEN plaatshouders uit deze lijst. Verzin er geen. Hebt u een gegeven
 nodig dat er niet bij staat, zeg dan dat u het niet hebt.
 
-Gebruik een plaatshouder pas nadat de bron is geraadpleegd — door u of door de
-host. Noemt u {{ELEKTRICITEIT_KWH}} terwijl noch u noch de host het verbruik
+Gebruik een plaatshouder pas nadat de bron is geraadpleegd — door u of door
+het systeem. Noemt u {{ELEKTRICITEIT_KWH}} terwijl noch u noch het systeem het verbruik
 heeft opgevraagd, dan kan het systeem hem niet invullen en krijgt de gebruiker
 een foutmelding in plaats van een antwoord.
 

@@ -1169,25 +1169,30 @@ class VLAMHost:
 
     @property
     def bronnen_offline(self) -> list[str]:
-        """Bronnen die het model niet kan gebruiken: niet opgekomen óf niet ingericht.
+        """Bronnen die ingericht zijn maar niet opkwamen: een storing.
 
-        Een bron die helemaal niet geconfigureerd is, is voor het model even weg
-        als een bron die niet startte - alleen stond hij nergens als "weg", en
-        bleef de prompt hem beloven ("uw energieverbruik haal ik op uit uw
-        Business Wallet"). Dat is erger dan een storing melden: de gebruiker
-        heeft geen enkele aanwijzing dat er iets mist.
+        Die meldt de assistent, met het alternatief voor de gebruiker
+        (`bronnen_status.md`). Een bron die bewust uitstaat hoort hier niet:
+        zie `bronnen_uit`.
+        """
+        return sorted(
+            naam for naam, status in self.server_status.items() if status != "verbonden"
+        )
 
-        Zo is een bron uitschakelen een kwestie van configuratie: haal hem uit
-        `MCP_SERVERS` en de assistent belooft hem niet meer, de domeinblokken en
-        voorbeelden die erop leunen vallen weg, en de regelloop vraagt de
-        ondernemer om wat hij zelf weet (`zelf_op_te_geven`).
+    @property
+    def bronnen_uit(self) -> list[str]:
+        """Bronnen die in deze omgeving bewust niet zijn ingericht.
+
+        Een bron uitschakelen is een kwestie van configuratie: haal hem uit
+        `MCP_SERVERS` en de domeinblokken en voorbeelden die erop leunen vallen
+        weg, en de regelloop vraagt de ondernemer om wat hij zelf weet
+        (`zelf_op_te_geven`). Voor het model is dat géén storing: het krijgt de
+        instructie de bron nooit te noemen. Anders zegt het "uw Business Wallet
+        is momenteel niet beschikbaar" tegen iemand voor wie die nooit bestond.
         """
         from errors import BRON_LABELS
 
-        bekend = set(BRON_LABELS) | set(self.server_status)
-        return sorted(
-            naam for naam in bekend if self.server_status.get(naam) != "verbonden"
-        )
+        return sorted(naam for naam in BRON_LABELS if naam not in self.server_status)
 
     @property
     def cli_bronnen_offline(self) -> list[str]:
@@ -1246,6 +1251,7 @@ class VLAMHost:
             cli_transport=cli_transport,
             regel_status=regel_status,
             feiten=feiten,
+            bronnen_uit=self.bronnen_uit,
         )
 
     def get_status(self) -> dict:
