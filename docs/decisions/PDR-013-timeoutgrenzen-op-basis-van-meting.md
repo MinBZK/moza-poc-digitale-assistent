@@ -1,4 +1,4 @@
-# PDR-013: Time-outgrenzen op basis van meting, met levensteken en één herkansing
+# PDR-013: Time-outgrenzen op basis van meting, met levensteken en herkansingen
 
 | Veld | Waarde |
 |---|---|
@@ -54,13 +54,16 @@ werd zo als "time-out" gemeld, met het advies de vraag korter te maken.
    stuurt elke `LLM_HARTSLAG_INTERVAL` (10 s) een `status`-event zolang het
    model werkt. De frontend breekt af na 90 s stilte; met een levensteken
    telt die stilte per event, niet per aanroep.
-3. **Geen SDK-retries; één herkansing in de host.** Beide clients staan op
+3. **Geen SDK-retries; herkansingen in de host.** Beide clients staan op
    `max_retries=0`. Meldt het model "te druk", "tijdelijk weg" of
    "onbereikbaar" (`LLM_TE_DRUK`, `LLM_OVERBELAST`, `LLM_ONBEREIKBAAR`),
-   dan probeert de host precies één keer opnieuw, met een `status`-event
-   ertussen ("Het AI-model is druk. Ik probeer het nog een keer...") en
-   binnen dezelfde grens. Faalt ook die, dan krijgt de gebruiker de
-   melding die bij de oorzaak hoort (PDR-011), niet "time-out".
+   dan probeert de host het `LLM_HERKANSINGEN` (2) keer opnieuw, met een
+   `status`-event per herkansing ("Het AI-model is druk. Ik probeer het nog
+   een keer...") en een wachttijd die verdubbelt (2 s, 4 s), binnen dezelfde
+   grens. Twee, omdat een verbindingsfout in een korte reeks komt: bij het
+   nameten viel één herkansing na 2 s daar nog middenin. Faalt ook de
+   laatste, dan krijgt de gebruiker de melding die bij de oorzaak hoort
+   (PDR-011), niet "time-out".
 
 De grenzen uit PDR-002 zijn hiermee vervangen; de rest van PDR-002 was al
 ongeldig.

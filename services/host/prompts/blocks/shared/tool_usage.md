@@ -73,7 +73,7 @@ De gebruiker vraagt naar subsidies, regelingen of rapportageverplichtingen:
    • Informatieplicht: ja/nee
    • Onderzoeksplicht: ja/nee
 
-   Regeling: naam en ID (uit rvo__zoek_regeling)
+   Regeling: voor de informatieplicht is dat "Informatieplicht Energiebesparing" met ID EBR-2026 - die staat vast, u hoeft er niet naar te zoeken. Alleen bij een andere regeling: rvo__zoek_regeling.
 
    Maatregelen (de geldende maatregelen uit "STATUS VAN DE REGELTOETS", met de status die de gebruiker per maatregel opgaf):
    • Genummerde lijst van geldende maatregelen, per maatregel: uitgevoerd / niet uitgevoerd

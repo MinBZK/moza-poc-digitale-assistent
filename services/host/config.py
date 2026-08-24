@@ -105,7 +105,11 @@ LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
 # ruim onder de stilte-grens van de frontend blijven.
 LLM_HARTSLAG_INTERVAL = float(os.getenv("LLM_HARTSLAG_INTERVAL", "10"))
 
-# Wachttijd vóór de ene herkansing als het model 'te druk' meldt.
+# Herkansingen als het model 'te druk', 'overbelast' of 'onbereikbaar' meldt,
+# en de wachttijd vóór de eerste (verdubbelt per herkansing). Twee, omdat een
+# verbindingsfout in de praktijk vaak in een korte reeks komt: één herkansing
+# na 2 s viel daar nog middenin.
+LLM_HERKANSINGEN = int(os.getenv("LLM_HERKANSINGEN", "2"))
 LLM_HERKANSING_WACHT = float(os.getenv("LLM_HERKANSING_WACHT", "2"))
 
 # Time-out per bron-aanroep (seconden), voor MCP én CLI. Zonder deze grens kan
@@ -198,5 +202,6 @@ __all__ = [
     "LLM_MAX_TOKENS",
     "LLM_HARTSLAG_INTERVAL",
     "LLM_HERKANSING_WACHT",
+    "LLM_HERKANSINGEN",
     "get_system_prompt",
 ]

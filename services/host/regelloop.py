@@ -100,7 +100,20 @@ async def volg_regel(
             "regelrecht__execute_law",
             {"law": law, "service": service, "parameters": parameters},
         )
-        data = json.loads(ruw).get("data") or {}
+        try:
+            data = json.loads(ruw).get("data") or {}
+        except (ValueError, AttributeError):
+            data = None
+        if not isinstance(data, dict):
+            # Geen JSON-object: de bron gaf iets terug dat de lus niet kan
+            # lezen. Doorgaan zou hetzelfde antwoord nog vier keer ophalen;
+            # stoppen met een reden laat in de log zien wat er misging.
+            return Uitkomst(
+                klaar=False,
+                resultaat=None,
+                wacht_op=None,
+                reden=f"{law}: RegelRecht gaf een onleesbaar antwoord; gestopt.",
+            )
 
         if data.get("voldoet_aan_voorwaarden"):
             return Uitkomst(klaar=True, resultaat=data, wacht_op=None, reden="")

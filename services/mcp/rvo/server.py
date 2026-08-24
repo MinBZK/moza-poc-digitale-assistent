@@ -20,6 +20,7 @@ Voldoet aan de MCP-standaard voor Generieke Interactieservices:
 import asyncio
 import json
 import logging
+import re
 from datetime import UTC, datetime
 
 from mcp.server import Server
@@ -231,6 +232,35 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     raise ValueError(f"Onbekende tool: {name}")
 
 
+# Zoeken op betekenis in plaats van op de letterlijke string. Het model vormt
+# zelf een zoekterm ("energiebesparingsrapportage", "informatieplicht
+# rapportage") en die staat zelden woordelijk in de naam; een letterlijke match
+# gaf dan niets, waarna het model nog twee keer zocht en de gebruiker een
+# bronfout kreeg, vlak voor het indienen. Een woord raakt als het als woord of
+# als deel van een woord in naam, beschrijving of id voorkomt, en korte
+# stopwoorden tellen niet mee.
+_STOPWOORDEN = frozenset({"de", "het", "een", "en", "of", "voor", "van", "rvo"})
+
+
+def _raakt(trefwoord: str, regeling: dict) -> bool:
+    tekst = " ".join(
+        str(regeling.get(veld, "")) for veld in ("id", "naam", "beschrijving")
+    ).lower()
+    woorden = [
+        w for w in re.findall(r"[a-z0-9+]+", trefwoord.lower())
+        if len(w) >= 3 and w not in _STOPWOORDEN
+    ]
+    if not woorden:
+        return trefwoord.lower() in tekst
+    # Samengestelde woorden ("energiebesparingsrapportage") raken via hun
+    # bestanddelen: een woord raakt ook als de tekst een woord bevat dat erin
+    # begint (energiebesparing ⊂ energiebesparingsrapportage).
+    tekstwoorden = re.findall(r"[a-z0-9+]+", tekst)
+    def raakt(w: str) -> bool:
+        return w in tekst or any(t in w and len(t) >= 6 for t in tekstwoorden)
+    return any(raakt(w) for w in woorden)
+
+
 def _zoek_regeling(arguments: dict) -> list[TextContent]:
     """Zoek regelingen op trefwoord (mock)."""
     trefwoord = arguments.get("trefwoord", "").lower()
@@ -251,11 +281,7 @@ def _zoek_regeling(arguments: dict) -> list[TextContent]:
             )
         ]
 
-    resultaten = [
-        r
-        for r in MOCK_REGELINGEN
-        if trefwoord in r["naam"].lower() or trefwoord in r["beschrijving"].lower()
-    ]
+    resultaten = [r for r in MOCK_REGELINGEN if _raakt(trefwoord, r)]
 
     output = {
         "trefwoord": trefwoord,

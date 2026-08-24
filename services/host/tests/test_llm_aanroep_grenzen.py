@@ -65,6 +65,7 @@ def test_grenzen_liggen_ruim_boven_de_gemeten_duur():
     assert config.VLAM_TIMEOUT >= 120
     assert config.LLM_MAX_TOKENS == 2048
     assert 0 < config.LLM_HARTSLAG_INTERVAL <= 15
+    assert config.LLM_HERKANSINGEN >= 2
 
 
 async def test_sdk_clients_doen_zelf_geen_retries(monkeypatch):
@@ -202,7 +203,8 @@ async def test_druk_model_krijgt_een_herkansing_met_een_status_ertussen(fout):
     assert len(statussen) == 1 and "druk" in statussen[0].lower()
 
 
-async def test_blijft_het_model_druk_dan_precies_een_herkansing():
+@pytest.mark.parametrize("herkansingen", [0, 1, 2])
+async def test_blijft_het_model_druk_dan_precies_het_aantal_herkansingen(herkansingen):
     pogingen = 0
 
     async def altijd_druk():
@@ -211,11 +213,34 @@ async def test_blijft_het_model_druk_dan_precies_een_herkansing():
         raise _http_fout(anthropic.RateLimitError, 429)
 
     events = await _verzamel(
-        vlam_host._llm_aanroep(altijd_druk, "claude", timeout=5, interval=1, wacht=0)
+        vlam_host._llm_aanroep(
+            altijd_druk, "claude", timeout=5, interval=1, wacht=0,
+            herkansingen=herkansingen,
+        )
     )
-    assert pogingen == 2
+    assert pogingen == 1 + herkansingen
+    assert len(_statussen(events)) == herkansingen
     fout = _fout(events)
     assert fout is not None and fout["code"] == "LLM_TE_DRUK"
+
+
+async def test_twee_verbindingsfouten_op_rij_overleven_de_standaard():
+    """Een verbindingsfout komt in de praktijk in een korte reeks; de default
+    van twee herkansingen vangt er twee op rij."""
+    pogingen = 0
+
+    async def twee_keer_weg():
+        nonlocal pogingen
+        pogingen += 1
+        if pogingen <= 2:
+            raise anthropic.APIConnectionError(request=httpx.Request("POST", "https://api.test"))
+        return "antwoord"
+
+    events = await _verzamel(
+        vlam_host._llm_aanroep(twee_keer_weg, "claude", timeout=5, interval=1, wacht=0)
+    )
+    assert _resultaat(events) == "antwoord"
+    assert pogingen == 3
 
 
 @pytest.mark.parametrize(

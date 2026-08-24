@@ -28,6 +28,7 @@ from config import (
     CLAUDE_TIMEOUT,
     LLM_HARTSLAG_INTERVAL,
     LLM_HERKANSING_WACHT,
+    LLM_HERKANSINGEN,
     LLM_MAX_TOKENS,
     MCP_SERVERS,
     TOOL_TIMEOUT,
@@ -908,9 +909,10 @@ async def _llm_aanroep(
     *,
     interval: float | None = None,
     wacht: float | None = None,
+    herkansingen: int | None = None,
     label: str = "",
 ) -> AsyncGenerator[dict, None]:
-    """Eén LLM-aanroep binnen één grens, met levensteken en één herkansing.
+    """Eén LLM-aanroep binnen één grens, met levensteken en herkansingen.
 
     Yieldt `status`-events zolang de aanroep loopt (elke `interval` seconden),
     en sluit af met `{"type": "_resultaat", "resultaat": ...}` of met een
@@ -920,16 +922,17 @@ async def _llm_aanroep(
 
     De SDK-clients staan op `max_retries=0`. Hun eigen retry zit binnen de
     grens en is voor de gebruiker onzichtbaar: een model dat 'te druk' is werd
-    daardoor als time-out gemeld. Hier krijgt de herkansing een status-event, en
-    deelt hij de grens met de eerste poging, zodat de gebruiker nooit langer
-    wacht dan de grens belooft.
+    daardoor als time-out gemeld. Hier krijgt elke herkansing een status-event,
+    en deelt hij de grens met de eerste poging, zodat de gebruiker nooit langer
+    wacht dan de grens belooft. De wachttijd verdubbelt per herkansing.
     """
     interval = LLM_HARTSLAG_INTERVAL if interval is None else interval
     wacht = LLM_HERKANSING_WACHT if wacht is None else wacht
+    herkansingen = LLM_HERKANSINGEN if herkansingen is None else herkansingen
     label = label or backend
     lus = asyncio.get_running_loop()
     deadline = lus.time() + timeout
-    herkanst = False
+    herkanst = 0
     while True:
         taak = asyncio.ensure_future(maak_aanroep())
         try:
@@ -951,15 +954,19 @@ async def _llm_aanroep(
                 return
         except Exception as e:
             fout = classificeer_llm_fout(e, backend, timeout)
+            pauze = wacht * (2**herkanst)
             if (
                 fout.code in _HERKANSBAAR
-                and not herkanst
-                and lus.time() + wacht < deadline
+                and herkanst < herkansingen
+                and lus.time() + pauze < deadline
             ):
-                herkanst = True
-                logger.warning("%s-call [%s], één herkansing: %s", label, fout.code, e)
+                herkanst += 1
+                logger.warning(
+                    "%s-call [%s], herkansing %d van %d na %.0f s: %s",
+                    label, fout.code, herkanst, herkansingen, pauze, e,
+                )
                 yield {"type": "status", "message": _HERKANSING_STATUS}
-                await asyncio.sleep(wacht)
+                await asyncio.sleep(pauze)
                 continue
             logger.error("%s-call mislukt [%s]: %s", label, fout.code, e)
             yield naar_event(fout)
@@ -1292,8 +1299,14 @@ class VLAMHost:
         tool_key = "regelrecht__execute_law"
         if tool_key in self.registry.tool_map:
             try:
-                raw = await self.registry.call_tool(
-                    tool_key, {"law": law, "service": service, "parameters": {}}
+                # Zelfde grens als elke bron-aanroep: zonder deze hield een
+                # bron die niet antwoordt de hele regelloop, en dus de stream,
+                # vast.
+                raw = await asyncio.wait_for(
+                    self.registry.call_tool(
+                        tool_key, {"law": law, "service": service, "parameters": {}}
+                    ),
+                    timeout=TOOL_TIMEOUT,
                 )
                 defs = json.loads(raw).get("data", {}).get("drempelwaarden")
                 if defs:
