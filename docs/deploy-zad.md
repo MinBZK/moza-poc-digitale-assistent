@@ -62,7 +62,7 @@ sessiestate van de respondent, dus uitrollen is een besluit, geen bijvangst.
 |---|---|
 | Deployment | `gebruikersonderzoek` |
 | Componenten | `dabackend-onderzoek` (backend, internal-only) en `proef-onderzoek` (frontend) |
-| Link | `https://proef-onderzoek-gebruikersonderzoek-pm-5sj.rig.prd1.gn2.quattro.rijksapps.nl` |
+| Link | `https://proef-onderzoek.gebruikersonderzoek-2026-03-moza.rijksapp.dev` |
 
 Waarom eigen componenten: env staat op ZAD **per component, projectbreed**. Een
 variabele op `dabackend` geldt dus in élke deployment waar dat component draait
