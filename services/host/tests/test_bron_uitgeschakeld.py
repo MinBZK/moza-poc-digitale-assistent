@@ -1,5 +1,6 @@
-"""Een bron die niet geconfigureerd is, is voor het model even weg als een bron
-die niet opkwam.
+"""Een bron die niet geconfigureerd is, staat uit; een bron die niet opkwam, heeft
+een storing. Het model krijgt ze allebei te horen, maar anders: over een storing
+meldt het wat er mist, over een uitgezette bron zwijgt het.
 
 `bronnen_offline` keek alleen naar servers die wél in de configuratie stonden
 maar niet startten. Schakel je een bron uit door hem uit de configuratie te
@@ -22,10 +23,12 @@ def _host(status: dict[str, str]) -> VLAMHost:
     return host
 
 
-def test_een_niet_geconfigureerde_bron_telt_als_weg():
+def test_een_niet_geconfigureerde_bron_staat_uit_en_is_geen_storing():
     """De wallet uit de configuratie halen is genoeg om hem uit te schakelen."""
     zonder_wallet = {n: "verbonden" for n in BRON_LABELS if n != "netbeheerder"}
-    assert "netbeheerder" in _host(zonder_wallet).bronnen_offline
+    host = _host(zonder_wallet)
+    assert host.bronnen_uit == ["netbeheerder"]
+    assert host.bronnen_offline == []
 
 
 def test_een_gestarte_bron_telt_niet_als_weg():
@@ -40,9 +43,10 @@ def test_een_bron_die_niet_opkwam_blijft_gemeld():
     assert "koop" in _host(status).bronnen_offline
 
 
-def test_de_lijst_blijft_gesorteerd_en_zonder_dubbelen():
-    """De lijst gaat de prompt in; een dubbele bron leest als een fout."""
+def test_de_lijsten_blijven_gesorteerd_en_gescheiden():
+    """De lijsten gaan de prompt in; een dubbele bron leest als een fout."""
     status = {n: "verbonden" for n in BRON_LABELS if n not in ("koop", "netbeheerder")}
-    offline = _host(status).bronnen_offline
-    assert offline == sorted(set(offline))
-    assert set(offline) == {"koop", "netbeheerder"}
+    status["koop"] = "niet beschikbaar"
+    host = _host(status)
+    assert host.bronnen_offline == ["koop"]
+    assert host.bronnen_uit == ["netbeheerder"]
