@@ -226,7 +226,7 @@ sequenceDiagram
     Host->>RVO: tools/call [zoek_regeling, trefwoord="energiebesparing"]
     Note over RVO: Zoekt in mock-regelingen<br/>op naam en beschrijving
     RVO-->>Host: 3 resultaten (EBR-2026, EIA-2026, ISDE-2026) + provenance
-    Host->>Gebruiker: "Er zijn 3 regelingen gevonden:<br/>1. Informatieplicht Energiebesparing (open, deadline 2027-12-01)<br/>2. Energie-investeringsaftrek EIA (open)<br/>3. Investeringssubsidie Duurzame Energie ISDE (open)"
+    Host->>Gebruiker: "Er zijn 3 regelingen gevonden:<br/>1. Informatieplicht Energiebesparing (open, deadline 2026-12-01)<br/>2. Energie-investeringsaftrek EIA (open)<br/>3. Investeringssubsidie Duurzame Energie ISDE (open)"
 
     Gebruiker->>Host: "Ik wil mijn energiebesparingsrapportage indienen"
     Note over Host: Muterende actie →<br/>eerst bedrijfsgegevens ophalen,<br/>dan bevestiging vragen

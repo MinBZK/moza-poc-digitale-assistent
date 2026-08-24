@@ -47,7 +47,7 @@ MOCK_REGELINGEN = [
         "id": "EBR-2026",
         "naam": "Informatieplicht Energiebesparing",
         "status": "open",
-        "deadline": "2027-12-01",
+        "deadline": "2026-12-01",
         "beschrijving": (
             "Bedrijven en instellingen die meer dan 50.000 kWh elektriciteit "
             "of 25.000 m3 aardgas per jaar verbruiken, moeten vierjaarlijks "
