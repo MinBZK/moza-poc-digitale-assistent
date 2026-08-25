@@ -208,7 +208,9 @@ def _regel_status_klaar_tekst(resultaat: dict) -> str:
     return " ".join(delen)
 
 
-def _maatregelen_status_tekst(maatregelen: dict | None) -> str | None:
+def _maatregelen_status_tekst(
+    maatregelen: dict | None, formulier_erbij: bool = True
+) -> str | None:
     """Tekst voor de tweede regel in de keten: de erkende maatregelen.
 
     De host draait die regel zelf zodra de energiebesparingsplicht geldt
@@ -219,11 +221,23 @@ def _maatregelen_status_tekst(maatregelen: dict | None) -> str | None:
     if not maatregelen:
         return None
     wacht_op = maatregelen.get("wacht_op")
+    if wacht_op == "opgave" and not formulier_erbij:
+        # Het formulier komt pas de beurt ná het oordeel (zie `draai()` in
+        # vlam_host.py). Zonder deze zin tikte het model de vragen en alle
+        # categorieën zelf uit, in proza die de frontend niet tot een formulier
+        # kan maken; de ondernemer typte dan zijn antwoorden los in de chat.
+        return (
+            "Voor de erkende maatregelen zijn nog een paar gegevens van de "
+            "ondernemer nodig. Het formulier daarvoor toont het systeem in de "
+            "volgende beurt. Noem de vragen en de categorieën NIET zelf. Sluit "
+            "af met één zin: dat u hierna een kort formulier laat zien om de "
+            "maatregelen te bepalen, en vraag of de ondernemer daarmee verder wil."
+        )
     if wacht_op == "opgave":
         return (
             "Voor de erkende maatregelen is nog nodig welke installaties en "
-            "gebouwdelen bij dit bedrijf voorkomen. Vraag dat via het formulier "
-            "en verzin de categorieën niet zelf."
+            "gebouwdelen bij dit bedrijf voorkomen. Het formulier daarvoor staat "
+            "bij dit antwoord; verwijs ernaar en verzin de categorieën niet zelf."
         )
     if wacht_op == "toestemming":
         return (
@@ -401,7 +415,9 @@ def _compose_regel_status(regel_status: dict | None, feiten: dict | None = None)
         )
     else:
         status = _regel_status_klaar_tekst(regel_status.get("resultaat") or {})
-    maatregelen_tekst = _maatregelen_status_tekst(regel_status.get("maatregelen"))
+    maatregelen_tekst = _maatregelen_status_tekst(
+        regel_status.get("maatregelen"), formulier_erbij=bool(regel_status.get("vraag"))
+    )
     if maatregelen_tekst:
         status = f"{status} {maatregelen_tekst}"
     feiten_tekst = _geoogste_feiten_tekst(feiten)
