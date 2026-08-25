@@ -239,4 +239,10 @@ def feiten_uit_tool(tool_naam: str, resultaat: str) -> dict[str, dict]:
         return {}
     if not isinstance(data, dict):
         return {}
-    return oogster(data)
+    try:
+        return oogster(data)
+    except (AttributeError, TypeError, KeyError) as e:
+        # Een geneste waarde van het verkeerde type (een lijst waar een dict
+        # hoort): geen feiten, geen afgebroken beurt.
+        logger.warning("Tool-resultaat van %s heeft een onverwachte vorm: %s", tool_naam, e)
+        return {}

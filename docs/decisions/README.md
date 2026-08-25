@@ -14,7 +14,7 @@ Beslissingen rond de Digitale Assistent. Lees de PDRs in volgorde — elke nieuw
 | [PDR-009](PDR-009-sessie-identiteit-host-side.md) | Bedrijfsidentiteit server-side bepaald door de host-sessie (MVP-01) | Geaccepteerd |
 | [PDR-010](PDR-010-sleutel-van-de-gebruiker.md) | De LLM-sleutel komt van de gebruiker, niet van de server (MVP-02) | Geaccepteerd |
 | [PDR-011](PDR-011-foutmeldingen-catalogus.md) | Foutmeldingen uit één catalogus, met wat er misging én wat je kunt doen | Geaccepteerd |
-| [PDR-013](PDR-013-timeoutgrenzen-op-basis-van-meting.md) | Time-outgrenzen op basis van meting, met levensteken en één herkansing | Geaccepteerd |
+| [PDR-013](PDR-013-timeoutgrenzen-op-basis-van-meting.md) | Time-outgrenzen op basis van meting, met levensteken en herkansingen | Geaccepteerd |
 
 ## Vervangen of ongeldig verklaarde beslissingen
 
