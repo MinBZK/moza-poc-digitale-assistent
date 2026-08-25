@@ -380,6 +380,50 @@ def _regel_status_dict(uitkomst: Uitkomst, maatregelen: Uitkomst | None = None) 
     return status
 
 
+# Verbruik dat de ondernemer in de chat typt in plaats van in het formulier:
+# "420.000 kWh en 140.000 m3", "elektriciteit 420000, gas 140000". Een eenheid
+# of een woord als elektriciteit/gas vlak vóór of ná het getal is het signaal;
+# een los getal telt niet, dat kan van alles zijn.
+_GETAL = r"(\d{1,3}(?:\.\d{3})+|\d+(?:,\d+)?)"
+_TEKST_OPGAVEN: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH",
+        re.compile(
+            rf"(?:(?:elektricite\w*|stroom\w*)\D{{0,25}}?{_GETAL}|{_GETAL}\s*kwh)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "JAARLIJKS_GASVERBRUIK_M3",
+        re.compile(
+            rf"(?:(?:aardgas\w*|gas\w*)\D{{0,25}}?{_GETAL}|{_GETAL}\s*(?:m3|m³|kuub|kubieke))",
+            re.IGNORECASE,
+        ),
+    ),
+)
+
+
+def _opgaven_uit_tekst(bericht: str) -> dict[str, object]:
+    """Verbruikscijfers uit een getypt bericht, als opgaven.
+
+    Het formulier is de bedoelde weg, maar een respondent typt zijn verbruik
+    ook gewoon in de chat. Zonder dit werd dat nooit een feit: de regelloop
+    bleef op de opgave wachten en de assistent vroeg het verbruik opnieuw,
+    terwijl het net gegeven was. Alleen getallen met een eenheid of een
+    verbruikswoord ernaast tellen; `_als_getal` leest de Nederlandse notatie.
+    """
+    opgaven: dict[str, object] = {}
+    for naam, patroon in _TEKST_OPGAVEN:
+        m = patroon.search(bericht or "")
+        if not m:
+            continue
+        ruw = next((g for g in m.groups() if g), None)
+        getal = _als_getal(ruw)
+        if getal is not None:
+            opgaven[naam] = getal
+    return opgaven
+
+
 def _als_getal(waarde: object) -> int | float | None:
     """Lees een getal zoals een ondernemer het typt.
 
@@ -1690,6 +1734,7 @@ class VLAMHost:
         feiten = self.feiten.setdefault(conv_key, {})
         if toestemming:
             self._leg_toestemming_vast(conv_key)
+        opgaven = {**_opgaven_uit_tekst(user_message), **(opgaven or {})}
         samenvoegen(feiten, _opgaven_als_feiten(opgaven))
         use_cli = mode.startswith("cli:")
         # Zie chat_stream: bij een leeg of onvolledig modelantwoord draaien we
@@ -1786,6 +1831,9 @@ class VLAMHost:
                 feiten = self.feiten.setdefault(conv_key, {})
                 if toestemming:
                     self._leg_toestemming_vast(conv_key)
+                # Het formulier wint van de tekst: wie beide stuurt, bedoelde het
+                # formulier.
+                opgaven = {**_opgaven_uit_tekst(user_message), **(opgaven or {})}
                 samenvoegen(feiten, _opgaven_als_feiten(opgaven))
                 # Beginstand van deze beurt. Loopt de beurt stuk op een leeg of
                 # onvolledig modelantwoord (_HERSTEL_CODES), dan draaien we
