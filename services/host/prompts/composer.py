@@ -209,7 +209,9 @@ def _regel_status_klaar_tekst(resultaat: dict) -> str:
 
 
 def _maatregelen_status_tekst(
-    maatregelen: dict | None, formulier_erbij: bool = True
+    maatregelen: dict | None,
+    formulier_erbij: bool = True,
+    lijst_formulier_erbij: bool = False,
 ) -> str | None:
     """Tekst voor de tweede regel in de keten: de erkende maatregelen.
 
@@ -237,7 +239,8 @@ def _maatregelen_status_tekst(
         return (
             "Voor de erkende maatregelen is nog nodig welke installaties en "
             "gebouwdelen bij dit bedrijf voorkomen. Het formulier daarvoor staat "
-            "bij dit antwoord; verwijs ernaar en verzin de categorieën niet zelf."
+            "bij dit antwoord: verwijs ernaar in één zin en herhaal de vragen en "
+            "de categorieën NIET in uw tekst."
         )
     if wacht_op == "toestemming":
         return (
@@ -273,11 +276,23 @@ def _maatregelen_status_tekst(
     if invoer:
         delen.append(invoer)
     delen.append("De maatregelen zijn: " + _maatregelen_opsomming(lijst) + ".")
-    delen.append(
-        "Noem de maatregelen uit deze lijst en verzin er geen bij. Elke "
-        "maatregel geldt onder de randvoorwaarden die erbij staan; presenteer ze "
-        "als voorwaarden om na te gaan, niet als vaststaand."
-    )
+    if lijst_formulier_erbij:
+        # De frontend maakt van de lijst op het answer-event een formulier
+        # met per maatregel "uitgevoerd / niet uitgevoerd". Dezelfde lijst
+        # daarnaast in tekst is dubbel en lang (23 regels); de ondernemer
+        # vult het formulier in, niet de tekst.
+        delen.append(
+            "Deze lijst staat als formulier bij dit antwoord. Som de maatregelen "
+            "NIET op in uw tekst: noem alleen hoeveel het er zijn en de "
+            "categorieën, en vraag de ondernemer per maatregel in het formulier "
+            "aan te geven of die is uitgevoerd. Verzin geen maatregelen bij."
+        )
+    else:
+        delen.append(
+            "Noem de maatregelen uit deze lijst en verzin er geen bij. Elke "
+            "maatregel geldt onder de randvoorwaarden die erbij staan; presenteer ze "
+            "als voorwaarden om na te gaan, niet als vaststaand."
+        )
     return " ".join(delen)
 
 
@@ -401,6 +416,13 @@ def _compose_regel_status(regel_status: dict | None, feiten: dict | None = None)
             "de ondernemer nodig (PDR-008). Vraag daar EXPLICIET om voordat u die "
             "bron noemt of gebruikt, en wacht op een duidelijk antwoord."
         )
+    elif wacht_op == "opgave" and regel_status.get("vraag"):
+        status = (
+            "Er is een gegeven nodig dat alleen de ondernemer weet. Het formulier "
+            "daarvoor staat bij dit antwoord: verwijs ernaar in één zin en herhaal "
+            "de vragen NIET in uw tekst, ook niet als invulregels met streepjes. "
+            "Dit is geen gegeven dat u zelf kunt opzoeken of aannemen."
+        )
     elif wacht_op == "opgave":
         status = (
             "Er is een gegeven nodig dat alleen de ondernemer weet. Vraag dat via "
@@ -416,7 +438,9 @@ def _compose_regel_status(regel_status: dict | None, feiten: dict | None = None)
     else:
         status = _regel_status_klaar_tekst(regel_status.get("resultaat") or {})
     maatregelen_tekst = _maatregelen_status_tekst(
-        regel_status.get("maatregelen"), formulier_erbij=bool(regel_status.get("vraag"))
+        regel_status.get("maatregelen"),
+        formulier_erbij=bool(regel_status.get("vraag")),
+        lijst_formulier_erbij=bool(regel_status.get("maatregelen_lijst_erbij")),
     )
     if maatregelen_tekst:
         status = f"{status} {maatregelen_tekst}"
