@@ -1142,6 +1142,11 @@ class VLAMHost:
         # eerst de uitkomst en waar die vandaan komt, dan pas de vragenlijst.
         self._oordeel_gemeld: dict[str, bool] = {}
         self._maatregelen_gemeld: dict[str, bool] = {}
+        # De laatste regelstatus per gesprek: wat de regelloop deze beurt al
+        # bepaalde. Roept het model daarna zelf dezelfde regel aan, dan krijgt
+        # het dit terug in plaats van een verse engine-aanroep met andere
+        # parameters (zie `_execute_tools`).
+        self._regel_status_laatst: dict[str, dict] = {}
         # Houdt bij welke servers gelukt/mislukt zijn
         self.server_status: dict[str, str] = {}
 
@@ -1811,6 +1816,7 @@ class VLAMHost:
                         async for event in self._regel_status(feiten, session_kvk, conv_key):
                             if event["type"] == "regel_status":
                                 regel_status = event["status"]
+                                self._regel_status_laatst[conv_key] = regel_status
                             else:
                                 yield event
                     if llm == "vlam":
@@ -1885,7 +1891,9 @@ class VLAMHost:
         zolang toestemming niet vastligt — zie `_execute_tools`.
         """
         tools = self.registry.get_anthropic_tools()
-        system_prompt = self._system_prompt("claude", regel_status=regel_status, feiten=feiten)
+        system_prompt = self._system_prompt(
+            "claude", regel_status=self._met_lijst_vlag(regel_status, conv_key), feiten=feiten
+        )
 
         # Per beurt (niet per iteratie): de tool-aanroep en het uiteindelijke
         # tekstantwoord zitten meestal in verschillende agentic-stappen.
@@ -1996,7 +2004,9 @@ class VLAMHost:
         zolang toestemming niet vastligt.
         """
         tools_openai = self.registry.get_openai_tools()
-        system_prompt = self._system_prompt("vlam", regel_status=regel_status, feiten=feiten)
+        system_prompt = self._system_prompt(
+            "vlam", regel_status=self._met_lijst_vlag(regel_status, conv_key), feiten=feiten
+        )
         openai_messages = self._to_openai_messages(messages, system_prompt)
 
         # Per beurt (niet per iteratie): de tool-aanroep en het uiteindelijke
@@ -2346,7 +2356,9 @@ class VLAMHost:
         if not claude.api_key:
             return _geen_sleutel_fout("claude").tekst
         tools = self.registry.get_anthropic_tools()
-        system_prompt = self._system_prompt("claude", regel_status=regel_status, feiten=feiten)
+        system_prompt = self._system_prompt(
+            "claude", regel_status=self._met_lijst_vlag(regel_status, conv_key), feiten=feiten
+        )
 
         max_iterations = 10
         for _ in range(max_iterations):
@@ -2408,7 +2420,9 @@ class VLAMHost:
         tool-aanroep van het model.
         """
         tools_openai = self.registry.get_openai_tools()
-        system_prompt = self._system_prompt("vlam", regel_status=regel_status, feiten=feiten)
+        system_prompt = self._system_prompt(
+            "vlam", regel_status=self._met_lijst_vlag(regel_status, conv_key), feiten=feiten
+        )
         openai_messages = self._to_openai_messages(messages, system_prompt)
 
         max_iterations = 10
@@ -2483,6 +2497,27 @@ class VLAMHost:
     # Helpers
     # ------------------------------------------------------------------
 
+    def _al_bepaalde_regel(self, tool_key: str, arguments: dict, conv_key: str) -> str | None:
+        """De uitkomst van de regelloop, als het model een al afgeronde regel aanroept.
+
+        Alleen voor `regelrecht__execute_law` op de twee wetten die de regelloop
+        zelf draait, en alleen als die regel deze beurt `klaar` is. Anders None:
+        dan gaat de aanroep gewoon naar de bron.
+        """
+        if tool_key != "regelrecht__execute_law":
+            return None
+        status = self._regel_status_laatst.get(conv_key) or {}
+        law = arguments.get("law")
+        if law == _INFORMATIEPLICHT_LAW and status.get("klaar"):
+            resultaat = status.get("resultaat")
+        elif law == _MAATREGELEN_LAW and (status.get("maatregelen") or {}).get("klaar"):
+            resultaat = status["maatregelen"].get("resultaat")
+        else:
+            return None
+        if not isinstance(resultaat, dict):
+            return None
+        return json.dumps({"data": resultaat}, ensure_ascii=False)
+
     async def _bron_aanroep_gated(
         self, aanroep, tool_key: str, arguments: dict, conv_key: str
     ) -> tuple[str, object, bool]:
@@ -2545,6 +2580,17 @@ class VLAMHost:
         for tool_use in tool_uses:
             arguments = _inject_session_kvk(tool_use.name, tool_use.input, session_kvk)
             logger.info("Tool-aanroep [claude]: %s (velden: %s)", tool_use.name, _arg_keys(arguments))
+            bekend = self._al_bepaalde_regel(tool_use.name, arguments, conv_key)
+            if bekend is not None:
+                # De regelloop had deze regel al klaar. Het model roept hem
+                # soms toch zelf aan, met eigen `overrides` of zonder de
+                # opgaven, en kreeg dan "ontbrekende gegevens" terug - waarna
+                # het een technisch probleem meldde dat er niet was.
+                logger.info("Regel al bepaald door de regelloop; uitkomst hergebruikt")
+                tool_results.append(
+                    {"type": "tool_result", "tool_use_id": tool_use.id, "content": bekend}
+                )
+                continue
             result, fout, ok = await self._bron_aanroep_gated(
                 partial(self.registry.call_tool, tool_use.name, arguments),
                 tool_use.name,
@@ -2610,6 +2656,21 @@ class VLAMHost:
             return
         self.toestemming.setdefault(conv_key, set()).add(scope)
 
+    def _met_lijst_vlag(self, regel_status: dict | None, conv_key: str) -> dict | None:
+        """De regelstatus plus of de maatregelenlijst déze beurt als formulier meegaat.
+
+        De lijst gaat één keer per gesprek als `maatregelen` op het answer-event
+        (de frontend maakt er een formulier van); de prompt hoort dan te zeggen
+        dat het model de lijst niet ook in tekst opsomt. Latere beurten (het
+        rapport vóór indienen) noemen de maatregelen wél per stuk.
+        """
+        if not regel_status or not maatregelen_uit_status(regel_status):
+            return regel_status
+        return {
+            **regel_status,
+            "maatregelen_lijst_erbij": not self.maatregelen_al_gemeld(conv_key),
+        }
+
     def maatregelen_al_gemeld(self, conv_key: str) -> bool:
         """Of dit gesprek de maatregelenlijst al op het scherm heeft gehad."""
         return self._maatregelen_gemeld.get(conv_key, False)
@@ -2645,5 +2706,6 @@ class VLAMHost:
             self._gespreksmerken.pop(sleutel, None)
             self._oordeel_gemeld.pop(sleutel, None)
             self._maatregelen_gemeld.pop(sleutel, None)
+            self._regel_status_laatst.pop(sleutel, None)
             self._toestemming_gevraagd.pop(sleutel, None)
             self._toestemming_zwevend.pop(sleutel, None)
