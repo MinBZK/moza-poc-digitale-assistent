@@ -585,7 +585,8 @@ gemodelleerd in `regelrecht-corpus`, branch
 `traject/financieel-cv-validatie-df48ddd1`, commit `aa04ff3`) en
 één die niet meer bestaat (LIV). Welke wet je aanroept en met welke status
 bepaalt de uitkomst; de vertaling van "afstand tot de arbeidsmarkt" naar deze
-statussen is de stap die deze PDR buiten het model legt.*
+statussen is de stap die deze PDR buiten het model legt. Eén label in het
+beeld overlapt een kader; het beeld komt zo uit de bronrepository.*
 
 - **Zelfde voorziening, andere vindplaats.** Wet WIA artikel 35, lid 4 sluit
   Wajong-gerechtigden uit van jobcoaching en werkplekaanpassing, maar de Wajong

@@ -10,7 +10,7 @@
 | 4 | 6 | 68.5 (103.7) | [5.7, 40.4, 10.1, 3.8, 4.5, 4.0] | 2 | 2 | 2 | geen | - | - | 0 | 2 | - | 7/30 |
 | 5 | 6 | 54.0 (54.0) | [3.5, 28.0, 9.3, 4.8, 4.5, 3.9] | 2 | 2 | 2 | geen | - | - | 0 | 2 | - | 7/32 |
 
-Duur per beurt over alle runs: mediaan 4.8 s, max 40.4 s, som van de beurten per run 49–68 s, mediaan 59 s (wandkloktijd incl. wachten buiten de beurten: mediaan 59 s)
+Duur per beurt over alle runs: mediaan 4.8 s, max 40.4 s, som van de (op 0,1 s afgeronde) beurten per run 49–68 s, mediaan 59 s (wandkloktijd incl. wachten buiten de beurten: mediaan 59 s)
 
 ### Beurt 1 per run (wat de ondernemer leest vóór enige bron)
 
@@ -90,7 +90,7 @@ Duur per beurt over alle runs: mediaan 4.8 s, max 40.4 s, som van de beurten per
 | 4 | 7 | 94.8 (94.8) | [4.6, 10.9, 20.3, 10.7, 6.3, 25.2, 16.8] | 1 | 1 | 3 | geen | - | 1 december 2026 | 0 | 14 | 1:TOESTEMMING_VEREIST(kvk), 2:TOESTEMMING_VEREIST(netbeheerder) | 8/44 |
 | 5 | 7 | 125.0 (125.0) | [35.7, 14.7, 20.1, 5.6, 6.2, 24.9, 17.8] | 1 | 1 | 3 | geen | - | 1 december 2026 | 0 | 14 | 1:TOESTEMMING_VEREIST(kvk) | 4/44 |
 
-Duur per beurt over alle runs: mediaan 16.0 s, max 43.2 s, som van de beurten per run 95–146 s, mediaan 125 s (wandkloktijd incl. wachten buiten de beurten: mediaan 125 s)
+Duur per beurt over alle runs: mediaan 16.0 s, max 43.2 s, som van de (op 0,1 s afgeronde) beurten per run 95–146 s, mediaan 125 s (wandkloktijd incl. wachten buiten de beurten: mediaan 125 s)
 
 ### Beurt 1 per run (wat de ondernemer leest vóór enige bron)
 

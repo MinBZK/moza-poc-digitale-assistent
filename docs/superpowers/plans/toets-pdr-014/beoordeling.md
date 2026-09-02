@@ -16,6 +16,7 @@
 > rapport zijn hernummerd (de peiling-beperking is nu 3).
 > De doorlooptijden "94,8–162,6 s" zijn wandkloktijd inclusief wachten buiten
 > de beurten; de som van de beurten is 95–146 s.
+> Onder A/C2 staat "5/9 main-antwoorden"; de regex uit `analyse.py` geeft 4/9.
 
 Datum 2026-09-02. Gelezen: PDR-014, het meetrapport van 2 september, de
 bestanden onder `toets-pdr-014/` (runs-main.json, runs-f22f063.json,

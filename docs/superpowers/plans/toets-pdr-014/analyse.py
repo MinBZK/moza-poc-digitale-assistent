@@ -105,7 +105,7 @@ def main(mappen: list[str]) -> None:
         print()
         alle_s = [s for r in sel for s in r["seconden"] if s]
         if alle_s:
-            print(f"Duur per beurt over alle runs: mediaan {statistics.median(alle_s):.1f} s, max {max(alle_s):.1f} s, som van de beurten per run {min(r['beurten_s'] for r in sel):.0f}–{max(r['beurten_s'] for r in sel):.0f} s, mediaan {statistics.median([r['beurten_s'] for r in sel]):.0f} s (wandkloktijd incl. wachten buiten de beurten: mediaan {statistics.median([r['totaal_s'] for r in sel if r['totaal_s']]):.0f} s)\n")
+            print(f"Duur per beurt over alle runs: mediaan {statistics.median(alle_s):.1f} s, max {max(alle_s):.1f} s, som van de (op 0,1 s afgeronde) beurten per run {min(r['beurten_s'] for r in sel):.0f}–{max(r['beurten_s'] for r in sel):.0f} s, mediaan {statistics.median([r['beurten_s'] for r in sel]):.0f} s (wandkloktijd incl. wachten buiten de beurten: mediaan {statistics.median([r['totaal_s'] for r in sel if r['totaal_s']]):.0f} s)\n")
         print("### Beurt 1 per run (wat de ondernemer leest vóór enige bron)\n")
         for r in sel:
             print(f"**run {r['run']}** ({r['beurt1_s']} s, tools: {r['beurt1_tools'] or 'geen'}) — toezeggingen: {', '.join(r['beurt1_toezeggingen'].keys()) or 'geen'}\n")
