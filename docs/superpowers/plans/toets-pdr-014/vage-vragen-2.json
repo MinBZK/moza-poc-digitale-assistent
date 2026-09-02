@@ -1,0 +1,101 @@
+[
+ {
+  "label": "main",
+  "vraag": "hoe zit dat dan met die verplichting",
+  "run": 1,
+  "seconden": 4.6,
+  "tools": [
+   "regelrecht__execute_law"
+  ],
+  "fouten": [],
+  "antwoord": "Ik wil u graag helpen, maar ik weet nog niet precies welke verplichting u bedoelt. Bedoelt u een van deze?\n\n1. Of de energiebesparingsplicht voor uw bedrijf geldt. Vraag dan bijvoorbeeld: \"Geldt de energiebesparingsplicht voor mijn bedrijf?\"\n2. Wat u moet doen voor de informatieplicht, dus de vierjaarlijkse rapportage aan RVO. Vraag dan bijvoorbeeld: \"Wanneer moet ik rapporteren over energiebesparing?\"\n3. De wettekst zelf. Vraag dan bijvoorbeeld: \"Laat de tekst van het Besluit activiteiten leefomgeving zien.\"\n\nLaat u weten welke van deze het dichtst bij uw vraag komt?"
+ },
+ {
+  "label": "main",
+  "vraag": "hoe zit dat dan met die verplichting",
+  "run": 2,
+  "seconden": 5.0,
+  "tools": [
+   "regelrecht__execute_law"
+  ],
+  "fouten": [],
+  "antwoord": "Ik wil u graag helpen, maar ik weet nog niet precies welke verplichting u bedoelt. Bedoelt u een van deze?\n\n1. Of de energiebesparingsplicht voor uw bedrijf geldt. Vraag dan bijvoorbeeld: \"Geldt de energiebesparingsplicht voor mijn bedrijf?\"\n2. Wat u moet doen als de plicht geldt, zoals de vierjaarlijkse rapportage aan RVO. Vraag dan bijvoorbeeld: \"Wanneer moet ik rapporteren over energiebesparing?\"\n3. De wettekst zelf. Vraag dan bijvoorbeeld: \"Laat de tekst van het Besluit activiteiten leefomgeving zien.\"\n\nLaat u weten welke het dichtst bij uw vraag komt?"
+ },
+ {
+  "label": "main",
+  "vraag": "hoe zit dat dan met die verplichting",
+  "run": 3,
+  "seconden": 5.1,
+  "tools": [
+   "regelrecht__execute_law"
+  ],
+  "fouten": [],
+  "antwoord": "Ik wil u graag helpen, maar ik weet nog niet precies welke verplichting u bedoelt. Bedoelt u een van deze?\n\n1. Of de energiebesparingsplicht voor uw bedrijf geldt. Vraag dan bijvoorbeeld: \"Geldt de energiebesparingsplicht voor mijn bedrijf?\"\n2. Wat u moet doen als de plicht geldt, zoals de vierjaarlijkse rapportage aan RVO. Vraag dan bijvoorbeeld: \"Wanneer moet ik rapporteren over energiebesparing?\"\n3. De wettekst zelf. Vraag dan bijvoorbeeld: \"Laat de tekst van het Besluit activiteiten leefomgeving zien.\"\n\nLaat u weten welke van deze het dichtst bij uw vraag komt?"
+ },
+ {
+  "label": "main",
+  "vraag": "Kom ik in aanmerking voor subsidie als ik iemand met een Wajong-uitkering aanneem voor 32 uur per week?",
+  "run": 1,
+  "seconden": 6.6,
+  "tools": [
+   "regelrecht__execute_law"
+  ],
+  "fouten": [],
+  "antwoord": "Dit gaat over loonkostensubsidie en arbeidsparticipatie voor mensen met een uitkering. Deze vraag valt buiten mijn kennisgebied. Voor vragen over subsidies bij het in dienst nemen van mensen met een Wajong-uitkering kunt u terecht bij het UWV (uwv.nl) of de Rijksdienst voor Ondernemend Nederland (rvo.nl).\n\nIk ben de digitale assistent van MijnOverheid Zakelijk. Ik help u nu met bedrijfsgegevens, verplichtingen, regelgeving en subsidies. Daar komt steeds meer bij.\n\nWilt u bijvoorbeeld weten of de energiebesparingsplicht voor uw bedrijf geldt? Vraag dan: \"Geldt de energiebesparingsplicht voor mijn bedrijf?\""
+ },
+ {
+  "label": "main",
+  "vraag": "Kom ik in aanmerking voor subsidie als ik iemand met een Wajong-uitkering aanneem voor 32 uur per week?",
+  "run": 2,
+  "seconden": 6.8,
+  "tools": [
+   "regelrecht__execute_law"
+  ],
+  "fouten": [],
+  "antwoord": "Dit gaat over arbeidsmarktsubsidies en regelingen rondom mensen met een arbeidsbeperking. Deze vraag valt buiten mijn kennisgebied. Voor informatie over loonkostensubsidie bij het in dienst nemen van iemand met een Wajong-uitkering kunt u terecht bij het UWV of de Rijksdienst voor Ondernemend Nederland (RVO).\n\nIk ben de digitale assistent van MijnOverheid Zakelijk. Ik help u nu met bedrijfsgegevens, verplichtingen, regelgeving en subsidies op het gebied van energie en milieu. Daar komt steeds meer bij.\n\nU kunt mij bijvoorbeeld vragen: \"Welke energiesubsidies kan ik aanvragen voor mijn bedrijf?\""
+ },
+ {
+  "label": "main",
+  "vraag": "Kom ik in aanmerking voor subsidie als ik iemand met een Wajong-uitkering aanneem voor 32 uur per week?",
+  "run": 3,
+  "seconden": 6.9,
+  "tools": [
+   "regelrecht__execute_law"
+  ],
+  "fouten": [],
+  "antwoord": "Dit gaat over arbeidsmarktsubsidie en het in dienst nemen van mensen met een uitkering. Deze vraag valt buiten mijn kennisgebied. Voor informatie over loonkostensubsidie en het aannemen van mensen met een Wajong-uitkering kunt u terecht bij UWV (uwv.nl) of de RVO (rvo.nl). Ook uw gemeente of een arbeidsdeskundige kan u verder helpen.\n\nIk ben de digitale assistent van MijnOverheid Zakelijk. Ik help u nu met bedrijfsgegevens, verplichtingen, regelgeving en subsidies. Daar komt steeds meer bij.\n\nWilt u bijvoorbeeld weten of er energiesubsidies beschikbaar zijn voor uw bedrijf? Vraag dan: \"Welke energiesubsidies kan ik aanvragen?\""
+ },
+ {
+  "label": "main",
+  "vraag": "Hoeveel loonkostensubsidie krijg ik als ik iemand uit de banenafspraak aanneem?",
+  "run": 1,
+  "seconden": 6.0,
+  "tools": [
+   "regelrecht__execute_law"
+  ],
+  "fouten": [],
+  "antwoord": "Dit gaat over loonkostensubsidie en de banenafspraak. Deze vraag valt buiten mijn kennisgebied. Voor informatie over loonkostensubsidie kunt u terecht bij het UWV (uwv.nl) of de gemeente waar uw bedrijf is gevestigd. Zij voeren de banenafspraak uit en kunnen u vertellen op welk bedrag u recht heeft.\n\nIk ben de digitale assistent van MijnOverheid Zakelijk. Ik help u nu met bedrijfsgegevens, verplichtingen, regelgeving en subsidies. Daar komt steeds meer bij.\n\nWilt u bijvoorbeeld weten welke gegevens er over uw bedrijf in het Handelsregister staan? Vraag dan: \"Wat zijn mijn bedrijfsgegevens?\""
+ },
+ {
+  "label": "main",
+  "vraag": "Hoeveel loonkostensubsidie krijg ik als ik iemand uit de banenafspraak aanneem?",
+  "run": 2,
+  "seconden": 4.9,
+  "tools": [
+   "regelrecht__execute_law"
+  ],
+  "fouten": [],
+  "antwoord": "Dit gaat over loonkostensubsidie en de banenafspraak. Deze vraag valt buiten mijn kennisgebied. Voor informatie over loonkostensubsidie kunt u terecht bij het UWV of de gemeente waar uw bedrijf is gevestigd.\n\nIk ben de digitale assistent van MijnOverheid Zakelijk. Ik help u nu met bedrijfsgegevens, verplichtingen, regelgeving en subsidies. Daar komt steeds meer bij.\n\nWilt u bijvoorbeeld weten welke energiesubsidies er voor uw bedrijf beschikbaar zijn? Vraag dan: \"Welke energiesubsidies kan ik aanvragen?\""
+ },
+ {
+  "label": "main",
+  "vraag": "Hoeveel loonkostensubsidie krijg ik als ik iemand uit de banenafspraak aanneem?",
+  "run": 3,
+  "seconden": 5.2,
+  "tools": [
+   "regelrecht__execute_law"
+  ],
+  "fouten": [],
+  "antwoord": "Dit gaat over loonkostensubsidie en de banenafspraak. Deze vraag valt buiten mijn kennisgebied. Voor informatie over loonkostensubsidie kunt u terecht bij het UWV (uwv.nl) of uw gemeente.\n\nIk ben de digitale assistent van MijnOverheid Zakelijk. Ik help u nu met bedrijfsgegevens, verplichtingen, regelgeving en subsidies. Daar komt steeds meer bij.\n\nWilt u bijvoorbeeld weten welke subsidies en regelingen van RVO beschikbaar zijn voor uw bedrijf? Vraag dan: \"Welke energiesubsidies zijn er voor mijn bedrijf?\""
+ }
+]
