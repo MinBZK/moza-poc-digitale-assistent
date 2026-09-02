@@ -13,22 +13,12 @@ gemeld worden, met het alternatief voor de gebruiker (`bronnen_status.md`).
 
 from pathlib import Path
 
-import pytest
-
 import vlam_host
+from config import MCP_SERVER_ENV_KEYS
 from prompts.composer import compose_system_prompt
 
 STORING_KOP = "BESCHIKBAARHEID VAN BRONNEN"
 ALLE = ("kvk", "koop", "regelrecht", "rvo", "netbeheerder")
-
-
-@pytest.fixture(autouse=True)
-def _configuratie_per_test(monkeypatch):
-    """`bronnen_uit` leest de configuratie (welke bronnen zijn ingericht), niet
-    de status; elke test zet de configuratie gelijk aan de status die hij
-    opgeeft en krijgt hem daarna netjes terug."""
-    monkeypatch.setattr(vlam_host, "MCP_SERVERS", dict(vlam_host.MCP_SERVERS))
-    monkeypatch.setattr(vlam_host, "MCP_SERVERS_UIT", {})
 
 
 def _host(status: dict[str, str]) -> vlam_host.VLAMHost:
@@ -36,7 +26,7 @@ def _host(status: dict[str, str]) -> vlam_host.VLAMHost:
     host.server_status = status
     vlam_host.MCP_SERVERS = {naam: Path(f"{naam}/server.py") for naam in status}
     vlam_host.MCP_SERVERS_UIT = {
-        naam: env for naam, env in vlam_host.MCP_SERVER_ENV_KEYS.items() if naam not in status
+        naam: env for naam, env in MCP_SERVER_ENV_KEYS.items() if naam not in status
     }
     return host
 

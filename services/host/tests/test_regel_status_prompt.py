@@ -300,3 +300,21 @@ def test_toestemming_zonder_bron_valt_terug_op_de_wallet():
         "claude", has_tools=True, regel_status={"wacht_op": "toestemming"}
     )
     assert "Voor de bron de Business Wallet is eerst toestemming" in prompt
+
+
+@pytest.mark.parametrize("bron", ["Business Wallet", "KvK Handelsregister"])
+def test_maatregelen_toestemming_noemt_de_bron_en_verbiedt_de_eigen_aanroep(bron):
+    """De maatregelen-tak had dezelfde blinde vlek als de eerste regel: "een
+    bron" zonder naam, en niets over de tool niet zelf aanroepen."""
+    prompt = compose_system_prompt(
+        "claude",
+        has_tools=True,
+        regel_status={
+            "klaar": True,
+            "wacht_op": None,
+            "resultaat": {},
+            "maatregelen": {"klaar": False, "wacht_op": "toestemming", "toestemming_bron": bron},
+        },
+    )
+    assert f"toestemming van de ondernemer voor de bron {bron}" in prompt
+    assert "NIET zelf aan" in prompt

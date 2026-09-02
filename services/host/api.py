@@ -584,10 +584,7 @@ async def list_tools():
 @app.get("/health")
 async def health():
     """Gezondheidscontrole met status van backends en MCP-servers."""
-    return {
-        "status": "actief",
-        **host.get_status(),
-    }
+    return host.get_status()
 
 
 @app.get("/regelrecht/definities")

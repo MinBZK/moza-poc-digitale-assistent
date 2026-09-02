@@ -243,9 +243,12 @@ def _maatregelen_status_tekst(
             "de categorieën NIET in uw tekst."
         )
     if wacht_op == "toestemming":
+        bron = maatregelen.get("toestemming_bron") or "de Business Wallet"
         return (
-            "De maatregelenlijst wacht nog op toestemming van de ondernemer voor "
-            "een bron. Vraag daar EXPLICIET om."
+            f"De maatregelenlijst wacht nog op toestemming van de ondernemer voor "
+            f"de bron {bron}. Vraag daar EXPLICIET om, roep de tool van die bron "
+            "NIET zelf aan (het systeem haalt de gegevens op zodra het akkoord is "
+            "vastgelegd), en wacht op een duidelijk antwoord."
         )
     if not maatregelen.get("klaar"):
         return (

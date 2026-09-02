@@ -30,7 +30,6 @@ from config import (
     LLM_HERKANSING_WACHT,
     LLM_HERKANSINGEN,
     LLM_MAX_TOKENS,
-    MCP_SERVER_ENV_KEYS,
     MCP_SERVERS,
     MCP_SERVERS_UIT,
     TOOL_TIMEOUT,
@@ -380,6 +379,10 @@ def _regel_status_dict(uitkomst: Uitkomst, maatregelen: Uitkomst | None = None) 
             "reden": maatregelen.reden,
             "resultaat": maatregelen.resultaat,
         }
+        if maatregelen.wacht_op == "toestemming":
+            # Zelfde reden als hierboven: het model moet weten welke bron het
+            # akkoord vergt, anders roept het de tool zelf aan.
+            status["maatregelen"]["toestemming_bron"] = maatregelen.bron
     return status
 
 
@@ -1193,12 +1196,11 @@ class VLAMHost:
         elke bron aan; hier wordt een afwijking zichtbaar zonder in de
         configuratie te hoeven kijken.
         """
-        for naam in self.bronnen_uit:
-            env_key = MCP_SERVERS_UIT.get(naam) or MCP_SERVER_ENV_KEYS.get(naam, "?")
+        for naam, env_key in sorted(MCP_SERVERS_UIT.items()):
             logger.warning(
                 "Bron '%s' (%s) staat bewust uit: %s heeft een uitzet-waarde. "
-                "Standaard staat deze bron aan; verwijder de variabele (een lege "
-                "waarde zet hem ook uit) om hem weer in te schakelen.",
+                "Standaard staat deze bron aan; verwijder de variabele of maak "
+                "hem leeg om hem weer in te schakelen.",
                 naam,
                 BRON_LABELS.get(naam, naam),
                 env_key,
@@ -1227,7 +1229,7 @@ class VLAMHost:
         instructie de bron nooit te noemen. Anders zegt het "uw Business Wallet
         is momenteel niet beschikbaar" tegen iemand voor wie die nooit bestond.
         """
-        return sorted(naam for naam in BRON_LABELS if naam not in MCP_SERVERS)
+        return sorted(MCP_SERVERS_UIT)
 
     @property
     def cli_bronnen_offline(self) -> list[str]:
@@ -1297,7 +1299,12 @@ class VLAMHost:
             "regelrecht": (CLI_DIR / "regelrecht-cli").is_file(),
             "rvo": (CLI_DIR / "rvo-cli").is_file(),
         }
+        # "gedegradeerd" zodra een bron uitstaat of niet opkwam: de
+        # readiness-probe kijkt naar de HTTP-status, maar wie /health leest
+        # hoort in één woord te zien dat er iets afwijkt.
+        gezond = not self.bronnen_uit and not self.bronnen_offline
         return {
+            "status": "actief" if gezond else "gedegradeerd",
             "backends": {
                 "claude": bool(ANTHROPIC_API_KEY),
                 "vlam": self.vlam_client is not None,

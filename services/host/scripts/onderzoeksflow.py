@@ -603,16 +603,20 @@ def draai(loop: Loop, persona: Persona) -> None:
         f"backend {loop.mode} is beschikbaar",
         json.dumps(gezond["backends"]),
     )
-    ontbreekt = [n for n, s in gezond["servers"].items() if s != "verbonden"]
+    # Toets tegen de vijf bekende bronnen, niet tegen wat `servers` toevallig
+    # bevat: een bewust uitgezette bron staat daar niet in en zou anders
+    # ongemerkt passeren.
+    ontbreekt = sorted(
+        n for n in errors.BRON_LABELS if gezond["servers"].get(n) != "verbonden"
+    )
     loop.controleer(
         "health",
         not ontbreekt,
         "alle vijf de bronnen zijn verbonden",
-        f"niet verbonden: {ontbreekt}",
+        f"niet verbonden of uitgezet: {ontbreekt}",
     )
-    # Een bewust uitgezette bron staat niet in `servers` en zou hierboven
-    # ongemerkt passeren; /health meldt hem apart. De Business Wallet hoort
-    # standaard aan, dus dit hoort leeg te zijn.
+    # De Business Wallet hoort standaard aan; /health meldt een uitgezette
+    # bron apart onder `bronnen_uit`.
     uit = gezond.get("bronnen_uit", [])
     loop.controleer(
         "health",

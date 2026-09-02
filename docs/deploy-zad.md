@@ -41,32 +41,31 @@ staat los daarvan in de component-config.
 - Geen `ANTHROPIC_API_KEY` / `VLAM_API_KEY`: gebruikers leveren hun eigen sleutel
   via de UI (PDR-010).
 - **Geen `MCP_SERVER_NETBEHEERDER`.** De EU Business Wallet (netbeheerder-mock)
-  staat standaard **aan**: is de variabele afwezig, dan start de host de server
-  op het standaardpad. Uitzetten gebeurt met een uitzet-waarde: `uit`, `off`,
-  `none`, `geen` **of een lege waarde**. De variabele leegmaken in de ZAD-UI
-  zet de wallet dus óók uit; hij moet worden **verwijderd**. Een pad als waarde
-  (zoals `compose.yaml` doet) zet hem aan en geeft geen waarschuwing.
+  staat standaard **aan**: is de variabele afwezig of leeg, dan start de host
+  de server op het standaardpad; een pad als waarde (zoals `compose.yaml`
+  doet) zet hem ook aan. Uitzetten kan alleen met een uitzet-woord (`uit`,
+  `off`, `none`, `geen`, `false`, `no`, `nee`, `0`, `disabled`).
   `MCP_SERVER_NETBEHEERDER=uit` was een tijdelijke instelling voor het
   gebruikersonderzoek van augustus (de respondent gaf zijn verbruik zelf op)
-  en hoort op geen enkel component meer te staan. Staat er een uitzet-waarde,
-  dan waarschuwt de host bij het opstarten (`Bron 'netbeheerder' ... staat
-  bewust uit: MCP_SERVER_NETBEHEERDER heeft een uitzet-waarde`) en toont
-  `GET /health` hem onder `bronnen_uit`.
+  en hoort op geen enkel component meer te staan: verwijderen of leegmaken in
+  de ZAD-UI, allebei is goed. Staat er een uitzet-woord, dan waarschuwt de
+  host bij het opstarten (`Bron 'netbeheerder' ... staat bewust uit:
+  MCP_SERVER_NETBEHEERDER heeft een uitzet-waarde`), toont `GET /health` hem
+  onder `bronnen_uit` en meldt `status: gedegradeerd`.
 
   **Controle na elke uitrol**, via de frontend-proxy (`/health` gaat mee naar
   de backend) of vanuit de pod:
 
   ```bash
   curl -s https://<frontend-url>/health \
-    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['bronnen_uit'], d['servers'].get('netbeheerder'))"
+    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['status'], d['bronnen_uit'], d['servers'].get('netbeheerder'))"
   ```
 
-  Verwacht: `[] verbonden`. Allebei nodig: `bronnen_uit` leeg zegt alleen
-  dat de wallet niet is uitgezet; `servers.netbeheerder == "verbonden"` zegt
-  dat hij ook is opgekomen (een server die bij het starten faalt staat als
-  `niet beschikbaar` in `servers`, niet in `bronnen_uit`). `status: actief`
-  zegt hier niets; de readiness-probe van ZAD kijkt daar alleen naar.
-  `services/host/scripts/onderzoeksflow.py` doet dezelfde twee controles.
+  Verwacht: `actief [] verbonden`. `status` is `gedegradeerd` zodra een bron
+  uitstaat (`bronnen_uit`) óf bij het starten faalde (`niet beschikbaar` in
+  `servers`); de readiness-probe van ZAD kijkt alleen naar de HTTP-status en
+  vangt dit niet. `services/host/scripts/onderzoeksflow.py` doet dezelfde
+  controles.
 
 ### Valkuil: kale hostnamen in de nginx-proxy
 

@@ -41,22 +41,24 @@ VLAM_MODEL_ID = os.getenv(
 
 # MCP-servers: naam → pad naar server.py
 # Relatieve paden uit .env worden opgelost t.o.v. de host-directory (BASE_DIR)
-# Waarden waarmee een bron bewust wordt uitgezet. Een lege of afwezige waarde
-# betekende "gebruik het standaardpad", dus een bron weglaten uit de configuratie
-# schakelde hem niet uit - hij startte gewoon. De enige uitweg was hem laten
-# falen, en dan staat er een fout in de log voor iets dat je expres deed.
-_UIT = frozenset({"", "uit", "off", "none", "geen"})
+# Waarden waarmee een bron bewust wordt uitgezet. Een afwezige of lege waarde
+# betekent "gebruik het standaardpad": elke bron staat aan tenzij iemand hem
+# met een van deze woorden uitzet. Leeg is bewust géén uitzet-waarde, want een
+# variabele leegmaken in een beheer-UI is de gewone handeling voor "terug naar
+# standaard", en die mag de Business Wallet niet stil uitzetten.
+_UIT = frozenset({"uit", "off", "none", "geen", "false", "no", "nee", "0", "disabled"})
 
 
 def _resolve_server_path(env_key: str, default: Path) -> Path | None:
     """Het pad naar een MCP-server, of None als die bewust uitstaat.
 
-    Uitzetten is een besluit en hoort er ook zo uit te zien: `MCP_SERVER_X=` (of
-    `uit`) laat de bron weg, terwijl de variabele helemaal weglaten het
-    standaardpad houdt. Zo verdwijnt een bron nooit door een vergeten regel.
+    Uitzetten is een besluit en hoort er ook zo uit te zien: `MCP_SERVER_X=uit`
+    laat de bron weg; de variabele weglaten of leeg laten houdt het
+    standaardpad. Zo verdwijnt een bron nooit door een vergeten of gewiste
+    regel, en alleen door een woord dat uitzetten betekent.
     """
     raw = os.getenv(env_key)
-    if raw is None:
+    if raw is None or not raw.strip():
         return default
     if raw.strip().lower() in _UIT:
         return None
@@ -202,7 +204,9 @@ __all__ = [
     "ANTHROPIC_API_KEY",
     "CLAUDE_MODEL",
     "MAX_VRAAG_TEKENS",
+    "MCP_SERVER_ENV_KEYS",
     "MCP_SERVERS",
+    "MCP_SERVERS_UIT",
     "TOOL_TIMEOUT",
     "TEST_KVK_NUMMERS",
     "kvk_uit_header",

@@ -26,10 +26,21 @@ def _config_met(monkeypatch, **env):
     return importlib.reload(config)
 
 
-def test_een_lege_waarde_schakelt_de_bron_uit(monkeypatch):
-    config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER="")
+@pytest.mark.parametrize("waarde", ["uit", "off", "none", "geen", "false", "no", "nee", "0", "disabled", " Uit "])
+def test_een_uitzet_woord_schakelt_de_bron_uit(monkeypatch, waarde):
+    config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER=waarde)
     assert "netbeheerder" not in config.MCP_SERVERS
+    assert config.MCP_SERVERS_UIT == {"netbeheerder": "MCP_SERVER_NETBEHEERDER"}
     assert "kvk" in config.MCP_SERVERS
+
+
+@pytest.mark.parametrize("waarde", ["", "   "])
+def test_een_lege_waarde_houdt_de_bron_aan(monkeypatch, waarde):
+    """Leegmaken in een beheer-UI is de gewone handeling voor "terug naar
+    standaard"; die mag de Business Wallet niet stil uitzetten."""
+    config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER=waarde)
+    assert "netbeheerder" in config.MCP_SERVERS
+    assert config.MCP_SERVERS_UIT == {}
 
 
 def test_zonder_variabele_blijft_de_bron_gewoon_staan(monkeypatch):
@@ -39,14 +50,15 @@ def test_zonder_variabele_blijft_de_bron_gewoon_staan(monkeypatch):
     assert "netbeheerder" in config.MCP_SERVERS
 
 
-@pytest.mark.parametrize("waarde", ["", "  ", "uit"])
+@pytest.mark.parametrize("waarde", ["uit", "UIT", " off "])
 def test_uitzetten_kan_op_meer_dan_een_manier(monkeypatch, waarde):
-    """Leeg, spaties of het woord 'uit' - wie een bron wil uitzetten moet niet
-    hoeven raden welke schrijfwijze werkt."""
+    """Hoofdletters en spaties eromheen maken niet uit - wie een bron wil
+    uitzetten moet niet hoeven raden welke schrijfwijze werkt. Leeg hoort er
+    bewust niet bij: dat is "terug naar standaard"."""
     config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER=waarde)
     assert "netbeheerder" not in config.MCP_SERVERS
 
 
 def test_de_andere_bronnen_blijven_ongemoeid(monkeypatch):
-    config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER="")
+    config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER="uit")
     assert set(config.MCP_SERVERS) == {"kvk", "koop", "regelrecht", "rvo"}

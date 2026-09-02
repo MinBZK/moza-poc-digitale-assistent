@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 import vlam_host
+from config import MCP_SERVER_ENV_KEYS
 from errors import BRON_LABELS
 from vlam_host import VLAMHost
 
@@ -26,18 +27,15 @@ ALLE = sorted(BRON_LABELS)
 LOGGER = "vlam.host"
 
 
-@pytest.fixture(autouse=True)
-def _configuratie_per_test(monkeypatch):
-    monkeypatch.setattr(vlam_host, "MCP_SERVERS", dict(vlam_host.MCP_SERVERS))
-    monkeypatch.setattr(vlam_host, "MCP_SERVERS_UIT", {})
-
-
 def _host(uit: list[str] | None = None, storing: list[str] | None = None) -> VLAMHost:
-    """Een host waarvan `uit` niet is ingericht en `storing` wel, maar niet opkwam."""
+    """Een host waarvan `uit` niet is ingericht en `storing` wel, maar niet opkwam.
+
+    Zet de configuratie-globals van `vlam_host` direct; de autouse-fixture
+    `configuratie_per_test` in conftest.py draait dat na elke test terug."""
     uit, storing = uit or [], storing or []
     host = VLAMHost()
     vlam_host.MCP_SERVERS = {n: Path(f"{n}/server.py") for n in ALLE if n not in uit}
-    vlam_host.MCP_SERVERS_UIT = {n: vlam_host.MCP_SERVER_ENV_KEYS[n] for n in uit}
+    vlam_host.MCP_SERVERS_UIT = {n: MCP_SERVER_ENV_KEYS[n] for n in uit}
     host.server_status = {
         n: ("niet beschikbaar" if n in storing else "verbonden") for n in ALLE if n not in uit
     }
@@ -77,7 +75,7 @@ def test_de_lijsten_blijven_gesorteerd_en_gescheiden():
 def test_elke_bron_heeft_een_omgevingsvariabele():
     """De waarschuwing noemt de variabele uit de configuratie; een bron zonder
     variabele zou een naam verzinnen die niemand kan zetten."""
-    assert set(BRON_LABELS) == set(vlam_host.MCP_SERVER_ENV_KEYS)
+    assert set(BRON_LABELS) == set(MCP_SERVER_ENV_KEYS)
 
 
 @pytest.mark.parametrize("uit", UIT_GEVALLEN)
@@ -90,8 +88,8 @@ def test_elke_uitgezette_bron_krijgt_een_eigen_waarschuwing(uit, caplog):
     for naam, melding in zip(sorted(uit), meldingen, strict=True):
         assert f"Bron '{naam}'" in melding
         assert BRON_LABELS[naam] in melding
-        assert vlam_host.MCP_SERVER_ENV_KEYS[naam] in melding
-        assert "lege waarde" in melding
+        assert MCP_SERVER_ENV_KEYS[naam] in melding
+        assert "maak hem leeg" in melding
 
 
 def test_een_storing_is_geen_reden_voor_de_uitzet_waarschuwing(caplog):
@@ -125,3 +123,25 @@ def test_startup_meldt_de_uitgezette_bronnen(uit, caplog):
     assert [n for n in ALLE if n not in uit] == sorted(host.server_status)
     meldingen = _waarschuwingen(caplog)
     assert [m.split("'")[1] for m in meldingen] == sorted(uit)
+
+
+@pytest.mark.parametrize(
+    ("uit", "storing", "verwacht"),
+    [([], [], "actief"), (["netbeheerder"], [], "gedegradeerd"), ([], ["koop"], "gedegradeerd")],
+)
+def test_health_status_is_gedegradeerd_bij_een_bron_die_uit_of_weg_is(uit, storing, verwacht):
+    """De readiness-probe kijkt naar de HTTP-status; wie de body leest hoort in
+    één woord te zien dat er een bron ontbreekt."""
+    assert _host(uit=uit, storing=storing).get_status()["status"] == verwacht
+
+
+def test_regelstatus_geeft_de_bron_van_de_maatregelen_toestemming_door():
+    from regelloop import Uitkomst
+
+    plicht = Uitkomst(klaar=True, wacht_op=None, reden="", resultaat={})
+    maatregelen = Uitkomst(
+        klaar=False, wacht_op="toestemming", reden="", resultaat=None,
+        bron="Business Wallet", scope="netbeheerder",
+    )
+    status = vlam_host._regel_status_dict(plicht, maatregelen)
+    assert status["maatregelen"]["toestemming_bron"] == "Business Wallet"
