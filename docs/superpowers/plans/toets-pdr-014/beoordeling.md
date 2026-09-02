@@ -1,5 +1,13 @@
 # Beoordeling van de toets van PDR-014 door een tweede lezer
 
+> Momentopname. Deze beoordeling is gemaakt vóór de correcties die erop
+> volgden (zie "Wat de beoordeling veranderde" in het rapport). De
+> regelnummers verwijzen naar de PDR van dat moment en kloppen niet meer; de
+> bestanden `runs-main.json` en `runs-f22f063.json` heten nu
+> `main/main-run*.json` en `f22f063/f22f063-run*.json` en bevatten de
+> volledige events. De cijfers 28 (eerste beurten) en 8 (weigeringen) zijn
+> in rapport en PDR vervangen door 37 en 7.
+
 Datum 2026-09-02. Gelezen: PDR-014, het meetrapport van 2 september, de
 bestanden onder `toets-pdr-014/` (runs-main.json, runs-f22f063.json,
 vage-vragen.json, engine-runs.json, analyse-ruw.md, meet.py, analyse.py) en

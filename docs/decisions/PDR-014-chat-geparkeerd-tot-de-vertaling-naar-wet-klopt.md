@@ -5,7 +5,7 @@
 | Status | Voorgesteld (concept, nog niet vastgesteld) |
 | Datum | 2026-09-02 |
 | Beslisser(s) | Projectteam poc-moza; vaststelling door de MOZa-productgroep nog te plannen |
-| Gerelateerd | [PDR-006](PDR-006-feasibility-conclusie.md), [PDR-008](PDR-008-generieke-regelrecht-tool-en-wallet.md), [PDR-011](PDR-011-foutmeldingen-catalogus.md), [PDR-013](PDR-013-timeoutgrenzen-op-basis-van-meting.md), sessiedocument [juridische toets 10 augustus](../sessies/sessie_maandag/2026-08-10-juridische-toets-casus-arbeidsmarkt.md), notities SZW-juristvalidatie 23 juli (repo `MinBZK/regelrecht`, `docs/financieel-cv/szw/2026-07-23-juristvalidatie-notities.md`, branch `feat/financieel_cv_RVO`) |
+| Gerelateerd | [PDR-006](PDR-006-feasibility-conclusie.md), [PDR-008](PDR-008-generieke-regelrecht-tool-en-wallet.md), [PDR-011](PDR-011-foutmeldingen-catalogus.md), [PDR-013](PDR-013-timeoutgrenzen-op-basis-van-meting.md), het sessiedocument *Classificatie van de Digitale Assistent* (juridische toets 10 augustus 2026; werkdocument van het team, niet in deze repository), notities SZW-juristvalidatie 23 juli (repo `MinBZK/regelrecht`, `docs/financieel-cv/szw/2026-07-23-juristvalidatie-notities.md`, branch `feat/financieel_cv_RVO`) |
 
 ## Hoe dit document te lezen
 
@@ -93,7 +93,7 @@ ontwerp geen bron met gegevens over de ondernemer aan (toestemming eerst,
 PDR-008); de wet draait er wel al met lege parameters, en een openbare
 regelingenlijst mag. Wat de assistent in die beurt over de situatie van de
 ondernemer zegt, is dus puur model. Dat het daar meestal goed gaat, is
-gemeten: in 28 eerste beurten op 2 september (flow en vage vragen, oude en
+gemeten: in 37 eerste beurten op 2 september (flow en losse vragen, oude en
 nieuwe host) stond geen enkele uitspraak over wat geldt, een bedrag, een
 termijn of een indiening die niet uit een bron kwam of van een voorbehoud was
 voorzien. Dat het níet altijd goed gaat, is ook gemeten: "Uw rapportage is
@@ -205,12 +205,6 @@ kunnen controleren onderaan staat.
    traceerbaar is tot artikel en regelset-versie. Het is een hypothese: de
    schermschets wordt eerst met ondernemers getoetst.
 
-   ![Schermschets van de concept-aanvraag](assets/pdr-014/fig9-schermschets-vooringevuld.png)
-
-   *Figuur 9. Schermschets van de concept-aanvraag: per gegeven de bron en de
-   ophaaldatum, de uitkomst met artikel en regelset-versie, en de knoppen
-   bevestigen of tegenspreken.*
-
 3. **Wat uit de assistent blijft staan.** De regelloop en de routeringstabel,
    de feitenkaart met herkomst en soort per waarde, de toestemmingspoort per
    bron (PDR-008), de sessie-identiteit aan de host-kant (PDR-009), de sleutel
@@ -248,8 +242,8 @@ kunnen controleren onderaan staat.
 
 ## Opschalen naar meerdere usecases
 
-De informatieplicht is gebouwd als één flow: een routeringstabel van zes velden
-in `regelrouting.py`, een prompt die de regeling bij naam noemt (EBR-2026), en
+De informatieplicht is gebouwd als één flow: een routeringstabel van acht
+velden in `regelrouting.py`, een prompt die de regeling bij naam noemt (EBR-2026), en
 formulieren die de frontend per regeling herkent. Dat schaalt niet: elke
 volgende regeling zou dezelfde handmatige laag opnieuw vragen. De vraag "wie
 schrijft de tabel" uit de onderbouwing is de schaalvraag. Het antwoord is een
@@ -320,20 +314,21 @@ maat al ingeschat ("modelleerbaar: goed, deels, matig, niet").
 
 Alle gevallen hieronder zijn waargenomen in de ene flow die volledig is
 uitgewerkt, de energiebesparings- en informatieplicht, in de periode
-13 tot 25 augustus. Ze staan in de commit-berichten, in `NEXT_STEPS.md` en in
-de metingen onder `docs/superpowers/plans/`.
+13 tot 25 augustus. Ze staan in de commit-berichten en in de ontwerpen en
+metingen onder `docs/superpowers/`.
 
 **Het model reconstrueert invoer in plaats van hem door te geven.**
 
 - In een rapport richting RVO stond "Bloemenlaan 12" als vestigingsadres,
   terwijl de KvK-bron "Hoefweg 210" had geleverd. Het model had het adres uit
   het gesprek nagereconstrueerd in plaats van uit het tool-resultaat
-  (`NEXT_STEPS.md`, MVP-13). Antwoord: de feitenkaart en slot-substitutie, zodat
+  (`docs/superpowers/plans/2026-08-13-onderzoeksflow-robuust.md`). Antwoord:
+  de feitenkaart en slot-substitutie, zodat
   het model bedrijfsgegevens nooit meer zelf uitschrijft.
 - Een override die het model zelf verzon kon een echte attestatie uit de
   Business Wallet overschrijven en kwam de volgende ronde terug als wetsinvoer,
-  waarna het oordeel zich presenteerde als "uit RegelRecht" (MVP-14,
-  eindreview-fixes). Antwoord: een geëchode waarde krijgt de soort `echo` en
+  waarna het oordeel zich presenteerde als "uit RegelRecht" (herstelronde
+  van 13 augustus, `docs/superpowers/specs/2026-08-13-regel-stuurt-de-flow-design.md`). Antwoord: een geëchode waarde krijgt de soort `echo` en
   telt nooit als invoer.
 
 **De invoerwaarden die de ondernemer zelf aanlevert zijn zonder tussenkomst
@@ -362,12 +357,6 @@ verkeerd.**
   gegeven (`af6924d`, 25 augustus). Antwoord: een parser die getallen met een
   eenheid uit de chattekst haalt. Dat is het formulier nabouwen in de chat.
 
-  ![Log van de onderzoeksomgeving, 25 augustus: verbruik in de chat getypt, regelloop wacht op opgave](assets/pdr-014/fig6-zadlog-verbruik-als-tekst.png)
-
-  *Figuur 6. Log van `dabackend-onderzoek` tijdens de sessie van 25 augustus:
-  de respondent typt het verbruik als tekst, de regelloop blijft op
-  `wacht_op="opgave"` staan en de assistent vraagt het verbruik opnieuw.*
-
 **Het model kiest de verkeerde wet, de verkeerde bron of het verkeerde
 moment.**
 
@@ -393,12 +382,13 @@ moment.**
   model `netbeheerder__verbruik` zelf aan, vóórdat de respondent iets had
   gezegd, en een geslaagde aanroep legde zijn eigen toestemming vast. De
   PDR-008-controle zakte van 5/5 naar 1/5. "Prompt-instructies bleken niet
-  genoeg; dit is code, geen instructie" (MVP-14, taak 8). Antwoord:
+  genoeg; dit is code, geen instructie" (meting van 13 augustus,
+  `docs/superpowers/plans/meting-regelloop-2026-08-13.md`). Antwoord:
   `_bron_aanroep_gated`, één poort in de host waar model én regelloop
-  doorheen moeten. Nagemeten op 2 september: het model probeert in vrijwel
-  elke eerste beurt het Handelsregister aan te roepen vóór het akkoord (11
-  keer in 5 doorlopen plus 15 losse vragen) en drie keer de wallet; de poort
-  weigert alle 14 (figuur 5). De regelloop zelf stopt vóór zo'n bron. Het
+  doorheen moeten. Nagemeten op 2 september: in de flow probeert het model in
+  elke eerste beurt het Handelsregister aan te roepen vóór het akkoord (5 van
+  5) en tweemaal de wallet; bij 18 losse vragen 6 keer de KvK en 1 keer de
+  wallet. De poort weigert alle 14 (figuur 5). De regelloop zelf stopt vóór zo'n bron. Het
   model vertaalt de weigering vervolgens in "geef toestemming via Delen en
   stel uw vraag daarna opnieuw", een extra beurt voor de ondernemer.
 
@@ -411,7 +401,7 @@ moment.**
 - De maatregelenregel kwam erbij als het model besloot dat de vraag erom
   vroeg. Artikel 5.15d Bal draagt op te rapporteren over de getroffen
   maatregelen; de tweede regel volgt dus uit de eerste en hoeft niet geraden
-  te worden (MVP-14, taak 9). De EML-fallback gaf intussen iedereen de
+  te worden (ontwerp van 13 augustus, `docs/superpowers/specs/2026-08-13-regel-stuurt-de-flow-design.md`). De EML-fallback gaf intussen iedereen de
   algemene bijlage, ook een kweker onder glas voor wie een eigen bijlage
   geldt.
 
@@ -450,7 +440,7 @@ moment.**
   bronnen en de wet werden aangeroepen. De wet kwam op zijn vroegst in de
   tweede beurt: vraag, toestemmingsvraag, akkoord, dan pas KvK, wallet en
   regel, alles in één beurt van het model. De maatregelenregel kwam er alleen bij als het model vond dat de
-  vraag erom vroeg (MVP-14, taak 9).
+  vraag erom vroeg (tot het ontwerp van 13 augustus).
 - Bij een onduidelijke vraag ("hoe zit dat dan met die verplichting") stelt de
   assistent eerst een verduidelijkingsvraag met drie opties
   (`prompts/examples/onduidelijke_vraag.md`). Dat is goed gedrag, en het is
@@ -459,7 +449,8 @@ moment.**
   een bronfout vlak voor het indienen (`84b95ec`). De maatregelenbeurt
   herhaalde op 13 augustus dezelfde twee vragen woordelijk zonder iets toe te
   voegen; geen enkele controle in het meetscript vraagt of een beurt de
-  ondernemer verder helpt (`NEXT_STEPS.md`, MVP-14).
+  ondernemer verder helpt (waargenomen bij de doorloop van 13 augustus, zie
+  `docs/superpowers/plans/meting-regelloop-2026-08-13.md`).
 - Een beurt kost 5 tot 45 seconden (rooktest vóór de sessie van 25 augustus).
   Op 24 augustus was de zwaarste beurt 20 seconden; op 2 september, met de
   regelloop in elke beurt, is de mediaan 16 seconden en de zwaarste 43. Een
@@ -512,10 +503,11 @@ heeft en waar die vandaan komt. Geen daarvan is een gespreksprobleem.
 
 ### B. Wat de juridische toets van 10 augustus opleverde
 
-Het sessiedocument en de sprekersnotities staan in
-`docs/sessies/sessie_maandag/`. Van de sessie zelf zijn in deze repository
-geen notulen gevonden; wat hieronder staat is de lezing van het team zoals die
-ter tafel lag, met de open vragen die zijn meegegeven.
+Het sessiedocument (*Classificatie van de Digitale Assistent*, met de tien
+beslismomenten B1 tot en met B10) en de sprekersnotities zijn werkdocumenten
+van het team en staan niet in deze repository. Van de sessie zelf zijn geen
+notulen gevonden; wat hieronder staat is de lezing van het team zoals die ter
+tafel lag, met de open vragen die zijn meegegeven.
 
 > **AANVULLEN vóór vaststelling:** de oordelen die de jurist en de
 > AI-Act-expert per beslismoment hebben gegeven (akkoord / akkoord mits / niet
@@ -588,7 +580,7 @@ naar deze statussen is de stap die deze PDR buiten het model legt.*
   rato gekort bij een arbeidsduur onder 36 uur. Koen werkt 32 uur; het
   gemodelleerde bedrag was het 36-uursbedrag. Na correctie: €862 werd €766,22
   per maand. Een taalmodel dat "hij werkt vier dagen" moet vertalen naar
-  `arbeidsduur_uren_per_week = 32` maakt hier de beslissing die de uitkomst
+  `overeengekomen_arbeidsduur_uren_per_week = 32` maakt hier de beslissing die de uitkomst
   bepaalt.
 - **Drie regimes in één wet.** De Wajong kent drie tijdperken die de berekening
   van de loondispensatie raken; welk regime geldt is zelf een invoerwaarde die
@@ -609,7 +601,10 @@ waargenomen: geen overzicht (de ondernemer weet nooit hoeveel er nog komt; de
 maatregelenbeurt van 13 augustus herhaalde twee vragen woordelijk zonder
 iets toe te voegen), geen determinisme (dezelfde situatie moet dezelfde
 uitkomst geven; de metingen hierboven laten zien wat het kost om dat in een
-chat af te dwingen), hoe zorgen we ervoor dat het gesprek niet aanvullend is op de trace, en de regelstructuur verdwijnt.
+chat af te dwingen), geen bruikbare onderbouwing (het gesprek mag niets
+toevoegen aan of afwijken van de trace van de regel; proza naast een trace is
+geen onderbouwing bij bezwaar), en de regelstructuur verdwijnt (de
+traceerbaarheid die RegelRecht biedt lost op in het gesprek).
 
 ## Alternatieven overwogen
 
@@ -701,8 +696,8 @@ classifier, zoeken in KOOP), waarna het model alleen nog de invoer uitvraagt.
   wordt, en de naam wordt daarbij meegetoetst.
 - **Deze repository.** Blijft staan en blijft draaibaar: de chat-flow is de
   demo van wat er al werkt en het bewijs voor de argumenten hierboven. Er komt
-  geen nieuw werk aan de gespreksvorm zolang de parkeerstand duurt;
-  `NEXT_STEPS.md` en de open bevindingen uit de review van 24 augustus blijven
+  geen nieuw werk aan de gespreksvorm zolang de parkeerstand duurt; de
+  werklijst en de open bevindingen uit de review van 24 augustus blijven
   open en worden alleen opgepakt als het onderzoek van augustus er een uitloop
   van vraagt. Waar de bouw van de basis en van Digitale assistent 2.0 landt, wordt bij
   de eerste bouwstap besloten.

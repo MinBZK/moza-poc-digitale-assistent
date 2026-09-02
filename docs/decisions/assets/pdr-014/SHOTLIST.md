@@ -21,10 +21,10 @@ onderzoeksomgeving in beeld; alleen de fictieve persona's.
 | 3 | `fig3-log-250000-engine.png` | **aanwezig, gerenderd uit `log3-250000-engine.txt`** (2 sept, echte engine, geen taalmodel) | Onderbouwing A, invoerwaarden | `"250.000"` → 250, `-65000` → plicht vervalt |
 | 4 | `fig4-hostlog-maatregelen-eigen-aanroep.png` | **aanwezig, gerenderd uit `log4-hostlog-model-roept-regel-zelf.txt`** (host-log 2 sept) | Onderbouwing A, verkeerde wet/bron/moment | model roept de regel zelf aan; host hergebruikt de uitkomst |
 | 5 | `fig5-hostlog-toestemming-vereist.png` | **aanwezig, gerenderd uit `log5-hostlog-toestemming-geweigerd.txt`** (host-log 2 sept) | Onderbouwing A, toestemmingspoort | model roept KvK en wallet aan vóór Delen; poort weigert |
-| 6 | `fig6-zadlog-verbruik-als-tekst.png` | MAKEN (ZAD-log 25 aug) | Onderbouwing A, invoerwaarden | respondent typt verbruik als tekst; regelloop wacht op opgave; assistent vraagt opnieuw |
+| 6 | `fig6-zadlog-verbruik-als-tekst.png` | MAKEN (ZAD-log 25 aug) | Onderbouwing A, invoerwaarden (invoegen na de bullet over `af6924d`) | respondent typt verbruik als tekst; regelloop wacht op opgave; assistent vraagt opnieuw |
 | 7 | `fig7-route-b5.png` | aanwezig (sessieschema) | Onderbouwing B | classificatieroute met B5 |
 | 8 | `fig8-sadee-financieel-cv.png` | aanwezig (regelrecht-repo) | Onderbouwing C | zeven regelingen op dezelfde feiten |
-| 9 | `fig9-schermschets-vooringevuld.png` | MAKEN (Keynote-export) | Beslissing 2 | concept-aanvraag met bron + ophaaldatum per gegeven |
+| 9 | `fig9-schermschets-concept-aanvraag.png` | MAKEN | Beslissing 2 (invoegen na "de schermschets wordt eerst met ondernemers getoetst") | concept-aanvraag met bron + ophaaldatum per gegeven |
 
 ## fig3 opnieuw maken
 
@@ -66,12 +66,13 @@ dat niet vanzelf, dus dan via de frontend of met `curl` op `/chat/stream`.
 **Redigeren vóór opname:** sleutels en tokens redigeert de host al
 (`log_redaction.py`); controleer op de pod-naam, de hostnaam en de URL.
 
-## fig9 — schermschets Vooringevuld
+## fig9 — schermschets van de concept-aanvraag
 
-Uit `~/projects/vooringevuld-onepager_RM.key` (Keynote): de slide met de
-concept-aanvraag exporteren als PNG. Bestaat er nog geen schets met een
-gegevensregel "bron + ophaaldatum", dan is dat de eerste schets om te maken;
-de PDR verwijst er nu al naar als werkhypothese.
+De one-pager van Digitale assistent 2.0 heeft een slide met de concept-aanvraag;
+die als PNG exporteren. Bestaat er nog geen schets met per gegeven een regel
+"bron + ophaaldatum", dan is dat de eerste schets om te maken; de PDR noemt de
+schermschets nu als werkhypothese zonder beeld. Voeg de afbeelding pas in de
+PDR in als het bestand bestaat (de verwijzing is er nu bewust uit).
 
 ## Bewust geen beeld
 
