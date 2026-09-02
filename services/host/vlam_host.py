@@ -30,7 +30,9 @@ from config import (
     LLM_HERKANSING_WACHT,
     LLM_HERKANSINGEN,
     LLM_MAX_TOKENS,
+    MCP_SERVER_ENV_KEYS,
     MCP_SERVERS,
+    MCP_SERVERS_UIT,
     TOOL_TIMEOUT,
     VLAM_API_KEY,
     VLAM_BASE_URL,
@@ -39,6 +41,7 @@ from config import (
     get_system_prompt,
 )
 from errors import (
+    BRON_LABELS,
     classificeer_llm_fout,
     classificeer_tool_fout,
     maak_fout,
@@ -1183,23 +1186,22 @@ class VLAMHost:
     def _meld_uitgezette_bronnen(self) -> None:
         """Waarschuw bij het opstarten voor elke bron die bewust uitstaat.
 
-        Uitzetten gebeurt via `MCP_SERVER_<BRON>=uit` in de omgeving, en die
-        omgeving staat op ZAD per component buiten deze repository. Een bron
-        die voor één onderzoek is uitgezet, blijft anders stil uit staan, en
-        de ondernemer krijgt dan een formulier waar een Business Wallet had
-        gestaan. Standaard staan alle bronnen aan; dit is de plek waar een
-        afwijking zichtbaar wordt zonder in de configuratie te hoeven kijken.
+        Uitzetten gebeurt met een uitzet-waarde in de omgevingsvariabele van de
+        bron (`config.MCP_SERVERS_UIT`), en die omgeving staat op ZAD per
+        component buiten deze repository. Zonder deze melding blijft een bron
+        die voor één onderzoek is uitgezet stil uit staan. Standaard staat
+        elke bron aan; hier wordt een afwijking zichtbaar zonder in de
+        configuratie te hoeven kijken.
         """
-        from errors import BRON_LABELS
-
         for naam in self.bronnen_uit:
+            env_key = MCP_SERVERS_UIT.get(naam) or MCP_SERVER_ENV_KEYS.get(naam, "?")
             logger.warning(
-                "Bron '%s' (%s) staat bewust uit via MCP_SERVER_%s. Standaard "
-                "staat deze bron aan; verwijder de variabele of zet hem op het "
-                "standaardpad om hem weer in te schakelen.",
+                "Bron '%s' (%s) staat bewust uit: %s heeft een uitzet-waarde. "
+                "Standaard staat deze bron aan; verwijder de variabele (een lege "
+                "waarde zet hem ook uit) om hem weer in te schakelen.",
                 naam,
                 BRON_LABELS.get(naam, naam),
-                naam.upper(),
+                env_key,
             )
 
     @property
@@ -1225,9 +1227,7 @@ class VLAMHost:
         instructie de bron nooit te noemen. Anders zegt het "uw Business Wallet
         is momenteel niet beschikbaar" tegen iemand voor wie die nooit bestond.
         """
-        from errors import BRON_LABELS
-
-        return sorted(naam for naam in BRON_LABELS if naam not in self.server_status)
+        return sorted(naam for naam in BRON_LABELS if naam not in MCP_SERVERS)
 
     @property
     def cli_bronnen_offline(self) -> list[str]:

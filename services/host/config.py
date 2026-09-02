@@ -65,22 +65,36 @@ def _resolve_server_path(env_key: str, default: Path) -> Path | None:
         p = (BASE_DIR / p).resolve()
     return p
 
+# Per bron de omgevingsvariabele die hem aan- of uitzet. Eén plek, zodat de
+# waarschuwing bij het opstarten en /health dezelfde naam noemen als de
+# configuratie leest.
+MCP_SERVER_ENV_KEYS: dict[str, str] = {
+    "kvk": "MCP_SERVER_KVK",
+    "koop": "MCP_SERVER_KOOP",
+    "regelrecht": "MCP_SERVER_REGELRECHT",
+    "rvo": "MCP_SERVER_RVO",
+    "netbeheerder": "MCP_SERVER_NETBEHEERDER",
+}
+
 _MCP_SERVERS_RUW: dict[str, Path | None] = {
-    "kvk": _resolve_server_path("MCP_SERVER_KVK", SERVERS_DIR / "kvk" / "server.py"),
-    "koop": _resolve_server_path("MCP_SERVER_KOOP", SERVERS_DIR / "koop" / "server.py"),
-    "regelrecht": _resolve_server_path("MCP_SERVER_REGELRECHT", SERVERS_DIR / "regelrecht" / "server.py"),
-    "rvo": _resolve_server_path("MCP_SERVER_RVO", SERVERS_DIR / "rvo" / "server.py"),
-    "netbeheerder": _resolve_server_path(
-        "MCP_SERVER_NETBEHEERDER", SERVERS_DIR / "netbeheerder" / "server.py"
-    ),
+    naam: _resolve_server_path(env_key, SERVERS_DIR / naam / "server.py")
+    for naam, env_key in MCP_SERVER_ENV_KEYS.items()
 }
 
 # Alleen de bronnen die aanstaan. Een uitgezette bron is geen storing: hij hoort
 # niet in `server_status` als "niet beschikbaar" te belanden, maar simpelweg
-# afwezig te zijn - `bronnen_offline` telt hem dan mee en de assistent belooft
-# hem niet meer.
+# afwezig te zijn - de host meldt hem onder `bronnen_uit` (niet onder
+# `bronnen_offline`) en de assistent belooft hem niet meer.
 MCP_SERVERS: dict[str, Path] = {
     naam: pad for naam, pad in _MCP_SERVERS_RUW.items() if pad is not None
+}
+
+# De bronnen die bewust uitstaan, met de variabele waardoor dat komt. Standaard
+# is dit leeg: elke bron staat aan tenzij iemand hem uitzet.
+MCP_SERVERS_UIT: dict[str, str] = {
+    naam: MCP_SERVER_ENV_KEYS[naam]
+    for naam, pad in _MCP_SERVERS_RUW.items()
+    if pad is None
 }
 
 # Host

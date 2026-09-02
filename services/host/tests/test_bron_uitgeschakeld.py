@@ -13,72 +13,115 @@ dat dit project wil vermijden. En het is erger dan een storing melden, want de
 gebruiker heeft geen enkele aanwijzing dat er iets mist.
 """
 
+from pathlib import Path
+from unittest.mock import AsyncMock
+
+import pytest
+
+import vlam_host
 from errors import BRON_LABELS
 from vlam_host import VLAMHost
 
+ALLE = sorted(BRON_LABELS)
+LOGGER = "vlam.host"
 
-def _host(status: dict[str, str]) -> VLAMHost:
+
+@pytest.fixture(autouse=True)
+def _configuratie_per_test(monkeypatch):
+    monkeypatch.setattr(vlam_host, "MCP_SERVERS", dict(vlam_host.MCP_SERVERS))
+    monkeypatch.setattr(vlam_host, "MCP_SERVERS_UIT", {})
+
+
+def _host(uit: list[str] | None = None, storing: list[str] | None = None) -> VLAMHost:
+    """Een host waarvan `uit` niet is ingericht en `storing` wel, maar niet opkwam."""
+    uit, storing = uit or [], storing or []
     host = VLAMHost()
-    host.server_status = status
+    vlam_host.MCP_SERVERS = {n: Path(f"{n}/server.py") for n in ALLE if n not in uit}
+    vlam_host.MCP_SERVERS_UIT = {n: vlam_host.MCP_SERVER_ENV_KEYS[n] for n in uit}
+    host.server_status = {
+        n: ("niet beschikbaar" if n in storing else "verbonden") for n in ALLE if n not in uit
+    }
     return host
+
+
+def _waarschuwingen(caplog) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.name == LOGGER and r.levelname == "WARNING"]
+
+
+UIT_GEVALLEN = [[], ["netbeheerder"], ["koop", "netbeheerder"]]
 
 
 def test_een_niet_geconfigureerde_bron_staat_uit_en_is_geen_storing():
     """De wallet uit de configuratie halen is genoeg om hem uit te schakelen."""
-    zonder_wallet = {n: "verbonden" for n in BRON_LABELS if n != "netbeheerder"}
-    host = _host(zonder_wallet)
+    host = _host(uit=["netbeheerder"])
     assert host.bronnen_uit == ["netbeheerder"]
     assert host.bronnen_offline == []
 
 
 def test_een_gestarte_bron_telt_niet_als_weg():
-    alles = {n: "verbonden" for n in BRON_LABELS}
-    assert _host(alles).bronnen_offline == []
+    assert _host().bronnen_offline == []
 
 
 def test_een_bron_die_niet_opkwam_blijft_gemeld():
     """Het bestaande geval mag niet sneuvelen met deze wijziging."""
-    status = {n: "verbonden" for n in BRON_LABELS}
-    status["koop"] = "niet beschikbaar"
-    assert "koop" in _host(status).bronnen_offline
+    assert "koop" in _host(storing=["koop"]).bronnen_offline
 
 
 def test_de_lijsten_blijven_gesorteerd_en_gescheiden():
     """De lijsten gaan de prompt in; een dubbele bron leest als een fout."""
-    status = {n: "verbonden" for n in BRON_LABELS if n not in ("koop", "netbeheerder")}
-    status["koop"] = "niet beschikbaar"
-    host = _host(status)
+    host = _host(uit=["netbeheerder"], storing=["koop"])
     assert host.bronnen_offline == ["koop"]
     assert host.bronnen_uit == ["netbeheerder"]
 
 
-def test_een_uitgezette_bron_wordt_bij_het_opstarten_gemeld(caplog):
-    """De omgeving staat buiten de repo; de log is de plek waar een bron die
-    voor één onderzoek is uitgezet, zichtbaar blijft."""
-    zonder_wallet = {n: "verbonden" for n in BRON_LABELS if n != "netbeheerder"}
-    host = _host(zonder_wallet)
-    with caplog.at_level("WARNING", logger="vlam.host"):
+def test_elke_bron_heeft_een_omgevingsvariabele():
+    """De waarschuwing noemt de variabele uit de configuratie; een bron zonder
+    variabele zou een naam verzinnen die niemand kan zetten."""
+    assert set(BRON_LABELS) == set(vlam_host.MCP_SERVER_ENV_KEYS)
+
+
+@pytest.mark.parametrize("uit", UIT_GEVALLEN)
+def test_elke_uitgezette_bron_krijgt_een_eigen_waarschuwing(uit, caplog):
+    host = _host(uit=uit)
+    with caplog.at_level("WARNING", logger=LOGGER):
         host._meld_uitgezette_bronnen()
-    meldingen = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
-    assert len(meldingen) == 1
-    assert "netbeheerder" in meldingen[0]
-    assert "MCP_SERVER_NETBEHEERDER" in meldingen[0]
-    assert "Business Wallet" in meldingen[0]
+    meldingen = _waarschuwingen(caplog)
+    assert len(meldingen) == len(uit)
+    for naam, melding in zip(sorted(uit), meldingen, strict=True):
+        assert f"Bron '{naam}'" in melding
+        assert BRON_LABELS[naam] in melding
+        assert vlam_host.MCP_SERVER_ENV_KEYS[naam] in melding
+        assert "lege waarde" in melding
 
 
-def test_alle_bronnen_aan_geeft_geen_waarschuwing(caplog):
-    alles = {n: "verbonden" for n in BRON_LABELS}
-    with caplog.at_level("WARNING", logger="vlam.host"):
-        _host(alles)._meld_uitgezette_bronnen()
-    assert not [r for r in caplog.records if r.levelname == "WARNING"]
+def test_een_storing_is_geen_reden_voor_de_uitzet_waarschuwing(caplog):
+    with caplog.at_level("WARNING", logger=LOGGER):
+        _host(storing=["koop"])._meld_uitgezette_bronnen()
+    assert _waarschuwingen(caplog) == []
 
 
-def test_health_toont_de_uitgezette_bronnen_apart():
+@pytest.mark.parametrize("uit", UIT_GEVALLEN)
+def test_health_toont_de_uitgezette_bronnen_apart(uit):
     """`servers` meldt storingen; een bewust uitgezette bron hoort daar niet
     tussen, maar wel zichtbaar zijn voor wie /health leest."""
-    zonder_wallet = {n: "verbonden" for n in BRON_LABELS if n != "netbeheerder"}
-    status = _host(zonder_wallet).get_status()
-    assert status["bronnen_uit"] == ["netbeheerder"]
-    assert "netbeheerder" not in status["servers"]
-    alles = {n: "verbonden" for n in BRON_LABELS}
-    assert _host(alles).get_status()["bronnen_uit"] == []
+    status = _host(uit=uit).get_status()
+    assert status["bronnen_uit"] == sorted(uit)
+    assert set(status["servers"]) == set(ALLE) - set(uit)
+
+
+@pytest.mark.parametrize("uit", UIT_GEVALLEN)
+def test_startup_meldt_de_uitgezette_bronnen(uit, caplog):
+    """Niet de private methode maar `startup()` zelf: de omgeving staat buiten de
+    repo, dus de log bij het opstarten is de plek waar een bron die voor één
+    onderzoek is uitgezet, zichtbaar blijft."""
+    host = _host(uit=uit)
+    host.server_status = {}
+    host.registry.register_server = AsyncMock()
+    import asyncio
+
+    with caplog.at_level("WARNING", logger=LOGGER):
+        asyncio.run(host.startup())
+    assert host.registry.register_server.await_count == len(ALLE) - len(uit)
+    assert [n for n in ALLE if n not in uit] == sorted(host.server_status)
+    meldingen = _waarschuwingen(caplog)
+    assert [m.split("'")[1] for m in meldingen] == sorted(uit)

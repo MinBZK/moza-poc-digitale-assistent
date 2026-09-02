@@ -610,6 +610,16 @@ def draai(loop: Loop, persona: Persona) -> None:
         "alle vijf de bronnen zijn verbonden",
         f"niet verbonden: {ontbreekt}",
     )
+    # Een bewust uitgezette bron staat niet in `servers` en zou hierboven
+    # ongemerkt passeren; /health meldt hem apart. De Business Wallet hoort
+    # standaard aan, dus dit hoort leeg te zijn.
+    uit = gezond.get("bronnen_uit", [])
+    loop.controleer(
+        "health",
+        not uit,
+        "geen bron bewust uitgezet (de Business Wallet hoort aan)",
+        f"uitgezet via de omgeving: {uit}",
+    )
 
     print("\n=== 1. vraag naar de plicht (toestemming eerst) ===")
     antwoord, tools, events = loop.beurt("Geldt de energiebesparingsplicht voor mijn bedrijf?")
