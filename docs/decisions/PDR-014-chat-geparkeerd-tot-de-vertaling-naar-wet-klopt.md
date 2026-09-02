@@ -97,12 +97,10 @@ gemeten: in 37 eerste beurten op 2 september (flow en losse vragen, oude en
 nieuwe host) stond geen enkele uitspraak over wat geldt, een bedrag, een
 termijn of een indiening die niet uit een bron kwam of van een voorbehoud was
 voorzien. Dat het níet altijd goed gaat, is ook gemeten: "Uw rapportage is
-ingediend" in de beurt die nog om bevestiging vroeg (13 augustus), twee
-verschillende deadlines afhankelijk van de bron (24 augustus), en na de toets
-een termijn die het model aan de "volgende rapportageronde" koppelt (2
-september, 4 van 5 runs; de zin over de volgende ronde is een
-promptinstructie, de datum erbij is van het model). De grens wordt bewaakt door een promptregel ("geef NOOIT
-bedragen, deadlines of termijnen tenzij uit een tool-resultaat"), en een
+ingediend" in de beurt die nog om bevestiging vroeg (13 augustus), en twee
+verschillende deadlines afhankelijk van de bron (24 augustus). De grens wordt
+bewaakt door een promptregel ("Geef NOOIT specifieke bedragen, deadlines of
+termijnen tenzij deze direct uit een tool-resultaat komen"), en een
 promptregel houdt meestal. Op 10 augustus lag de vraag op tafel of één
 uitspraak van een overheidskanaal die er doorheen glipt, gerechtvaardigd
 vertrouwen wekt.
@@ -113,7 +111,7 @@ verduidelijkingsvraag of een toestemmingsvraag, geeft antwoord, en pas
 daarna kiest het model een wet, roept een bron aan, en soms nog een.
 Gemeten op 2 september: op de host van 13 augustus (het model orkestreert)
 leest de ondernemer de uitkomst in beurt 2, na een modelbeurt van 18 tot 40
-seconden waarin drie bronnen en de toets in één keer draaien; op de huidige
+seconden waarin twee bronnen en de toets in één keer draaien; op de huidige
 host (de regel stuurt) leest hij de uitkomst in beurt 3, na mediaan 16
 seconden per beurt en 95 tot 163 seconden per doorloop. De engine zelf doet
 er 60 milliseconden over. Vrijwel alle tijd zit in het model en het gesprek
@@ -402,8 +400,9 @@ moment.**
   en `netbeheerder__verbruik` aan te roepen voordat de ondernemer op Delen
   heeft geklikt; de poort weigert. Voor de wallet staat er een harde
   promptregel ("roep `netbeheerder__verbruik` nooit zelf aan") en die hield
-  drie keer niet; voor de KvK zegt de prompt juist "gebruik
-  `kvk__mijn_bedrijf`", en houdt alleen de code de volgorde vast. In beide
+  drie keer niet; over de KvK zegt de prompt niets over akkoord en schrijft
+  hij bij bedrijfsgegevens "Gebruik tool kvk__mijn_bedrijf" voor, en houdt
+  alleen de code de volgorde vast. In beide
   gevallen ligt de grens in code.*
 - De maatregelenregel kwam erbij als het model besloot dat de vraag erom
   vroeg. Artikel 5.15d Bal draagt op te rapporteren over de getroffen
@@ -468,8 +467,9 @@ moment.**
   60 milliseconden; de tijd zit in het model.
 - Ook met juristen erbij duurt het bepalen welke wet geldt lang. Op 23 juli
   kostte het een sessie om vast te stellen dat jobcoaching voor Sadee niet
-  via Wet WIA 35 loopt maar via Wajong 2:22, en drie punten uit de pre-read
-  kwamen die middag niet eens aan bod. Een taalmodel dat dit in één beurt
+  via Wet WIA 35 loopt maar via Wajong 2:22, en zes punten uit de pre-read
+  kwamen die middag niet eens aan bod; de naar-rato-correctie voor Koen kwam
+  pas in de vervolgacties van augustus. Een taalmodel dat dit in één beurt
   "even" beslist, beslist iets waar de uitvoering weken over doet.
 
 **De architectuur is de afgelopen maand al opgeschoven naar wat hier wordt
