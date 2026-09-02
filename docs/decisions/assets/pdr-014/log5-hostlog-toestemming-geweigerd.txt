@@ -1,4 +1,4 @@
-# host-log main, 2026-09-02, gebruikersonderzoeksflow beurt 1 ("Geldt de energiebesparingsplicht voor mijn bedrijf?")
+# host-log main, 2026-09-02, eerste beurten van de onderzoeksflow en van losse vragen, vóór enig akkoord
 # de regelloop stopt zelf voor een bron die akkoord vergt; wat hieronder geweigerd wordt, is een aanroep van het model
 2026-09-02 11:46:40  [regelrecht] AUDIT: {"timestamp": "2026-09-02T11:46:40.021469+00:00", "tool": "execute_law", "input_keys": ["law", "parameters",
 2026-09-02 11:46:43  [httpx] INFO: HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"

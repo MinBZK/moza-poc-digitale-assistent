@@ -11,7 +11,7 @@ Geen browser in de ontwikkelomgeving van Claude. Wat zonder taalmodel
 reproduceerbaar was, staat er al (fig3). De rest vraagt een draaiende host met
 een sleutel, of de ZAD-logs van de onderzoeksomgeving.
 
-Formaat: PNG, breedte ≥ 1600 px. Geen sleutels, tokens of URL's van de
+Formaat: PNG, breedte ≥ 1400 px (de gerenderde logs zijn 1440–2030 px). Geen sleutels, tokens of URL's van de
 onderzoeksomgeving in beeld; alleen de fictieve persona's.
 
 | # | Bestand | Status | Waar in de PDR | Wat het laat zien |
@@ -45,8 +45,8 @@ Beide komen uit de host-log van een gewone meting op main (zie
 starten met `LOG_LEVEL=INFO`, de onderzoeksflow één keer draaien, en:
 
 ```bash
-grep -B1 "geweigerd zonder vastgelegde toestemming" /tmp/host.log   # fig5
-grep -B1 "Regel al bepaald door de regelloop" /tmp/host.log          # fig4
+grep -B1 "geweigerd zonder vastgelegde toestemming" meting/host.log   # fig5
+grep -B1 "Regel al bepaald door de regelloop" meting/host.log          # fig4
 ```
 
 Liever een echte terminal-screenshot dan de gerenderde PNG: `cat` de txt.
@@ -77,8 +77,9 @@ PDR in als het bestand bestaat (de verwijzing is er nu bewust uit).
 ## Bewust geen beeld
 
 - **"Bloemenlaan 12" in het rapport.** Eén run op 13 augustus, ruwe log niet
-  bewaard, niet op commando reproduceerbaar. Blijft een citaat uit
-  `NEXT_STEPS.md`.
+  bewaard, niet op commando reproduceerbaar. Blijft een citaat uit de
+  werklijst van het team (niet in git); de docstring in
+  `docs/superpowers/plans/2026-08-13-onderzoeksflow-robuust.md` noemt het geval.
 - **Meting 5/5 → 1/5.** Alleen als tabel zichtbaar
   (`docs/superpowers/plans/meting-regelloop-2026-08-13.md`); de ruwe
   `meting-def.log` staat niet in git.

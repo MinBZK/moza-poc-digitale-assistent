@@ -6,7 +6,8 @@
 > bestanden `runs-main.json` en `runs-f22f063.json` heten nu
 > `main/main-run*.json` en `f22f063/f22f063-run*.json` en bevatten de
 > volledige events. De cijfers 28 (eerste beurten) en 8 (weigeringen) zijn
-> in rapport en PDR vervangen door 37 en 7.
+> in rapport en PDR vervangen door 37 en 7. Onder C.4 klopt "f22f063 run 2"
+> niet: alleen main run 2 noemt loonkostensubsidie en banenafspraak.
 
 Datum 2026-09-02. Gelezen: PDR-014, het meetrapport van 2 september, de
 bestanden onder `toets-pdr-014/` (runs-main.json, runs-f22f063.json,

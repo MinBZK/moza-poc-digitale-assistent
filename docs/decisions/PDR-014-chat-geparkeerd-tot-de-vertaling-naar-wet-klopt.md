@@ -255,7 +255,7 @@ vaste bouwvorm per regeling, met per onderdeel een eigenaar.
 |---|---|---|---|---|
 | **Regel** | de gemodelleerde wet in het RegelRecht-corpus, met versie en peildatum | regelhouder (departement), gevalideerd door een jurist | informatieplicht en maatregelen live; Financieel CV zeven regelingen gemodelleerd | ongewijzigd; per regeling een juristvalidatie zoals op 23 juli |
 | **Velden** | welke invoer de regel nodig heeft, met vraagtekst en type | volgt uit de regel: de engine meldt zelf wat hij mist, de `description` per parameter is de vraag (PDR-008, punt 3) | werkt live | ongewijzigd; geen handwerk per regeling |
-| **Veld → bron** | per veld: waar de waarde vandaan komt, welke soort (registratie, attestatie, opgave, wetsconstante), of toestemming nodig is, of de ondernemer mag corrigeren | portaalbeheer (MOZa), in overleg met de bronhouder | met de hand in Python, zes velden | een **bronnenregister** los van de regeling: per gegevenssoort één keer vastgelegd, hergebruikt door elke regeling die dat gegeven vraagt |
+| **Veld → bron** | per veld: waar de waarde vandaan komt, welke soort (registratie, attestatie, opgave, wetsconstante), of toestemming nodig is, of de ondernemer mag corrigeren | portaalbeheer (MOZa), in overleg met de bronhouder | met de hand in Python, acht velden | een **bronnenregister** los van de regeling: per gegevenssoort één keer vastgelegd, hergebruikt door elke regeling die dat gegeven vraagt |
 | **Bronnen** | een koppeling per bronhouder, met herkomst en toestemmingsscope | bronhouder | KvK, KOOP, RegelRecht, RVO, netbeheerder-mock | elke nieuwe bron één keer aansluiten (UWV: doelgroepregister; gemeente: loonwaarde); daarna beschikbaar voor elke regeling |
 | **Uitvoerder** | de afspraak dat beoordelaar en portaal dezelfde regelset-versie draaien | uitvoerder en MOZa | geen | per regeling een schaduwdraai-afspraak; zonder die afspraak geen groene toets vooraf |
 | **Scherm** | de concept-aanvraag: gegevens met bron en datum, uitkomst met artikel, bevestigen of tegenspreken | MOZa | formulierbouwer uit de routeringstabel en een rapport-event met herkomst bestaan al | één generieke weergave die uit de regelingsdefinitie wordt opgebouwd; geen scherm per regeling |
@@ -382,7 +382,8 @@ moment.**
   model `netbeheerder__verbruik` zelf aan, vóórdat de respondent iets had
   gezegd, en een geslaagde aanroep legde zijn eigen toestemming vast. De
   PDR-008-controle zakte van 5/5 naar 1/5. "Prompt-instructies bleken niet
-  genoeg; dit is code, geen instructie" (meting van 13 augustus,
+  genoeg; dit is code, geen instructie" (naar de toelichting bij
+  `_bron_aanroep_gated` in `services/host/vlam_host.py`; de meting staat in
   `docs/superpowers/plans/meting-regelloop-2026-08-13.md`). Antwoord:
   `_bron_aanroep_gated`, één poort in de host waar model én regelloop
   doorheen moeten. Nagemeten op 2 september: in de flow probeert het model in
@@ -443,7 +444,7 @@ moment.**
   vraag erom vroeg (tot het ontwerp van 13 augustus).
 - Bij een onduidelijke vraag ("hoe zit dat dan met die verplichting") stelt de
   assistent eerst een verduidelijkingsvraag met drie opties
-  (`prompts/examples/onduidelijke_vraag.md`). Dat is goed gedrag, en het is
+  (`services/host/prompts/examples/onduidelijke_vraag.md`). Dat is goed gedrag, en het is
   nog een beurt voordat er een wet in beeld is.
 - Het zoeken naar de RVO-regeling kostte in elke live run twee extra rondes en
   een bronfout vlak voor het indienen (`84b95ec`). De maatregelenbeurt
@@ -492,8 +493,8 @@ geweigerde poging als een raadpleging. Dit is overhead die een routeringstabel
 niet heeft: die is een tabel, en klopt of klopt niet.
 
 **Wat de vergelijking met het RVO-stappenplan toevoegde** (19 en 20 augustus;
-het document is niet gecommit en verloren gegaan, de kernpunten staan in de
-overdracht van 20 augustus). Het stappenplan van RVO dekt drie plichten, per
+het document is niet gecommit en verloren gegaan; de kernpunten staan in de
+overdrachtsnotitie van 20 augustus, een werkdocument buiten deze repository). Het stappenplan van RVO dekt drie plichten, per
 locatie, en kent een toepassingsbereiktoets op sector en activiteit. De
 assistent dekt er één, per bedrijf, en toetst het toepassingsbereik niet:
 onterecht bevestigde plichten zijn dus mogelijk. Bedrijf is niet gelijk aan
