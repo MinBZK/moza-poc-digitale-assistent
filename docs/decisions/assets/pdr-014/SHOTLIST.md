@@ -4,8 +4,8 @@ Werkbestand, weg zodra alle beelden er staan. De PDR verwijst al naar de
 bestandsnamen hieronder; zet een beeld op die naam en de verwijzing werkt.
 
 Uitgangspunt: in de onderbouwing staan **letterlijke logs van het moment dat
-het misgaat**, geen schema's. Schema's alleen in Context (fig0, fig1) en bij
-de juristensessies (fig7, fig8); haal ze weg als ze afleiden.
+het misgaat**, geen schema's. Schema's alleen in Context (fig1, fig2) en bij
+de juristensessies (fig6, fig7); haal ze weg als ze afleiden.
 
 Geen browser in de ontwikkelomgeving van Claude. Wat zonder taalmodel
 reproduceerbaar was, staat er al (fig3). De rest vraagt een draaiende host met
@@ -16,14 +16,14 @@ onderzoeksomgeving in beeld; alleen de fictieve persona's.
 
 | # | Bestand | Status | Waar in de PDR | Wat het laat zien |
 |---|---|---|---|---|
-| 0 | `fig0-toets-bij-regelrecht.png` | aanwezig (sessieschema) | Context | de toets ligt bij RegelRecht |
-| 1 | `fig1-beslismomenten.png` | aanwezig (sessieschema) | Context | B4/B5/B6 = taalmodel |
+| 1 | `fig1-toets-bij-regelrecht.png` | aanwezig (sessieschema) | Context | de toets ligt bij RegelRecht |
+| 2 | `fig2-beslismomenten.png` | aanwezig (sessieschema) | Context | B4/B5/B6 = taalmodel |
 | 3 | `fig3-log-250000-engine.png` | **aanwezig, gerenderd uit `log3-250000-engine.txt`** (2 sept, echte engine, geen taalmodel) | Onderbouwing A, invoerwaarden | `"250.000"` → 250, `-65000` → plicht vervalt |
 | 4 | `fig4-hostlog-maatregelen-eigen-aanroep.png` | **aanwezig, gerenderd uit `log4-hostlog-model-roept-regel-zelf.txt`** (host-log 2 sept) | Onderbouwing A, verkeerde wet/bron/moment | model roept de regel zelf aan; host hergebruikt de uitkomst |
 | 5 | `fig5-hostlog-toestemming-vereist.png` | **aanwezig, gerenderd uit `log5-hostlog-toestemming-geweigerd.txt`** (host-log 2 sept) | Onderbouwing A, toestemmingspoort | model roept KvK en wallet aan vóór Delen; poort weigert |
-| 6 | `fig6-zadlog-verbruik-als-tekst.png` | MAKEN (ZAD-log 25 aug) | Onderbouwing A, invoerwaarden (invoegen na de bullet over `af6924d`) | respondent typt verbruik als tekst; regelloop wacht op opgave; assistent vraagt opnieuw |
-| 7 | `fig7-route-b5.png` | aanwezig (sessieschema) | Onderbouwing B | classificatieroute met B5 |
-| 8 | `fig8-sadee-financieel-cv.png` | aanwezig (regelrecht-repo) | Onderbouwing C | zeven regelingen op dezelfde feiten |
+| 6 | `fig6-route-b5.png` | aanwezig (sessieschema) | Onderbouwing B | classificatieroute met B5 |
+| 7 | `fig7-sadee-financieel-cv.png` | aanwezig (regelrecht-repo) | Onderbouwing C | zeven regelingen op dezelfde feiten |
+| 8 | `fig8-zadlog-verbruik-als-tekst.png` | MAKEN (ZAD-log 25 aug) | Onderbouwing A, invoerwaarden (invoegen na de bullet over `af6924d`) | respondent typt verbruik als tekst; regelloop wacht op opgave; assistent vraagt opnieuw |
 | 9 | `fig9-schermschets-concept-aanvraag.png` | MAKEN | Beslissing 2 (invoegen na "de schermschets wordt eerst met ondernemers getoetst") | concept-aanvraag met bron + ophaaldatum per gegeven |
 
 ## fig3 opnieuw maken
@@ -51,7 +51,7 @@ grep -B1 "Regel al bepaald door de regelloop" /tmp/host.log          # fig4
 
 Liever een echte terminal-screenshot dan de gerenderde PNG: `cat` de txt.
 
-## fig6 — ZAD-log van 25 augustus
+## fig8 — ZAD-log van 25 augustus
 
 ZAD-UI → deployment `gebruikersonderzoek` → component `dabackend-onderzoek` →
 logs. Tijdvenster: sessie van 25 augustus, 11:00–12:00. Zoek op `opgave`,

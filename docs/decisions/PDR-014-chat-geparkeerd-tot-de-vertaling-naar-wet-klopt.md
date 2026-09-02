@@ -26,9 +26,9 @@ in het gebruikersonderzoek van augustus (proefronde 20 augustus, sessies 25 en
 27 augustus) hebben respondenten de informatieplicht-flow van vraag tot
 ingediende rapportage doorlopen.
 
-![De toets ligt bij RegelRecht, niet bij het taalmodel](assets/pdr-014/fig0-toets-bij-regelrecht.png)
+![De toets ligt bij RegelRecht, niet bij het taalmodel](assets/pdr-014/fig1-toets-bij-regelrecht.png)
 
-*Figuur 0. Waar de juridische toets valt: bij de gemodelleerde regel. Het
+*Figuur 1. Waar de juridische toets valt: bij de gemodelleerde regel. Het
 taalmodel zit ervoor en erna. Schema uit de sessie van 10 augustus.*
 
 Het probleem zit niet bij de toets maar ervoor. Drie stappen liggen tussen de
@@ -41,9 +41,9 @@ taak van het taalmodel:
    ondernemer zegt in de termen van de regel (B5).
 3. **Welke gegevens** moeten nog worden uitgevraagd, en bij wie (B6).
 
-![De tien beslismomenten; B4, B5 en B6 zijn stappen van het taalmodel](assets/pdr-014/fig1-beslismomenten.png)
+![De tien beslismomenten; B4, B5 en B6 zijn stappen van het taalmodel](assets/pdr-014/fig2-beslismomenten.png)
 
-*Figuur 1. De tien beslismomenten uit de sessie van 10 augustus. Blauw is het
+*Figuur 2. De tien beslismomenten uit de sessie van 10 augustus. Blauw is het
 taalmodel, amber de gemodelleerde regel, wit de host. De drie stappen hierboven
 zijn B4, B5 en B6.*
 
@@ -514,9 +514,9 @@ tafel lag, met de open vragen die zijn meegegeven.
 > akkoord / nader uit te zoeken), in het bijzonder voor B1, B4, B5 en B6, en
 > de afgesproken eigenaren van de open punten.
 
-![De classificatieroute met B5 als aangrijpingspunt](assets/pdr-014/fig7-route-b5.png)
+![De classificatieroute met B5 als aangrijpingspunt](assets/pdr-014/fig6-route-b5.png)
 
-*Figuur 7. B5 op de classificatieroute: bijlage III en de uitzondering van
+*Figuur 6. B5 op de classificatieroute: bijlage III en de uitzondering van
 artikel 6, lid 3, die vervalt bij profilering. Schema uit de sessie van
 10 augustus.*
 
@@ -563,9 +563,9 @@ de assistent. Ze is hier relevant omdat ze laat zien hoeveel er zit in de stap
 "welke wet en welke invoer", zelfs als de regel al gemodelleerd is en een
 jurist ernaast zit.
 
-![Casus Sadee: zeven regelingen, uitkomsten met grondslag](assets/pdr-014/fig8-sadee-financieel-cv.png)
+![Casus Sadee: zeven regelingen, uitkomsten met grondslag](assets/pdr-014/fig7-sadee-financieel-cv.png)
 
-*Figuur 8. De casus Sadee in het Financieel CV: vier statussen links, zeven
+*Figuur 7. De casus Sadee in het Financieel CV: vier statussen links, zeven
 uitkomsten rechts, elk met wetsartikel. Welke wet je aanroept en met welke
 status bepaalt de uitkomst; de vertaling van "afstand tot de arbeidsmarkt"
 naar deze statussen is de stap die deze PDR buiten het model legt.*
