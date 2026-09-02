@@ -18,7 +18,7 @@ onderzoeksomgeving in beeld; alleen de fictieve persona's.
 |---|---|---|---|---|
 | 1 | `fig1-toets-bij-regelrecht.png` | aanwezig (sessieschema) | Context | de toets ligt bij RegelRecht |
 | 2 | `fig2-beslismomenten.png` | aanwezig (sessieschema) | Context | B4/B5/B6 = taalmodel |
-| 3 | `fig3-log-250000-engine.png` | **aanwezig, gerenderd uit `log3-250000-engine.txt`** (2 sept, echte engine, geen taalmodel) | Onderbouwing A, invoerwaarden | `"250.000"` → 250, `-65000` → plicht vervalt |
+| 3 | `fig3-log-250000-engine.png` | **aanwezig, gerenderd uit `log3-250000-engine.txt`** (2 sept, echte engine, geen taalmodel) | Onderbouwing A, invoerwaarden | `"250.000"` → 250, `-65000` → geen uitkomst |
 | 4 | `fig4-hostlog-maatregelen-eigen-aanroep.png` | **aanwezig, gerenderd uit `log4-hostlog-model-roept-regel-zelf.txt`** (host-log 2 sept) | Onderbouwing A, verkeerde wet/bron/moment | model roept de regel zelf aan; host hergebruikt de uitkomst |
 | 5 | `fig5-hostlog-toestemming-vereist.png` | **aanwezig, gerenderd uit `log5-hostlog-toestemming-geweigerd.txt`** (host-log 2 sept) | Onderbouwing A, toestemmingspoort | model roept KvK en wallet aan vóór Delen; poort weigert |
 | 6 | `fig6-route-b5.png` | aanwezig (sessieschema) | Onderbouwing B | classificatieroute met B5 |

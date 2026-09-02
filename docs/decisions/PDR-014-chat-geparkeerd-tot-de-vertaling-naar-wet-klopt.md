@@ -99,8 +99,9 @@ termijn of een indiening die niet uit een bron kwam of van een voorbehoud was
 voorzien. Dat het níet altijd goed gaat, is ook gemeten: "Uw rapportage is
 ingediend" in de beurt die nog om bevestiging vroeg (13 augustus), twee
 verschillende deadlines afhankelijk van de bron (24 augustus), en na de toets
-een termijn die het model zelf aan een "volgende ronde" koppelt (2 september,
-4 van 5 runs). De grens wordt bewaakt door een promptregel ("geef NOOIT
+een termijn die het model aan de "volgende rapportageronde" koppelt (2
+september, 4 van 5 runs; de zin over de volgende ronde is een
+promptinstructie, de datum erbij is van het model). De grens wordt bewaakt door een promptregel ("geef NOOIT
 bedragen, deadlines of termijnen tenzij uit een tool-resultaat"), en een
 promptregel houdt meestal. Op 10 augustus lag de vraag op tafel of één
 uitspraak van een overheidskanaal die er doorheen glipt, gerechtvaardigd
@@ -343,7 +344,7 @@ verkeerd.**
   Beide gerepareerd met normalisatie in de host, vóór de wet. Geen van beide is
   iets dat een taalmodel betrouwbaar afvangt; het zijn regels over het veld.
 
-  ![Engine-log: "250.000" wordt 250, -65000 laat de plicht vervallen](assets/pdr-014/fig3-log-250000-engine.png)
+  ![Engine-log: "250.000" wordt 250 en -65000 geeft geen uitkomst](assets/pdr-014/fig3-log-250000-engine.png)
 
   *Figuur 3. Nagemeten op 2 september tegen de draaiende engine, zonder
   taalmodel (`assets/pdr-014/log3-250000-engine.txt`). Aanroep 2: de opgave
@@ -354,8 +355,9 @@ verkeerd.**
 - Een respondent typte zijn verbruik als tekst in plaats van via het
   formulier. Alleen formulierantwoorden werden een feit, de regelloop bleef
   wachten en de assistent vroeg het verbruik opnieuw terwijl het net was
-  gegeven (`af6924d`, 25 augustus). Antwoord: een parser die getallen met een
-  eenheid uit de chattekst haalt. Dat is het formulier nabouwen in de chat.
+  gegeven (`af6924d`, 25 augustus, op de branch `fix/verbruik-uit-de-chattekst`,
+  nog niet gemerged). Antwoord: een parser die getallen met een eenheid uit de
+  chattekst haalt. Dat is het formulier nabouwen in de chat.
 
 **Het model kiest de verkeerde wet, de verkeerde bron of het verkeerde
 moment.**
@@ -381,10 +383,11 @@ moment.**
 - Zodra het statusblok liet doorschemeren dat er verbruik nodig was, riep het
   model `netbeheerder__verbruik` zelf aan, vóórdat de respondent iets had
   gezegd, en een geslaagde aanroep legde zijn eigen toestemming vast. De
-  PDR-008-controle zakte van 5/5 naar 1/5. "Prompt-instructies bleken niet
-  genoeg; dit is code, geen instructie" (naar de toelichting bij
-  `_bron_aanroep_gated` in `services/host/vlam_host.py`; de meting staat in
-  `docs/superpowers/plans/meting-regelloop-2026-08-13.md`). Antwoord:
+  PDR-008-controle zakte van 5/5 naar 1/5. Promptinstructies alleen stopten
+  dat niet, zo staat het bij `_bron_aanroep_gated` in
+  `services/host/vlam_host.py`; de poort staat daarom in de host, niet in de
+  prompt (meting in `docs/superpowers/plans/meting-regelloop-2026-08-13.md`).
+  Antwoord:
   `_bron_aanroep_gated`, één poort in de host waar model én regelloop
   doorheen moeten. Nagemeten op 2 september: in de flow probeert het model in
   elke eerste beurt het Handelsregister aan te roepen vóór het akkoord (5 van
@@ -397,8 +400,11 @@ moment.**
 
   *Figuur 5. Host-log van 2 september: het model probeert `kvk__mijn_bedrijf`
   en `netbeheerder__verbruik` aan te roepen voordat de ondernemer op Delen
-  heeft geklikt; de poort weigert. De promptregel ("toestemming eerst, roep
-  in uw eerste antwoord geen tool aan") hield dit niet tegen, de code wel.*
+  heeft geklikt; de poort weigert. Voor de wallet staat er een harde
+  promptregel ("roep `netbeheerder__verbruik` nooit zelf aan") en die hield
+  drie keer niet; voor de KvK zegt de prompt juist "gebruik
+  `kvk__mijn_bedrijf`", en houdt alleen de code de volgorde vast. In beide
+  gevallen ligt de grens in code.*
 - De maatregelenregel kwam erbij als het model besloot dat de vraag erom
   vroeg. Artikel 5.15d Bal draagt op te rapporteren over de getroffen
   maatregelen; de tweede regel volgt dus uit de eerste en hoeft niet geraden
@@ -452,7 +458,8 @@ moment.**
   voegen; geen enkele controle in het meetscript vraagt of een beurt de
   ondernemer verder helpt (waargenomen bij de doorloop van 13 augustus, zie
   `docs/superpowers/plans/meting-regelloop-2026-08-13.md`).
-- Een beurt kost 5 tot 45 seconden (rooktest vóór de sessie van 25 augustus).
+- Een beurt kost 5 tot 45 seconden (rooktest vóór de sessie van 25 augustus,
+  werkdocument buiten deze repository).
   Op 24 augustus was de zwaarste beurt 20 seconden; op 2 september, met de
   regelloop in elke beurt, is de mediaan 16 seconden en de zwaarste 43. Een
   staart ging op 20 augustus twee keer over de grens van 60 seconden: lang
@@ -698,8 +705,8 @@ classifier, zoeken in KOOP), waarna het model alleen nog de invoer uitvraagt.
 - **Deze repository.** Blijft staan en blijft draaibaar: de chat-flow is de
   demo van wat er al werkt en het bewijs voor de argumenten hierboven. Er komt
   geen nieuw werk aan de gespreksvorm zolang de parkeerstand duurt; de
-  werklijst en de open bevindingen uit de review van 24 augustus blijven
-  open en worden alleen opgepakt als het onderzoek van augustus er een uitloop
+  werklijst en de open bevindingen uit de code-review van 24 augustus (beide
+  werkdocumenten buiten deze repository) blijven open en worden alleen opgepakt als het onderzoek van augustus er een uitloop
   van vraagt. Waar de bouw van de basis en van Digitale assistent 2.0 landt, wordt bij
   de eerste bouwstap besloten.
 
