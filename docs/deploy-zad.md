@@ -39,7 +39,11 @@ staat los daarvan in de component-config.
   proxy, dus CORS komt er niet aan te pas. Zet hier niets in "voor de zekerheid" —
   dat opent iets wat nu dicht is.
 - Geen `ANTHROPIC_API_KEY` / `VLAM_API_KEY`: gebruikers leveren hun eigen sleutel
-  via de UI (PDR-010).
+  via de UI (PDR-010). **Uitzondering:** tijdens een begeleid gebruikersonderzoek
+  staat er wél een aparte sleutel met spend limit, en gaat
+  `ALLOW_API_KEY_OVERRIDE` op `false`, zodat deelnemers niets hoeven in te voeren.
+  Die sleutel wordt na afloop ingetrokken en de vlag gaat terug naar `true`. Zie
+  het addendum van 2026-08-10 in `docs/decisions/PDR-010-sleutel-van-de-gebruiker.md`.
 
 ### Valkuil: kale hostnamen in de nginx-proxy
 
