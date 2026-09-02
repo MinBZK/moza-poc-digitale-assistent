@@ -69,6 +69,7 @@ def analyseer_run(run: dict) -> dict:
     return {
         "label": run["label"], "run": run["run"], "afgebroken": run.get("afgebroken"),
         "beurten": len(b), "totaal_s": run.get("totaal_seconden"),
+        "beurten_s": round(sum(x["seconden"] or 0 for x in b), 1),
         "seconden": [x["seconden"] for x in b],
         "tools_per_beurt": [x["tools"] for x in b],
         "eerste_bron_beurt": eerste_bron, "eerste_wet_beurt": eerste_wet,
@@ -96,15 +97,15 @@ def main(mappen: list[str]) -> None:
     for label in sorted({r["label"] for r in runs}):
         sel = [r for r in runs if r["label"] == label]
         print(f"## {label} ({len(sel)} runs)\n")
-        print("| run | beurten | totaal s | s per beurt | 1e bron | 1e wet | 1e uitkomst | toezegging vóór bron | 'ingediend' zonder indienen | datums | zoek_regeling | execute_law | bron_fouten | controles fout |")
+        print("| run | beurten | som beurten s (totaal incl. wachten) | s per beurt | 1e bron | 1e wet | 1e uitkomst | toezegging vóór bron | 'ingediend' zonder indienen | datums | zoek_regeling | execute_law | bron_fouten | controles fout |")
         print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
         for r in sel:
             tz = "; ".join(f"b{k}: {', '.join(v.keys())}" for k, v in r["toezeggingen_voor_eerste_bron"].items()) or "geen"
-            print(f"| {r['run']} | {r['beurten']} | {r['totaal_s']} | {r['seconden']} | {r['eerste_bron_beurt']} | {r['eerste_wet_beurt']} | {r['eerste_uitkomst_beurt']} | {tz} | {r['ingediend_zonder_indienen'] or '-'} | {', '.join(r['genoemde_datums']) or '-'} | {r['extra_rondes']['rvo__zoek_regeling']} | {r['extra_rondes']['regelrecht__execute_law']} | {', '.join(r['bron_fouten']) or '-'} | {len(r['controles_fout'])}/{r['controles_totaal']} |")
+            print(f"| {r['run']} | {r['beurten']} | {r['beurten_s']} ({r['totaal_s']}) | {r['seconden']} | {r['eerste_bron_beurt']} | {r['eerste_wet_beurt']} | {r['eerste_uitkomst_beurt']} | {tz} | {r['ingediend_zonder_indienen'] or '-'} | {', '.join(r['genoemde_datums']) or '-'} | {r['extra_rondes']['rvo__zoek_regeling']} | {r['extra_rondes']['regelrecht__execute_law']} | {', '.join(r['bron_fouten']) or '-'} | {len(r['controles_fout'])}/{r['controles_totaal']} |")
         print()
         alle_s = [s for r in sel for s in r["seconden"] if s]
         if alle_s:
-            print(f"Duur per beurt over alle runs: mediaan {statistics.median(alle_s):.1f} s, max {max(alle_s):.1f} s, som per run mediaan {statistics.median([r['totaal_s'] for r in sel if r['totaal_s']]):.0f} s\n")
+            print(f"Duur per beurt over alle runs: mediaan {statistics.median(alle_s):.1f} s, max {max(alle_s):.1f} s, som van de beurten per run {min(r['beurten_s'] for r in sel):.0f}–{max(r['beurten_s'] for r in sel):.0f} s, mediaan {statistics.median([r['beurten_s'] for r in sel]):.0f} s (wandkloktijd incl. wachten buiten de beurten: mediaan {statistics.median([r['totaal_s'] for r in sel if r['totaal_s']]):.0f} s)\n")
         print("### Beurt 1 per run (wat de ondernemer leest vóór enige bron)\n")
         for r in sel:
             print(f"**run {r['run']}** ({r['beurt1_s']} s, tools: {r['beurt1_tools'] or 'geen'}) — toezeggingen: {', '.join(r['beurt1_toezeggingen'].keys()) or 'geen'}\n")

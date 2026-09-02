@@ -2,15 +2,15 @@
 
 ## f22f063 (5 runs)
 
-| run | beurten | totaal s | s per beurt | 1e bron | 1e wet | 1e uitkomst | toezegging vóór bron | 'ingediend' zonder indienen | datums | zoek_regeling | execute_law | bron_fouten | controles fout |
+| run | beurten | som beurten s (totaal incl. wachten) | s per beurt | 1e bron | 1e wet | 1e uitkomst | toezegging vóór bron | 'ingediend' zonder indienen | datums | zoek_regeling | execute_law | bron_fouten | controles fout |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 6 | 63.0 | [6.0, 34.0, 9.8, 4.9, 4.5, 3.8] | 2 | 2 | 2 | geen | - | - | 0 | 2 | - | 8/32 |
-| 2 | 6 | 49.4 | [4.6, 18.2, 9.7, 8.9, 4.3, 3.7] | 2 | 2 | 2 | geen | - | - | 0 | 2 | - | 7/31 |
-| 3 | 6 | 59.4 | [10.6, 27.2, 9.2, 4.3, 4.2, 3.5] | 2 | 2 | 2 | geen | - | - | 0 | 2 | - | 7/31 |
-| 4 | 6 | 103.7 | [5.7, 40.4, 10.1, 3.8, 4.5, 4.0] | 2 | 2 | 2 | geen | - | - | 0 | 2 | - | 7/30 |
-| 5 | 6 | 54.0 | [3.5, 28.0, 9.3, 4.8, 4.5, 3.9] | 2 | 2 | 2 | geen | - | - | 0 | 2 | - | 7/32 |
+| 1 | 6 | 63.0 (63.0) | [6.0, 34.0, 9.8, 4.9, 4.5, 3.8] | 2 | 2 | 2 | geen | - | - | 0 | 2 | - | 8/32 |
+| 2 | 6 | 49.4 (49.4) | [4.6, 18.2, 9.7, 8.9, 4.3, 3.7] | 2 | 2 | 2 | geen | - | - | 0 | 2 | - | 7/31 |
+| 3 | 6 | 59.0 (59.4) | [10.6, 27.2, 9.2, 4.3, 4.2, 3.5] | 2 | 2 | 2 | geen | - | - | 0 | 2 | - | 7/31 |
+| 4 | 6 | 68.5 (103.7) | [5.7, 40.4, 10.1, 3.8, 4.5, 4.0] | 2 | 2 | 2 | geen | - | - | 0 | 2 | - | 7/30 |
+| 5 | 6 | 54.0 (54.0) | [3.5, 28.0, 9.3, 4.8, 4.5, 3.9] | 2 | 2 | 2 | geen | - | - | 0 | 2 | - | 7/32 |
 
-Duur per beurt over alle runs: mediaan 4.8 s, max 40.4 s, som per run mediaan 59 s
+Duur per beurt over alle runs: mediaan 4.8 s, max 40.4 s, som van de beurten per run 49–68 s, mediaan 59 s (wandkloktijd incl. wachten buiten de beurten: mediaan 59 s)
 
 ### Beurt 1 per run (wat de ondernemer leest vóór enige bron)
 
@@ -82,15 +82,15 @@ Duur per beurt over alle runs: mediaan 4.8 s, max 40.4 s, som per run mediaan 59
 
 ## main (5 runs)
 
-| run | beurten | totaal s | s per beurt | 1e bron | 1e wet | 1e uitkomst | toezegging vóór bron | 'ingediend' zonder indienen | datums | zoek_regeling | execute_law | bron_fouten | controles fout |
+| run | beurten | som beurten s (totaal incl. wachten) | s per beurt | 1e bron | 1e wet | 1e uitkomst | toezegging vóór bron | 'ingediend' zonder indienen | datums | zoek_regeling | execute_law | bron_fouten | controles fout |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 7 | 145.9 | [10.8, 12.3, 26.7, 12.8, 23.9, 31.0, 28.4] | 1 | 1 | 3 | geen | - | 1 december 2026 | 0 | 16 | 1:TOESTEMMING_VEREIST(kvk), 2:TOESTEMMING_VEREIST(netbeheerder) | 7/44 |
-| 2 | 7 | 162.6 | [6.7, 6.5, 43.2, 14.5, 8.4, 31.6, 16.0] | 1 | 1 | 3 | geen | - | 1 december 2026 | 0 | 15 | 1:TOESTEMMING_VEREIST(kvk) | 8/44 |
-| 3 | 7 | 105.7 | [16.0, 7.7, 22.2, 9.3, 8.6, 24.5, 17.6] | 1 | 1 | 3 | geen | - | 1 december 2026 | 0 | 14 | 1:TOESTEMMING_VEREIST(kvk) | 7/44 |
-| 4 | 7 | 94.8 | [4.6, 10.9, 20.3, 10.7, 6.3, 25.2, 16.8] | 1 | 1 | 3 | geen | - | 1 december 2026 | 0 | 14 | 1:TOESTEMMING_VEREIST(kvk), 2:TOESTEMMING_VEREIST(netbeheerder) | 8/44 |
-| 5 | 7 | 125.0 | [35.7, 14.7, 20.1, 5.6, 6.2, 24.9, 17.8] | 1 | 1 | 3 | geen | - | 1 december 2026 | 0 | 14 | 1:TOESTEMMING_VEREIST(kvk) | 4/44 |
+| 1 | 7 | 145.9 (145.9) | [10.8, 12.3, 26.7, 12.8, 23.9, 31.0, 28.4] | 1 | 1 | 3 | geen | - | 1 december 2026 | 0 | 16 | 1:TOESTEMMING_VEREIST(kvk), 2:TOESTEMMING_VEREIST(netbeheerder) | 7/44 |
+| 2 | 7 | 126.9 (162.6) | [6.7, 6.5, 43.2, 14.5, 8.4, 31.6, 16.0] | 1 | 1 | 3 | geen | - | 1 december 2026 | 0 | 15 | 1:TOESTEMMING_VEREIST(kvk) | 8/44 |
+| 3 | 7 | 105.9 (105.7) | [16.0, 7.7, 22.2, 9.3, 8.6, 24.5, 17.6] | 1 | 1 | 3 | geen | - | 1 december 2026 | 0 | 14 | 1:TOESTEMMING_VEREIST(kvk) | 7/44 |
+| 4 | 7 | 94.8 (94.8) | [4.6, 10.9, 20.3, 10.7, 6.3, 25.2, 16.8] | 1 | 1 | 3 | geen | - | 1 december 2026 | 0 | 14 | 1:TOESTEMMING_VEREIST(kvk), 2:TOESTEMMING_VEREIST(netbeheerder) | 8/44 |
+| 5 | 7 | 125.0 (125.0) | [35.7, 14.7, 20.1, 5.6, 6.2, 24.9, 17.8] | 1 | 1 | 3 | geen | - | 1 december 2026 | 0 | 14 | 1:TOESTEMMING_VEREIST(kvk) | 4/44 |
 
-Duur per beurt over alle runs: mediaan 16.0 s, max 43.2 s, som per run mediaan 125 s
+Duur per beurt over alle runs: mediaan 16.0 s, max 43.2 s, som van de beurten per run 95–146 s, mediaan 125 s (wandkloktijd incl. wachten buiten de beurten: mediaan 125 s)
 
 ### Beurt 1 per run (wat de ondernemer leest vóór enige bron)
 

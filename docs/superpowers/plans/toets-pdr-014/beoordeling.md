@@ -14,6 +14,8 @@
 > run-JSON niet te zien. Punt C.6 zegt
 > "drie bronnen": het zijn twee bronnen plus de toets. De beperkingen in het
 > rapport zijn hernummerd (de peiling-beperking is nu 3).
+> De doorlooptijden "94,8–162,6 s" zijn wandkloktijd inclusief wachten buiten
+> de beurten; de som van de beurten is 95–146 s.
 
 Datum 2026-09-02. Gelezen: PDR-014, het meetrapport van 2 september, de
 bestanden onder `toets-pdr-014/` (runs-main.json, runs-f22f063.json,

@@ -113,7 +113,7 @@ Gemeten op 2 september: op de host van 13 augustus (het model orkestreert)
 leest de ondernemer de uitkomst in beurt 2, na een modelbeurt van 18 tot 40
 seconden waarin twee bronnen en de toets in één keer draaien; op de huidige
 host (de regel stuurt) leest hij de uitkomst in beurt 3, na mediaan 16
-seconden per beurt en 95 tot 163 seconden per doorloop (beide hosts draaiden
+seconden per beurt en 95 tot 146 seconden aan beurten per doorloop (beide hosts draaiden
 deels tegelijk op dezelfde sleutel en engine, dus de uitschieters zijn onder
 gedeelde belasting gemeten). De engine zelf doet er 60 milliseconden over. Vrijwel alle tijd zit in het model en het gesprek
 eromheen. Als het model de verkeerde regeling zoekt, een regel opnieuw start
@@ -339,7 +339,8 @@ verkeerd.**
   ontbrekend veld maar `requirements_met = false` zonder uitkomst, en dat
   toonde de host als "de plicht geldt niet" (commit `cdde0e0`, 19 augustus).
   Een tikfout `-5000` deed hetzelfde (`4b13a2f`, 20 augustus). Nagemeten op
-  2 september: 10 van 10 identiek (figuur 3).
+  2 september: 10 van 10 identiek (`docs/superpowers/plans/toets-pdr-014/engine-runs.json`;
+  één reeks van vier aanroepen in figuur 3).
   Beide gerepareerd met normalisatie in de host, vóór de wet. Geen van beide is
   iets dat een taalmodel betrouwbaar afvangt; het zijn regels over het veld.
 
@@ -579,7 +580,9 @@ jurist ernaast zit.
 
 *Figuur 7. De casus Sadee in het Financieel CV (stand 14 augustus): vier
 statussen links, rechts de uitkomsten per regeling met wetsartikel, waaronder
-één die toen nog niet gemodelleerd was (Wajong 2:22, sinds 19 augustus wel) en
+één die toen nog niet gemodelleerd was (Wajong 2:22; op 19 augustus alsnog
+gemodelleerd in `regelrecht-corpus`, branch
+`traject/financieel-cv-validatie-df48ddd1`, commit `aa04ff3`) en
 één die niet meer bestaat (LIV). Welke wet je aanroept en met welke status
 bepaalt de uitkomst; de vertaling van "afstand tot de arbeidsmarkt" naar deze
 statussen is de stap die deze PDR buiten het model legt.*
@@ -679,8 +682,9 @@ classifier, zoeken in KOOP), waarna het model alleen nog de invoer uitvraagt.
   eventueel in een andere vorm." Te vermijden in de tekst richting de
   ondernemer: hulp, check, slim, AI, automatisch, en formuleringen die naar
   een recht klinken ("waar u recht op heeft").
-- **Eerdere PDR's blijven gelden.** PDR-001, PDR-005 en PDR-006 (dual
-  LLM-backend, CLI versus MCP als transport) beschrijven de chat-architectuur
+- **Eerdere PDR's blijven gelden.** PDR-001, PDR-005, PDR-006 en PDR-007
+  (dual LLM-backend, CLI versus MCP als transport, de demo-persona's en de
+  Business Wallet als bron) beschrijven de chat-architectuur
   van deze codebase; niets daarvan wordt ongeldig verklaard. Komt de chat
   terug, dan is dit het vertrekpunt. Wordt de vorm anders, dan wordt per PDR
   besloten of hij wordt overgenomen, vervangen of ongeldig verklaard. PDR-008,
