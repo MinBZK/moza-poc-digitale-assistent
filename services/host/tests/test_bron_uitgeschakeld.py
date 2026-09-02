@@ -50,3 +50,35 @@ def test_de_lijsten_blijven_gesorteerd_en_gescheiden():
     host = _host(status)
     assert host.bronnen_offline == ["koop"]
     assert host.bronnen_uit == ["netbeheerder"]
+
+
+def test_een_uitgezette_bron_wordt_bij_het_opstarten_gemeld(caplog):
+    """De omgeving staat buiten de repo; de log is de plek waar een bron die
+    voor één onderzoek is uitgezet, zichtbaar blijft."""
+    zonder_wallet = {n: "verbonden" for n in BRON_LABELS if n != "netbeheerder"}
+    host = _host(zonder_wallet)
+    with caplog.at_level("WARNING", logger="vlam.host"):
+        host._meld_uitgezette_bronnen()
+    meldingen = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert len(meldingen) == 1
+    assert "netbeheerder" in meldingen[0]
+    assert "MCP_SERVER_NETBEHEERDER" in meldingen[0]
+    assert "Business Wallet" in meldingen[0]
+
+
+def test_alle_bronnen_aan_geeft_geen_waarschuwing(caplog):
+    alles = {n: "verbonden" for n in BRON_LABELS}
+    with caplog.at_level("WARNING", logger="vlam.host"):
+        _host(alles)._meld_uitgezette_bronnen()
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
+
+
+def test_health_toont_de_uitgezette_bronnen_apart():
+    """`servers` meldt storingen; een bewust uitgezette bron hoort daar niet
+    tussen, maar wel zichtbaar zijn voor wie /health leest."""
+    zonder_wallet = {n: "verbonden" for n in BRON_LABELS if n != "netbeheerder"}
+    status = _host(zonder_wallet).get_status()
+    assert status["bronnen_uit"] == ["netbeheerder"]
+    assert "netbeheerder" not in status["servers"]
+    alles = {n: "verbonden" for n in BRON_LABELS}
+    assert _host(alles).get_status()["bronnen_uit"] == []

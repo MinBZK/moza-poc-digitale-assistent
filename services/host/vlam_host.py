@@ -1169,6 +1169,7 @@ class VLAMHost:
             tool_count,
             ", ".join(backends),
         )
+        self._meld_uitgezette_bronnen()
 
     async def shutdown(self):
         """Sluit alle verbindingen."""
@@ -1178,6 +1179,28 @@ class VLAMHost:
     @property
     def has_tools(self) -> bool:
         return len(self.registry.tool_map) > 0
+
+    def _meld_uitgezette_bronnen(self) -> None:
+        """Waarschuw bij het opstarten voor elke bron die bewust uitstaat.
+
+        Uitzetten gebeurt via `MCP_SERVER_<BRON>=uit` in de omgeving, en die
+        omgeving staat op ZAD per component buiten deze repository. Een bron
+        die voor één onderzoek is uitgezet, blijft anders stil uit staan, en
+        de ondernemer krijgt dan een formulier waar een Business Wallet had
+        gestaan. Standaard staan alle bronnen aan; dit is de plek waar een
+        afwijking zichtbaar wordt zonder in de configuratie te hoeven kijken.
+        """
+        from errors import BRON_LABELS
+
+        for naam in self.bronnen_uit:
+            logger.warning(
+                "Bron '%s' (%s) staat bewust uit via MCP_SERVER_%s. Standaard "
+                "staat deze bron aan; verwijder de variabele of zet hem op het "
+                "standaardpad om hem weer in te schakelen.",
+                naam,
+                BRON_LABELS.get(naam, naam),
+                naam.upper(),
+            )
 
     @property
     def bronnen_offline(self) -> list[str]:
@@ -1280,6 +1303,10 @@ class VLAMHost:
                 "vlam": self.vlam_client is not None,
             },
             "servers": self.server_status,
+            # Bewust uitgezette bronnen apart: ze staan niet in `servers` (geen
+            # storing), maar wie /health leest moet kunnen zien dat bijvoorbeeld
+            # de Business Wallet in deze omgeving uitstaat.
+            "bronnen_uit": self.bronnen_uit,
             "cli": {k: "verbonden" if v else "niet beschikbaar" for k, v in cli_tools.items()},
             "tools": len(self.registry.tool_map),
         }

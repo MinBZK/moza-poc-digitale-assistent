@@ -40,6 +40,14 @@ staat los daarvan in de component-config.
   dat opent iets wat nu dicht is.
 - Geen `ANTHROPIC_API_KEY` / `VLAM_API_KEY`: gebruikers leveren hun eigen sleutel
   via de UI (PDR-010).
+- **Geen `MCP_SERVER_NETBEHEERDER`.** De EU Business Wallet (netbeheerder-mock)
+  staat standaard **aan**: zonder de variabele start de host de server op het
+  standaardpad. `MCP_SERVER_NETBEHEERDER=uit` was een tijdelijke instelling
+  voor het gebruikersonderzoek van augustus (de respondent gaf zijn verbruik
+  zelf op) en hoort op geen enkel component meer te staan. Staat hij er wel,
+  dan waarschuwt de host bij het opstarten (`Bron 'netbeheerder' ... staat
+  bewust uit`) en toont `GET /health` hem onder `bronnen_uit`. Controleer dat
+  na elke uitrol: `bronnen_uit` hoort `[]` te zijn.
 
 ### Valkuil: kale hostnamen in de nginx-proxy
 
@@ -73,7 +81,9 @@ afwijking hoort niet op `poc` te belanden:
   respondenten geen sleutel hoeven in te vullen. Dat is een bewuste, tijdelijke
   afwijking van PDR-010, beperkt tot deze niet-gepubliceerde link. **Na het
   onderzoek gaat de sleutel er weer af.** Verder dezelfde env als `dabackend`
-  (`TEST_KVK_NUMMERS`, `MCP_SERVER_NETBEHEERDER`; `ALLOWED_ORIGINS` leeg).
+  (`TEST_KVK_NUMMERS`; `ALLOWED_ORIGINS` leeg; geen `MCP_SERVER_NETBEHEERDER`,
+  want de Business Wallet staat standaard aan; tijdens de sessies van augustus
+  stond hij hier bewust uit).
 - `proef-onderzoek` heeft `BACKEND_ORIGIN` op
   `http://dabackend-onderzoek.<namespace van gebruikersonderzoek>.svc.cluster.local:8000`
   (FQDN, zie de valkuil hierboven).
