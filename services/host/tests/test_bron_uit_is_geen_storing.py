@@ -13,12 +13,16 @@ gemeld worden, met het alternatief voor de gebruiker (`bronnen_status.md`).
 
 from pathlib import Path
 
+import pytest
+
 import vlam_host
 from config import MCP_SERVER_ENV_KEYS
 from prompts.composer import compose_system_prompt
 
 STORING_KOP = "BESCHIKBAARHEID VAN BRONNEN"
 ALLE = ("kvk", "koop", "regelrecht", "rvo", "netbeheerder")
+
+pytestmark = pytest.mark.usefixtures("configuratie_per_test")
 
 
 def _host(status: dict[str, str]) -> vlam_host.VLAMHost:

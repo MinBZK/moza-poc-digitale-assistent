@@ -605,24 +605,19 @@ def draai(loop: Loop, persona: Persona) -> None:
     )
     # Toets tegen de vijf bekende bronnen, niet tegen wat `servers` toevallig
     # bevat: een bewust uitgezette bron staat daar niet in en zou anders
-    # ongemerkt passeren.
+    # ongemerkt passeren. Eén controle, met in de toelichting het verschil
+    # tussen een storing en een uitgezette bron (de Business Wallet hoort aan).
+    uit = set(gezond.get("bronnen_uit", []))
+    storing = [n for n, s in gezond["servers"].items() if s != "verbonden"]
     ontbreekt = sorted(
         n for n in errors.BRON_LABELS if gezond["servers"].get(n) != "verbonden"
     )
     loop.controleer(
         "health",
         not ontbreekt,
-        "alle vijf de bronnen zijn verbonden",
-        f"niet verbonden of uitgezet: {ontbreekt}",
-    )
-    # De Business Wallet hoort standaard aan; /health meldt een uitgezette
-    # bron apart onder `bronnen_uit`.
-    uit = gezond.get("bronnen_uit", [])
-    loop.controleer(
-        "health",
-        not uit,
-        "geen bron bewust uitgezet (de Business Wallet hoort aan)",
-        f"uitgezet via de omgeving: {uit}",
+        "alle vijf de bronnen zijn verbonden (geen storing, geen bron uitgezet)",
+        f"storing: {storing}; bewust uitgezet via de omgeving: {sorted(uit)}; "
+        f"anders ontbrekend: {sorted(set(ontbreekt) - uit - set(storing))}",
     )
 
     print("\n=== 1. vraag naar de plicht (toestemming eerst) ===")

@@ -31,8 +31,10 @@ os.environ["TEST_KVK_NUMMERS"] = "85234567,62345681,56789012,61234570"
 # De bronnen staan onder pytest altijd op hun standaardpad. `bronnen_uit` leest
 # de configuratie, dus een `MCP_SERVER_NETBEHEERDER=uit` in de .env van de
 # ontwikkelaar zou anders elke host in de suite zonder wallet laten praten.
-for _key in [k for k in os.environ if k.startswith("MCP_SERVER_")]:
-    del os.environ[_key]
+# Leeg zetten, niet wissen: `load_dotenv` vult alleen ontbrekende sleutels aan,
+# en leeg betekent voor de configuratie "standaardpad".
+for _key in ("KVK", "KOOP", "REGELRECHT", "RVO", "NETBEHEERDER"):
+    os.environ[f"MCP_SERVER_{_key}"] = ""
 
 import pytest  # noqa: E402  — pas ná het leegzetten van de credentials
 
@@ -64,12 +66,12 @@ def schone_redactie_state():
         handler.setFormatter(formatter)
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def configuratie_per_test(monkeypatch):
-    """Elke test begint met de standaardconfiguratie (alle bronnen aan) en mag
-    `vlam_host.MCP_SERVERS` / `MCP_SERVERS_UIT` daarna voor zichzelf herzetten;
-    monkeypatch draait dat na de test terug."""
+    """Voor tests die `vlam_host.MCP_SERVERS` / `MCP_SERVERS_UIT` zelf herzetten
+    om een uitgezette bron na te bootsen: monkeypatch draait dat na de test
+    terug. Aanzetten met `pytestmark = pytest.mark.usefixtures(...)`."""
     import vlam_host
 
-    monkeypatch.setattr(vlam_host, "MCP_SERVERS", dict(vlam_host.MCP_SERVERS))
-    monkeypatch.setattr(vlam_host, "MCP_SERVERS_UIT", {})
+    monkeypatch.setattr(vlam_host, "MCP_SERVERS", vlam_host.MCP_SERVERS)
+    monkeypatch.setattr(vlam_host, "MCP_SERVERS_UIT", vlam_host.MCP_SERVERS_UIT)

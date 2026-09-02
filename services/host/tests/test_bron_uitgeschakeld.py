@@ -24,6 +24,9 @@ from errors import BRON_LABELS
 from vlam_host import VLAMHost
 
 ALLE = sorted(BRON_LABELS)
+
+pytestmark = pytest.mark.usefixtures("configuratie_per_test")
+
 LOGGER = "vlam.host"
 
 
@@ -127,11 +130,12 @@ def test_startup_meldt_de_uitgezette_bronnen(uit, caplog):
 
 @pytest.mark.parametrize(
     ("uit", "storing", "verwacht"),
-    [([], [], "actief"), (["netbeheerder"], [], "gedegradeerd"), ([], ["koop"], "gedegradeerd")],
+    [([], [], "actief"), (["netbeheerder"], [], "actief"), ([], ["koop"], "gedegradeerd")],
 )
-def test_health_status_is_gedegradeerd_bij_een_bron_die_uit_of_weg_is(uit, storing, verwacht):
-    """De readiness-probe kijkt naar de HTTP-status; wie de body leest hoort in
-    één woord te zien dat er een bron ontbreekt."""
+def test_health_status_is_gedegradeerd_bij_een_storing_niet_bij_een_uitgezette_bron(uit, storing, verwacht):
+    """Een storing is een afwijking van wat is ingericht; een uitgezette bron is
+    ingericht zoals hij is en staat apart onder `bronnen_uit`. Wie op `status`
+    let ziet zo alleen echte storingen."""
     assert _host(uit=uit, storing=storing).get_status()["status"] == verwacht
 
 
@@ -145,3 +149,30 @@ def test_regelstatus_geeft_de_bron_van_de_maatregelen_toestemming_door():
     )
     status = vlam_host._regel_status_dict(plicht, maatregelen)
     assert status["maatregelen"]["toestemming_bron"] == "Business Wallet"
+
+
+@pytest.mark.parametrize("transport", ["anthropic", "openai"])
+def test_tools_die_akkoord_vergen_staan_pas_na_akkoord_in_de_lijst(transport):
+    """De poort weigert een aanroep vóór akkoord al; maar een tool die het model
+    niet ziet, roept het ook niet aan, en dat scheelt een beurt en een bronfout."""
+    host = _host()
+
+    def tool(naam: str) -> dict:
+        if transport == "anthropic":
+            return {"name": naam, "description": "", "input_schema": {}}
+        return {"type": "function", "function": {"name": naam, "parameters": {}}}
+
+    alle = [tool(n) for n in ("kvk__mijn_bedrijf", "netbeheerder__verbruik",
+                              "regelrecht__execute_law", "rvo__zoek_regeling", "koop__zoek")]
+    namen = lambda ts: [t.get("name") or t["function"]["name"] for t in ts]  # noqa: E731
+    assert namen(host._tools_voor_model("g1", alle)) == [
+        "regelrecht__execute_law", "rvo__zoek_regeling", "koop__zoek"
+    ]
+    host.toestemming["g1"] = {"kvk"}
+    assert "kvk__mijn_bedrijf" in namen(host._tools_voor_model("g1", alle))
+    assert "netbeheerder__verbruik" not in namen(host._tools_voor_model("g1", alle))
+    host.toestemming["g1"] = {"kvk", "netbeheerder"}
+    assert namen(host._tools_voor_model("g1", alle)) == namen(alle)
+    assert namen(host._tools_voor_model("ander-gesprek", alle)) == [
+        "regelrecht__execute_law", "rvo__zoek_regeling", "koop__zoek"
+    ]

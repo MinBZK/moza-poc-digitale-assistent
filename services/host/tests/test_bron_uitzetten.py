@@ -11,11 +11,20 @@ te zijn - en hoort de assistent hem ook niet te beloven.
 """
 
 import importlib
+import re
+from pathlib import Path
 
 import pytest
 
+from config import _UIT
+
 
 def _config_met(monkeypatch, **env):
+    import dotenv
+
+    # Anders vult load_dotenv een gewiste sleutel weer aan uit de .env van de
+    # ontwikkelaar, en test je zijn omgeving in plaats van de configuratie.
+    monkeypatch.setattr(dotenv, "load_dotenv", lambda *a, **k: False)
     for k, v in env.items():
         if v is None:
             monkeypatch.delenv(k, raising=False)
@@ -26,7 +35,7 @@ def _config_met(monkeypatch, **env):
     return importlib.reload(config)
 
 
-@pytest.mark.parametrize("waarde", ["uit", "off", "none", "geen", "false", "no", "nee", "0", "disabled", " Uit "])
+@pytest.mark.parametrize("waarde", sorted(_UIT) + [" Uit "])
 def test_een_uitzet_woord_schakelt_de_bron_uit(monkeypatch, waarde):
     config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER=waarde)
     assert "netbeheerder" not in config.MCP_SERVERS
@@ -62,3 +71,20 @@ def test_uitzetten_kan_op_meer_dan_een_manier(monkeypatch, waarde):
 def test_de_andere_bronnen_blijven_ongemoeid(monkeypatch):
     config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER="uit")
     assert set(config.MCP_SERVERS) == {"kvk", "koop", "regelrecht", "rvo"}
+
+
+@pytest.mark.parametrize(
+    "bestand",
+    [
+        Path(__file__).parents[1] / ".env.example",
+        Path(__file__).parents[3] / "docs" / "deploy-zad.md",
+    ],
+)
+def test_de_uitzet_woorden_in_de_documentatie_zijn_die_van_de_code(bestand):
+    """De lijst leeft in `config._UIT`; de docs herhalen hem voor beheerders.
+    Loopt een woord uit de pas, dan belooft een doc iets dat de host negeert."""
+    tekst = bestand.read_text(encoding="utf-8")
+    for woord in _UIT:
+        assert re.search(rf"(?<!\w){re.escape(woord)}(?!\w)", tekst), (
+            f"{bestand.name} mist uitzet-woord {woord!r}"
+        )

@@ -44,14 +44,16 @@ staat los daarvan in de component-config.
   staat standaard **aan**: is de variabele afwezig of leeg, dan start de host
   de server op het standaardpad; een pad als waarde (zoals `compose.yaml`
   doet) zet hem ook aan. Uitzetten kan alleen met een uitzet-woord (`uit`,
-  `off`, `none`, `geen`, `false`, `no`, `nee`, `0`, `disabled`).
+  `off`, `none`, `geen`, `false`, `no`, `nee`, `0`, `disabled`; de lijst is
+  `_UIT` in `services/host/config.py`, en een test bewaakt dat deze zin
+  daarmee gelijk loopt).
   `MCP_SERVER_NETBEHEERDER=uit` was een tijdelijke instelling voor het
   gebruikersonderzoek van augustus (de respondent gaf zijn verbruik zelf op)
   en hoort op geen enkel component meer te staan: verwijderen of leegmaken in
   de ZAD-UI, allebei is goed. Staat er een uitzet-woord, dan waarschuwt de
   host bij het opstarten (`Bron 'netbeheerder' ... staat bewust uit:
-  MCP_SERVER_NETBEHEERDER heeft een uitzet-waarde`), toont `GET /health` hem
-  onder `bronnen_uit` en meldt `status: gedegradeerd`.
+  MCP_SERVER_NETBEHEERDER heeft een uitzet-waarde`) en toont `GET /health`
+  hem onder `bronnen_uit`.
 
   **Controle na elke uitrol**, via de frontend-proxy (`/health` gaat mee naar
   de backend) of vanuit de pod:
@@ -61,11 +63,13 @@ staat los daarvan in de component-config.
     | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['status'], d['bronnen_uit'], d['servers'].get('netbeheerder'))"
   ```
 
-  Verwacht: `actief [] verbonden`. `status` is `gedegradeerd` zodra een bron
-  uitstaat (`bronnen_uit`) óf bij het starten faalde (`niet beschikbaar` in
-  `servers`); de readiness-probe van ZAD kijkt alleen naar de HTTP-status en
-  vangt dit niet. `services/host/scripts/onderzoeksflow.py` doet dezelfde
-  controles.
+  Verwacht: `actief [] verbonden`. De drie velden zijn een contract:
+  `status` is `actief` of `gedegradeerd` (een ingerichte bron kwam niet op,
+  `niet beschikbaar` in `servers`); `bronnen_uit` noemt bronnen die bewust
+  uitstaan, wat géén storing is en `status` niet raakt; `servers` noemt per
+  ingerichte bron `verbonden` of `niet beschikbaar`. De readiness-probe van
+  ZAD kijkt alleen naar de HTTP-status en vangt geen van beide.
+  `services/host/scripts/onderzoeksflow.py` doet dezelfde controle.
 
 ### Valkuil: kale hostnamen in de nginx-proxy
 

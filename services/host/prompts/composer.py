@@ -169,6 +169,21 @@ def _compose_bronnen_uit(bronnen_uit: list[str]) -> str | None:
     return _load("shared/bronnen_uit.md").replace("{bronnen}", "\n".join(regels))
 
 
+
+TOESTEMMING_BRON_STANDAARD = "de Business Wallet"
+
+
+def _toestemming_instructie(bron: str | None) -> str:
+    """Eén formulering voor "wacht op akkoord voor bron X", gedeeld door de
+    regeltoets en de maatregelenlijst, zodat de twee niet uit elkaar lopen."""
+    bron = bron or TOESTEMMING_BRON_STANDAARD
+    return (
+        f"toestemming van de ondernemer voor de bron {bron} (PDR-008). Vraag daar "
+        "EXPLICIET om voordat u die bron noemt of gebruikt, roep de tool van die "
+        "bron NIET zelf aan (het systeem haalt de gegevens op zodra het akkoord "
+        "is vastgelegd), en wacht op een duidelijk antwoord."
+    )
+
 def _regel_status_klaar_tekst(resultaat: dict) -> str:
     """Tekst voor een afgeronde toets: de uitkomst, niet de interne sleutelnaam.
 
@@ -243,12 +258,8 @@ def _maatregelen_status_tekst(
             "de categorieën NIET in uw tekst."
         )
     if wacht_op == "toestemming":
-        bron = maatregelen.get("toestemming_bron") or "de Business Wallet"
-        return (
-            f"De maatregelenlijst wacht nog op toestemming van de ondernemer voor "
-            f"de bron {bron}. Vraag daar EXPLICIET om, roep de tool van die bron "
-            "NIET zelf aan (het systeem haalt de gegevens op zodra het akkoord is "
-            "vastgelegd), en wacht op een duidelijk antwoord."
+        return "De maatregelenlijst wacht nog op " + _toestemming_instructie(
+            maatregelen.get("toestemming_bron")
         )
     if not maatregelen.get("klaar"):
         return (
@@ -417,13 +428,8 @@ def _compose_regel_status(regel_status: dict | None, feiten: dict | None = None)
         # De bron waarop het systeem wacht staat in de status; die was eerder
         # hard "de Business Wallet", waardoor het model bij een KvK-wachtstand
         # de KvK-tool gewoon aanriep en de poort hem moest weigeren.
-        bron = regel_status.get("toestemming_bron") or "de Business Wallet"
-        status = (
-            f"Voor de bron {bron} is eerst toestemming van de ondernemer nodig "
-            "(PDR-008). Vraag daar EXPLICIET om voordat u die bron noemt of "
-            "gebruikt, roep de tool van die bron NIET zelf aan (het systeem haalt "
-            "de gegevens op zodra het akkoord is vastgelegd), en wacht op een "
-            "duidelijk antwoord."
+        status = "Voor de regeltoets is eerst " + _toestemming_instructie(
+            regel_status.get("toestemming_bron")
         )
     elif wacht_op == "opgave" and regel_status.get("vraag"):
         status = (

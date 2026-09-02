@@ -1299,12 +1299,11 @@ class VLAMHost:
             "regelrecht": (CLI_DIR / "regelrecht-cli").is_file(),
             "rvo": (CLI_DIR / "rvo-cli").is_file(),
         }
-        # "gedegradeerd" zodra een bron uitstaat of niet opkwam: de
-        # readiness-probe kijkt naar de HTTP-status, maar wie /health leest
-        # hoort in één woord te zien dat er iets afwijkt.
-        gezond = not self.bronnen_uit and not self.bronnen_offline
+        # "gedegradeerd" zodra een ingerichte bron niet opkwam: een storing.
+        # Een bewust uitgezette bron is geen storing en staat apart onder
+        # `bronnen_uit`; de readiness-probe kijkt alleen naar de HTTP-status.
         return {
-            "status": "actief" if gezond else "gedegradeerd",
+            "status": "actief" if not self.bronnen_offline else "gedegradeerd",
             "backends": {
                 "claude": bool(ANTHROPIC_API_KEY),
                 "vlam": self.vlam_client is not None,
@@ -1924,7 +1923,7 @@ class VLAMHost:
         zelf `netbeheerder__verbruik` aan, dan weigert die poort de aanroep
         zolang toestemming niet vastligt — zie `_execute_tools`.
         """
-        tools = self.registry.get_anthropic_tools()
+        tools = self._tools_voor_model(conv_key, self.registry.get_anthropic_tools())
         system_prompt = self._system_prompt(
             "claude", regel_status=self._met_lijst_vlag(regel_status, conv_key), feiten=feiten
         )
@@ -2037,7 +2036,7 @@ class VLAMHost:
         `netbeheerder__verbruik` aan, dan weigert die poort de aanroep
         zolang toestemming niet vastligt.
         """
-        tools_openai = self.registry.get_openai_tools()
+        tools_openai = self._tools_voor_model(conv_key, self.registry.get_openai_tools())
         system_prompt = self._system_prompt(
             "vlam", regel_status=self._met_lijst_vlag(regel_status, conv_key), feiten=feiten
         )
@@ -2389,7 +2388,7 @@ class VLAMHost:
         """
         if not claude.api_key:
             return _geen_sleutel_fout("claude").tekst
-        tools = self.registry.get_anthropic_tools()
+        tools = self._tools_voor_model(conv_key, self.registry.get_anthropic_tools())
         system_prompt = self._system_prompt(
             "claude", regel_status=self._met_lijst_vlag(regel_status, conv_key), feiten=feiten
         )
@@ -2453,7 +2452,7 @@ class VLAMHost:
         naar `_bron_aanroep_gated`, dat de PDR-008-poort toepast op elke
         tool-aanroep van het model.
         """
-        tools_openai = self.registry.get_openai_tools()
+        tools_openai = self._tools_voor_model(conv_key, self.registry.get_openai_tools())
         system_prompt = self._system_prompt(
             "vlam", regel_status=self._met_lijst_vlag(regel_status, conv_key), feiten=feiten
         )
@@ -2551,6 +2550,28 @@ class VLAMHost:
         if not isinstance(resultaat, dict):
             return None
         return json.dumps({"data": resultaat}, ensure_ascii=False)
+
+
+    def _tools_voor_model(self, conv_key: str, tools: list[dict]) -> list[dict]:
+        """De tool-lijst voor het model, zonder bronnen waarvoor het akkoord van
+        dit gesprek nog niet is vastgelegd (PDR-008).
+
+        De poort in `_bron_aanroep_gated` weigert zo'n aanroep al, maar een
+        weigering kost een extra modelbeurt en een bronfout in het scherm. Een
+        tool die het model niet ziet, roept het ook niet aan; de instructie in
+        de prompt hoeft dan niet dragend te zijn.
+        """
+        toegestaan = self.toestemming.get(conv_key, set())
+
+        def naam(tool: dict) -> str:
+            return str(tool.get("name") or tool.get("function", {}).get("name") or "")
+
+        return [
+            tool
+            for tool in tools
+            if naam(tool).split("__", 1)[0] not in TOESTEMMINGSPLICHTIGE_SCOPES
+            or naam(tool).split("__", 1)[0] in toegestaan
+        ]
 
     async def _bron_aanroep_gated(
         self, aanroep, tool_key: str, arguments: dict, conv_key: str
