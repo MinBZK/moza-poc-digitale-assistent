@@ -113,8 +113,9 @@ Gemeten op 2 september: op de host van 13 augustus (het model orkestreert)
 leest de ondernemer de uitkomst in beurt 2, na een modelbeurt van 18 tot 40
 seconden waarin twee bronnen en de toets in één keer draaien; op de huidige
 host (de regel stuurt) leest hij de uitkomst in beurt 3, na mediaan 16
-seconden per beurt en 95 tot 163 seconden per doorloop. De engine zelf doet
-er 60 milliseconden over. Vrijwel alle tijd zit in het model en het gesprek
+seconden per beurt en 95 tot 163 seconden per doorloop (beide hosts draaiden
+deels tegelijk op dezelfde sleutel en engine, dus de uitschieters zijn onder
+gedeelde belasting gemeten). De engine zelf doet er 60 milliseconden over. Vrijwel alle tijd zit in het model en het gesprek
 eromheen. Als het model de verkeerde regeling zoekt, een regel opnieuw start
 of dezelfde vraag herhaalt, schuift dat verder op, en de ondernemer ziet
 intussen alleen een assistent die iets aan het uitzoeken is. Het moment
@@ -389,16 +390,17 @@ moment.**
   `_bron_aanroep_gated`, één poort in de host waar model én regelloop
   doorheen moeten. Nagemeten op 2 september: in de flow probeert het model in
   elke eerste beurt het Handelsregister aan te roepen vóór het akkoord (5 van
-  5) en tweemaal de wallet; bij 18 losse vragen 6 keer de KvK en 1 keer de
-  wallet. De poort weigert alle 14 (figuur 5). De regelloop zelf stopt vóór zo'n bron. Het
+  5), en in twee doorlopen in beurt 2 de wallet, ná het KvK-akkoord en vóór
+  het wallet-akkoord; bij 18 losse vragen 6 keer de KvK en 1 keer de wallet.
+  De poort weigert alle 14 (figuur 5). De regelloop zelf stopt vóór zo'n bron. Het
   model vertaalt de weigering vervolgens in "geef toestemming via Delen en
   stel uw vraag daarna opnieuw", een extra beurt voor de ondernemer.
 
   ![Host-log: de poort weigert een wallet-aanroep van het model vóór toestemming](assets/pdr-014/fig5-hostlog-toestemming-vereist.png)
 
   *Figuur 5. Host-log van 2 september: het model probeert `kvk__mijn_bedrijf`
-  en `netbeheerder__verbruik` aan te roepen voordat de ondernemer op Delen
-  heeft geklikt; de poort weigert. Voor de wallet staat er een harde
+  en `netbeheerder__verbruik` aan te roepen voordat het akkoord voor die bron
+  is vastgelegd; de poort weigert. Voor de wallet staat er een harde
   promptregel ("roep `netbeheerder__verbruik` NOOIT zelf aan") en die hield
   drie keer niet; over de KvK zegt de prompt niets over akkoord en schrijft
   hij bij bedrijfsgegevens "Gebruik tool kvk__mijn_bedrijf" voor, en houdt
@@ -457,10 +459,12 @@ moment.**
   voegen; geen enkele controle in het meetscript vraagt of een beurt de
   ondernemer verder helpt (waargenomen bij de doorloop van 13 augustus, zie
   `docs/superpowers/plans/meting-regelloop-2026-08-13.md`).
-- Een beurt kost 5 tot 45 seconden (rooktest vóór de sessie van 25 augustus,
-  werkdocument buiten deze repository).
-  Op 24 augustus was de zwaarste beurt 20 seconden; op 2 september, met de
-  regelloop in elke beurt, is de mediaan 16 seconden en de zwaarste 43. Een
+- Een beurt kost 5 tot 45 seconden op de onderzoeksomgeving (rooktest vóór de
+  sessie van 25 augustus, werkdocument buiten deze repository); in de
+  lokale meting van 24 augustus, met prompt-caching, was de zwaarste beurt
+  20 seconden (PDR-013). Op 2 september, met de regelloop in elke beurt en
+  twee hosts tegelijk op dezelfde sleutel, is de mediaan 16 seconden en de
+  zwaarste 43. Een
   staart ging op 20 augustus twee keer over de grens van 60 seconden: lang
   wachten, een foutmelding, opnieuw beginnen (PDR-013). De respondent wist
   op dat moment niet of er al iets was getoetst. De engine zelf antwoordt in
@@ -679,8 +683,9 @@ classifier, zoeken in KOOP), waarna het model alleen nog de invoer uitvraagt.
   LLM-backend, CLI versus MCP als transport) beschrijven de chat-architectuur
   van deze codebase; niets daarvan wordt ongeldig verklaard. Komt de chat
   terug, dan is dit het vertrekpunt. Wordt de vorm anders, dan wordt per PDR
-  besloten of hij wordt overgenomen, vervangen of ongeldig verklaard. PDR-008
-  tot en met PDR-013 gaan hoe dan ook mee, zoals beschreven in beslispunt 3.
+  besloten of hij wordt overgenomen, vervangen of ongeldig verklaard. PDR-008,
+  PDR-009, PDR-010, PDR-011 en PDR-013 gaan hoe dan ook mee, zoals beschreven
+  in beslispunt 3.
 - **De keten, niet alleen het scherm.** De regelingen liggen bij de
   uitvoerders. Met Min SZW moet de machine-uitvoerbare lezing van één regeling
   worden vastgesteld, inclusief wie die publiceert en beheert. Met UWV en één
