@@ -8,8 +8,10 @@
 > volledige events. De cijfers 28 (eerste beurten) en 8 (weigeringen in de flow) zijn
 > in rapport en PDR vervangen door 37 en 7 (14 met de losse vragen erbij). Onder C.4 klopt "f22f063 run 2"
 > niet: alleen main run 2 noemt loonkostensubsidie en banenafspraak. Punt C.3
-> (termijnuitspraak in beurt 7) is achterhaald: die zin is een promptvoorbeeld
-> met het slot `{{VOLGENDE_DEADLINE}}`, gevuld door de host. Punt C.6 zegt
+> (termijnuitspraak in beurt 7) is achterhaald: die zin volgt een promptvoorbeeld
+> ("Bij de volgende ronde ({{VOLGENDE_DEADLINE}})") en de instructie
+> "volgende rapportageronde" in `tool_usage.md`; wie het slot vulde is uit de
+> run-JSON niet te zien. Punt C.6 zegt
 > "drie bronnen": het zijn twee bronnen plus de toets. De beperkingen in het
 > rapport zijn hernummerd (de peiling-beperking is nu 3).
 

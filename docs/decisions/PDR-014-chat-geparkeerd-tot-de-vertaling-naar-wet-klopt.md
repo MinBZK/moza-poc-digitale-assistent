@@ -90,7 +90,7 @@ schade zit hoger op de trap, en heeft twee vormen.
 
 **Toezeggingen vóórdat de toets heeft gedraaid.** De eerste beurt raakt per
 ontwerp geen bron met gegevens over de ondernemer aan (toestemming eerst,
-PDR-008); de wet draait er wel al met lege parameters, en een openbare
+PDR-008); de wet draait er wel al, met alleen het KvK-nummer uit de sessie, en een openbare
 regelingenlijst mag. Wat de assistent in die beurt over de situatie van de
 ondernemer zegt, is dus puur model. Dat het daar meestal goed gaat, is
 gemeten: in 37 eerste beurten op 2 september (flow en losse vragen, oude en
@@ -399,7 +399,7 @@ moment.**
   *Figuur 5. Host-log van 2 september: het model probeert `kvk__mijn_bedrijf`
   en `netbeheerder__verbruik` aan te roepen voordat de ondernemer op Delen
   heeft geklikt; de poort weigert. Voor de wallet staat er een harde
-  promptregel ("roep `netbeheerder__verbruik` nooit zelf aan") en die hield
+  promptregel ("roep `netbeheerder__verbruik` NOOIT zelf aan") en die hield
   drie keer niet; over de KvK zegt de prompt niets over akkoord en schrijft
   hij bij bedrijfsgegevens "Gebruik tool kvk__mijn_bedrijf" voor, en houdt
   alleen de code de volgorde vast. In beide
@@ -434,7 +434,7 @@ moment.**
   zelf niet had hoeven doen, meldde het een technisch probleem dat er niet
   was (`40134ac`). Ook dat is een uitspraak over de stand van zaken die niet
   klopt.
-- De guardrail "geef NOOIT specifieke bedragen, deadlines of termijnen tenzij
+- De guardrail "Geef NOOIT specifieke bedragen, deadlines of termijnen tenzij
   deze direct uit een tool-resultaat komen" bestaat omdat dit gedrag er is.
   Op 10 augustus stond daar de vraag naast of een uitspraak van een
   overheidskanaal, reproduceerbaar en aantoonbaar op het scherm,
@@ -478,8 +478,8 @@ van drie uitgangspunten van de opdrachtgever: waarden komen uit RegelRecht,
 RegelRecht wordt zo vroeg mogelijk ingezet, en zo min mogelijk stappen die het
 model bepaalt. Het resultaat is een lus die vóór het model draait, een
 routeringstabel van zes velden met per veld de bron en of er toestemming nodig
-is, en de regel "wat er niet in de tabel staat, komt er niet in: geen raden,
-geen doorschuiven naar het model". Die tabel ís het vooringevulde formulier.
+is, en de regel uit het ontwerp: "Wat er níét in de tabel staat, komt er
+niet in" en "Geen raden, geen doorschuiven naar het model". Die tabel ís het vooringevulde formulier.
 
 Binnen die ene flow doet het model nog de vraag herkennen (B1) en het
 antwoord formuleren (B8); voor B4, B5 en B6 is hij daar vervangen door code.
@@ -573,10 +573,12 @@ jurist ernaast zit.
 
 ![Casus Sadee: zeven regelingen, uitkomsten met grondslag](assets/pdr-014/fig7-sadee-financieel-cv.png)
 
-*Figuur 7. De casus Sadee in het Financieel CV: vier statussen links, zeven
-uitkomsten rechts, elk met wetsartikel. Welke wet je aanroept en met welke
-status bepaalt de uitkomst; de vertaling van "afstand tot de arbeidsmarkt"
-naar deze statussen is de stap die deze PDR buiten het model legt.*
+*Figuur 7. De casus Sadee in het Financieel CV (stand 14 augustus): vier
+statussen links, rechts de uitkomsten per regeling met wetsartikel, waaronder
+één die toen nog niet gemodelleerd was (Wajong 2:22, sinds 19 augustus wel) en
+één die niet meer bestaat (LIV). Welke wet je aanroept en met welke status
+bepaalt de uitkomst; de vertaling van "afstand tot de arbeidsmarkt" naar deze
+statussen is de stap die deze PDR buiten het model legt.*
 
 - **Zelfde voorziening, andere vindplaats.** Wet WIA artikel 35, lid 4 sluit
   Wajong-gerechtigden uit van jobcoaching en werkplekaanpassing, maar de Wajong
