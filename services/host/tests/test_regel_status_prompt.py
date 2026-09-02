@@ -6,6 +6,8 @@ precies wat er gebeurde met de "voldoet_aan_voorwaarden"-lek en de interne
 veldnamen uit `reden` (C2/I3/I4 uit de taak-4-review).
 """
 
+import pytest
+
 from prompts.composer import _compose_regel_status, compose_system_prompt
 
 KOP = "STATUS VAN DE REGELTOETS"
@@ -272,3 +274,29 @@ def test_zonder_bruikbare_feiten_geen_lege_zin():
         feiten={"current": _feit("x"), "maatregelen": _feit([1, 2])},
     )
     assert "Al opgehaald" not in blok
+
+
+@pytest.mark.parametrize(
+    "bron",
+    ["KvK Handelsregister", "Business Wallet"],
+)
+def test_toestemming_noemt_de_bron_waarop_het_systeem_wacht(bron):
+    """Het statusblok noemde altijd de Business Wallet, ook als de host op akkoord
+    voor het Handelsregister wachtte; het model riep dan de KvK-tool aan en de
+    poort moest hem weigeren. De status weet welke bron het is."""
+    prompt = compose_system_prompt(
+        "claude",
+        has_tools=True,
+        regel_status={"wacht_op": "toestemming", "toestemming_bron": bron},
+    )
+    andere = "Business Wallet" if bron != "Business Wallet" else "KvK Handelsregister"
+    assert f"Voor de bron {bron} is eerst toestemming" in prompt
+    assert f"Voor de bron {andere}" not in prompt
+    assert "NIET zelf aan" in prompt
+
+
+def test_toestemming_zonder_bron_valt_terug_op_de_wallet():
+    prompt = compose_system_prompt(
+        "claude", has_tools=True, regel_status={"wacht_op": "toestemming"}
+    )
+    assert "Voor de bron de Business Wallet is eerst toestemming" in prompt

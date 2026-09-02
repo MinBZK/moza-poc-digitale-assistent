@@ -411,10 +411,16 @@ def _compose_regel_status(regel_status: dict | None, feiten: dict | None = None)
         return None
     wacht_op = regel_status.get("wacht_op")
     if wacht_op == "toestemming":
+        # De bron waarop het systeem wacht staat in de status; die was eerder
+        # hard "de Business Wallet", waardoor het model bij een KvK-wachtstand
+        # de KvK-tool gewoon aanriep en de poort hem moest weigeren.
+        bron = regel_status.get("toestemming_bron") or "de Business Wallet"
         status = (
-            "Voor het energieverbruik uit de Business Wallet is toestemming van "
-            "de ondernemer nodig (PDR-008). Vraag daar EXPLICIET om voordat u die "
-            "bron noemt of gebruikt, en wacht op een duidelijk antwoord."
+            f"Voor de bron {bron} is eerst toestemming van de ondernemer nodig "
+            "(PDR-008). Vraag daar EXPLICIET om voordat u die bron noemt of "
+            "gebruikt, roep de tool van die bron NIET zelf aan (het systeem haalt "
+            "de gegevens op zodra het akkoord is vastgelegd), en wacht op een "
+            "duidelijk antwoord."
         )
     elif wacht_op == "opgave" and regel_status.get("vraag"):
         status = (
