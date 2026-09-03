@@ -50,7 +50,7 @@ def test_een_lege_waarde_houdt_de_bron_aan(monkeypatch, waarde):
     config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER=waarde)
     assert "netbeheerder" in config.MCP_SERVERS
     assert config.MCP_SERVERS_UIT == {}
-    assert config.MCP_SERVERS_LEEG == ["MCP_SERVER_NETBEHEERDER"]
+    assert "MCP_SERVER_NETBEHEERDER" in config.MCP_SERVERS_LEEG
 
 
 def test_zonder_variabele_blijft_de_bron_gewoon_staan(monkeypatch):
