@@ -187,3 +187,14 @@ def test_een_ander_gesprek_deelt_het_akkoord_niet(host_met_bronnen):
     host.toestemming["g1"] = {"kvk", "netbeheerder"}
     assert _namen(host._tools_voor_model("g1", alle)) == _namen(alle)
     assert _namen(host._tools_voor_model("g2", alle)) == VRIJ
+
+
+def test_een_lege_variabele_wordt_bij_het_opstarten_gemeld(caplog, host_met_bronnen, monkeypatch):
+    """Leeg is standaard, maar zette de bron vroeger uit; een omgeving met de
+    oude betekenis hoort dat terug te zien in plaats van stil een bron aan."""
+    monkeypatch.setattr(vlam_host, "MCP_SERVERS_LEEG", ["MCP_SERVER_NETBEHEERDER"])
+    with caplog.at_level("INFO", logger=LOGGER):
+        host_met_bronnen()._meld_uitgezette_bronnen()
+    infos = [r.getMessage() for r in caplog.records if r.name == LOGGER and r.levelname == "INFO"]
+    assert infos == ["MCP_SERVER_NETBEHEERDER is leeg: standaardpad (een lege waarde zette de bron vroeger uit)"]
+    assert _waarschuwingen(caplog) == []

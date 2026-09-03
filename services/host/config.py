@@ -1,6 +1,5 @@
 """Configuratie voor de VLAM MCP-host."""
 
-import logging
 import os
 from pathlib import Path
 
@@ -52,6 +51,10 @@ VLAM_MODEL_ID = os.getenv(
 _UIT = frozenset({"uit", "off", "none", "geen", "false", "no", "nee", "0", "disabled"})
 
 
+# Variabelen die leeg stonden: leeg betekent standaardpad, maar vroeger uit.
+MCP_SERVERS_LEEG: list[str] = []
+
+
 def _resolve_server_path(env_key: str, default: Path) -> Path | None:
     """Het pad naar een MCP-server, of None als die bewust uitstaat.
 
@@ -66,11 +69,9 @@ def _resolve_server_path(env_key: str, default: Path) -> Path | None:
     if not raw.strip():
         # Vóór september zette een lege waarde de bron uit; nu is leeg
         # "standaard". Een omgeving die de oude betekenis nog draagt, hoort dat
-        # in de log terug te zien in plaats van stil een bron aan te krijgen.
-        logging.getLogger("vlam.config").info(
-            "%s is leeg: standaardpad (een lege waarde zette de bron vroeger uit)",
-            env_key,
-        )
+        # bij het opstarten in de log terug te zien (de host meldt het; hier is
+        # logging nog niet ingericht) in plaats van stil een bron aan te krijgen.
+        MCP_SERVERS_LEEG.append(env_key)
         return default
     if raw.strip().lower() in _UIT:
         return None
@@ -214,6 +215,7 @@ __all__ = [
     "MAX_VRAAG_TEKENS",
     "MCP_SERVER_ENV_KEYS",
     "MCP_SERVERS",
+    "MCP_SERVERS_LEEG",
     "MCP_SERVERS_UIT",
     "TOOL_TIMEOUT",
     "TEST_KVK_NUMMERS",

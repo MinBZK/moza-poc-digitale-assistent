@@ -31,6 +31,7 @@ from config import (
     LLM_HERKANSINGEN,
     LLM_MAX_TOKENS,
     MCP_SERVERS,
+    MCP_SERVERS_LEEG,
     MCP_SERVERS_UIT,
     TOOL_TIMEOUT,
     VLAM_API_KEY,
@@ -1206,6 +1207,11 @@ class VLAMHost:
         elke bron aan; hier wordt een afwijking zichtbaar zonder in de
         configuratie te hoeven kijken.
         """
+        for env_key in MCP_SERVERS_LEEG:
+            logger.info(
+                "%s is leeg: standaardpad (een lege waarde zette de bron vroeger uit)",
+                env_key,
+            )
         for naam, env_key in sorted(MCP_SERVERS_UIT.items()):
             logger.warning(
                 "Bron '%s' (%s) staat bewust uit: %s heeft een uitzet-waarde. "
