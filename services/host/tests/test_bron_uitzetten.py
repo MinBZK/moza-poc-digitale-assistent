@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from config import _UIT
+from config import _AAN, _UIT
 
 
 @pytest.fixture(autouse=True)
@@ -102,3 +102,18 @@ def test_de_uitzet_woorden_in_de_documentatie_zijn_die_van_de_code(bestand):
     assert gedocumenteerd == set(_UIT), (
         f"{bestand.name}: docs {sorted(gedocumenteerd)} vs code {sorted(_UIT)}"
     )
+
+
+@pytest.mark.parametrize("waarde", sorted(_AAN) + [" Aan "])
+def test_een_aanzet_woord_houdt_de_bron_aan(monkeypatch, waarde):
+    """Wie het spiegelbeeld van `uit` schrijft, bedoelt geen bestand dat zo heet."""
+    config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER=waarde)
+    assert config.MCP_SERVERS["netbeheerder"].name == "server.py"
+    assert config.MCP_SERVERS_UIT == {}
+
+
+def test_een_pad_met_spaties_eromheen_wordt_gestript(monkeypatch, tmp_path):
+    server = tmp_path / "server.py"
+    server.write_text("")
+    config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER=f"  {server}  ")
+    assert config.MCP_SERVERS["netbeheerder"] == server

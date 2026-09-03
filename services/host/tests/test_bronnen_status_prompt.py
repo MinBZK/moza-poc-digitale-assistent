@@ -6,34 +6,20 @@ of terugvallen op eigen kennis. Deze test bewaakt de doorgifte van host naar
 systeemprompt, en dat het blok verdwijnt zodra alles draait.
 """
 
-import vlam_host
 from prompts.composer import compose_system_prompt
 
 KOP = "BESCHIKBAARHEID VAN BRONNEN"
 BRONNEN = ("kvk", "koop", "regelrecht", "rvo", "netbeheerder")
 
 
-def _host_met_status(status: dict) -> vlam_host.VLAMHost:
-    """Een host met deze bronstatus; wat niet genoemd is, staat verbonden.
-
-    `bronnen_offline` leest de status; `bronnen_uit` leest de configuratie
-    (`vlam_host.MCP_SERVERS_UIT`, zie `test_bron_uitgeschakeld.py`). Deze tests
-    gaan over de doorgifte van storingen naar de prompt, dus vullen we de rest
-    van de status expliciet aan als verbonden.
-    """
-    host = vlam_host.VLAMHost()
-    host.server_status = {naam: "verbonden" for naam in BRONNEN} | status
-    return host
-
-
-def test_alles_verbonden_geeft_geen_extra_blok():
-    host = _host_met_status({"kvk": "verbonden", "koop": "verbonden"})
+def test_alles_verbonden_geeft_geen_extra_blok(host_met_bronnen):
+    host = host_met_bronnen()
     assert host.bronnen_offline == []
     assert KOP not in host._system_prompt("claude", has_tools=True)
 
 
-def test_uitgevallen_bron_staat_met_alternatief_in_de_prompt():
-    host = _host_met_status({"kvk": "verbonden", "koop": "niet beschikbaar"})
+def test_uitgevallen_bron_staat_met_alternatief_in_de_prompt(host_met_bronnen):
+    host = host_met_bronnen(storing=["koop"])
     assert host.bronnen_offline == ["koop"]
 
     prompt = host._system_prompt("claude", has_tools=True)
@@ -46,9 +32,9 @@ def test_uitgevallen_bron_staat_met_alternatief_in_de_prompt():
     assert "Handelsregister -" not in kop_tot_eind
 
 
-def test_cli_paden_melden_de_mcp_status_niet():
+def test_cli_paden_melden_de_mcp_status_niet(host_met_bronnen):
     """CLI gebruikt een ander transport; de MCP-status zegt daar niets over."""
-    host = _host_met_status({"koop": "niet beschikbaar"})
+    host = host_met_bronnen(storing=["koop"])
     prompt = host._system_prompt("claude", has_tools=True, bronnen_offline=[])
     assert KOP not in prompt
 
@@ -59,27 +45,27 @@ def test_composer_werkt_ook_zonder_het_nieuwe_argument():
     assert KOP not in compose_system_prompt("vlam", False)
 
 
-def test_zonder_tools_maar_met_uitgevallen_bronnen_geen_eigen_kennis_instructie():
+def test_zonder_tools_maar_met_uitgevallen_bronnen_geen_eigen_kennis_instructie(host_met_bronnen):
     """`no_tools.md` en het statusblok zeggen het tegenovergestelde.
 
     Het eerste draagt op om op eigen kennis te antwoorden, het tweede verbiedt
     dat juist. Samen in één prompt is slechter dan één van beide, dus vervangt
     het statusblok de andere.
     """
-    host = _host_met_status(dict.fromkeys(BRONNEN, "niet beschikbaar"))
+    host = host_met_bronnen(storing=BRONNEN)
     prompt = host._system_prompt("claude", has_tools=False)
 
     assert "GEEN ENKELE BRON BESCHIKBAAR" in prompt
     assert "Beantwoord vragen op basis van je eigen kennis" not in prompt
 
 
-def test_voorbeelden_met_een_uitgevallen_bron_verdwijnen():
+def test_voorbeelden_met_een_uitgevallen_bron_verdwijnen(host_met_bronnen):
     """Een voorbeeld is het sterkste stuursignaal in deze prompt.
 
     Een voorbeeld dat KOOP aanroept terwijl KOOP eruit ligt, demonstreert precies
     wat het statusblok net verbood.
     """
-    host = _host_met_status({**dict.fromkeys(BRONNEN, "verbonden"), "koop": "niet beschikbaar"})
+    host = host_met_bronnen(storing=["koop"])
     prompt = host._system_prompt("claude", has_tools=True)
     voorbeelden = prompt.split("voorbeelden van goede antwoorden")[-1]
 
@@ -87,7 +73,7 @@ def test_voorbeelden_met_een_uitgevallen_bron_verdwijnen():
     assert "kvk__" in voorbeelden, "voorbeelden van werkende bronnen blijven staan"
 
 
-def test_bij_uitval_blijven_de_afwijzings_voorbeelden_staan_met_waarschuwing():
+def test_bij_uitval_blijven_de_afwijzings_voorbeelden_staan_met_waarschuwing(host_met_bronnen):
     """Die twee demonstreren een vórm, geen bron-flow: ze roepen niets aan.
 
     Ze wegfilteren zou het sterkste stuursignaal voor scope-detectie weghalen in
@@ -95,7 +81,7 @@ def test_bij_uitval_blijven_de_afwijzings_voorbeelden_staan_met_waarschuwing():
     hangt wél aan een bron, dus die staat als `bronnen-optioneel` en levert een
     waarschuwing op in plaats van het hele voorbeeld te laten vallen.
     """
-    host = _host_met_status(dict.fromkeys(BRONNEN, "niet beschikbaar"))
+    host = host_met_bronnen(storing=BRONNEN)
     prompt = host._system_prompt("claude", has_tools=False)
 
     assert "arbeidsrecht" in prompt, "het afwijzings-voorbeeld hoort te blijven"

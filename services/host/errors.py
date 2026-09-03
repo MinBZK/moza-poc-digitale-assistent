@@ -96,9 +96,19 @@ BRON_ALTERNATIEF: dict[str, str] = {
 }
 
 
+def scope_uit_tool(tool_key: str | None) -> str:
+    """De servernaam vóór `__` in een tool-key (`koop__zoek_regelgeving` -> `koop`).
+
+    Eén afspraak voor de toestemmingspoort, het tool-filter, de regelloop en
+    het CLI-transport: zien die niet dezelfde scope, dan toont de een een tool
+    die de ander weigert.
+    """
+    return str(tool_key or "").split("__", 1)[0]
+
+
 def bron_uit_tool(tool_key: str) -> str | None:
-    """Haal de bronnaam uit een tool-key (`koop__zoek_regelgeving` -> `koop`)."""
-    bron = str(tool_key or "").split("__", 1)[0]
+    """Haal de bronnaam uit een tool-key, of None als het geen bekende bron is."""
+    bron = scope_uit_tool(tool_key)
     return bron if bron in BRON_LABELS else None
 
 

@@ -47,6 +47,9 @@ VLAM_MODEL_ID = os.getenv(
 # variabele leegmaken in een beheer-UI is de gewone handeling voor "terug naar
 # standaard", en die mag de Business Wallet niet stil uitzetten.
 _UIT = frozenset({"uit", "off", "none", "geen", "false", "no", "nee", "0", "disabled"})
+# Het spiegelbeeld: wie "aan" schrijft bedoelt het standaardpad, geen bestand
+# dat `aan` heet en dus als storing zou opkomen.
+_AAN = frozenset({"aan", "on", "true", "1", "ja", "yes", "enabled"})
 
 
 def _resolve_server_path(env_key: str, default: Path) -> Path | None:
@@ -60,11 +63,12 @@ def _resolve_server_path(env_key: str, default: Path) -> Path | None:
     raw = os.getenv(env_key)
     if raw is None:
         return default
-    if not raw.strip():
+    woord = raw.strip().lower()
+    if not woord or woord in _AAN:
         return default
-    if raw.strip().lower() in _UIT:
+    if woord in _UIT:
         return None
-    p = Path(raw)
+    p = Path(raw.strip())
     if not p.is_absolute():
         p = (BASE_DIR / p).resolve()
     return p

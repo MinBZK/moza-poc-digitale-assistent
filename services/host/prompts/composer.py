@@ -181,7 +181,7 @@ def _toestemming_instructie(bron: str | None) -> str:
     bron = bron or "waarop het systeem wacht (zie het deelverzoek in het scherm)"
     return (
         f"toestemming van de ondernemer voor de bron {bron} (PDR-008). Vraag daar "
-        "EXPLICIET om voordat u die bron noemt of gebruikt, roep de tool van die "
+        "EXPLICIET om voordat u gegevens uit die bron gebruikt, roep de tool van die "
         "bron NIET zelf aan (het systeem haalt de gegevens op zodra het akkoord "
         "is vastgelegd), en wacht op een duidelijk antwoord."
     )

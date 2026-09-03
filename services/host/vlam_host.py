@@ -41,12 +41,12 @@ from config import (
 )
 from errors import (
     BRON_LABELS,
-    bron_uit_tool,
     classificeer_llm_fout,
     classificeer_tool_fout,
     maak_fout,
     naar_event,
     naar_llm,
+    scope_uit_tool,
     verrijk_llm,
 )
 from feiten import feiten_uit_tool, samenvoegen
@@ -337,18 +337,8 @@ def _vraag_uit_uitkomst(
 # routeringstabel: één bron van waarheid. Elke tool van zo'n bron valt onder de
 # poort, ook tools die geen veld in de tabel hebben (kvk__eigenaar,
 # kvk__vestigingen) - het akkoord gaat over de bron, niet over één endpoint.
-def scope_van(tool_key: str | None) -> str:
-    """De bron (servernaam) van een tool-sleutel als `kvk__mijn_bedrijf`.
-
-    Dezelfde afspraak als `errors.bron_uit_tool`, met een lege string voor een
-    onbekende bron: de toestemmingspoort, het tool-filter en de lijst van
-    toestemmingsplichtige bronnen moeten dezelfde bron zien.
-    """
-    return bron_uit_tool(tool_key or "") or ""
-
-
 TOESTEMMINGSPLICHTIGE_SCOPES: frozenset[str] = frozenset(
-    scope_van(veld.tool)
+    scope_uit_tool(veld.tool)
     for veld in regelrouting.HERKOMST.values()
     if veld.toestemming and veld.tool
 )
@@ -2567,30 +2557,33 @@ class VLAMHost:
         return json.dumps({"data": resultaat}, ensure_ascii=False)
 
 
-    def _tools_voor_model(self, conv_key: str, tools: list[dict]) -> list[dict]:
-        """De tool-lijst voor het model zonder de bronnen die akkoord vergen,
-        zolang de regelloop op dat akkoord wacht (PDR-008).
+    def _verborgen_bronnen(self, conv_key: str) -> frozenset[str]:
+        """Bronnen waarvan de tools dit gesprek nog niet aan het model gaan.
 
-        De poort in `_bron_aanroep_gated` weigert zo'n aanroep al, maar een
-        weigering kost een extra modelbeurt en een bronfout in het scherm. Een
-        tool die het model niet ziet, roept het ook niet aan.
-
-        Alleen terwijl het deelverzoek in het scherm staat (`wacht_op ==
-        "toestemming"`): dan is er een knop die het akkoord vastlegt. In elke
-        andere stand blijft de lijst heel en is de poort de grens; anders is
-        er geen weg meer naar een bron waarvoor nooit een deelverzoek kwam.
+        Hetzelfde predicaat als `_bron_aanroep_gated`: een bron die akkoord
+        vergt en dat akkoord nog niet heeft. De poort weigert zo'n aanroep al,
+        maar een weigering kost een extra modelbeurt en een bronfout in het
+        scherm; een tool die het model niet ziet, roept het niet aan. Het akkoord
+        komt via het deelverzoek van de regelloop; een deelverzoek buiten die
+        lus om bestaat niet (PDR-015).
         """
-        status = self._regel_status_laatst.get(conv_key)
-        if not status or status.get("wacht_op") != "toestemming":
-            return tools
-        verborgen = TOESTEMMINGSPLICHTIGE_SCOPES - self.toestemming.get(conv_key, set())
+        return TOESTEMMINGSPLICHTIGE_SCOPES - self.toestemming.get(conv_key, set())
+
+    def _tools_voor_model(self, conv_key: str, tools: list[dict]) -> list[dict]:
+        """De tool-lijst zonder de bronnen uit `_verborgen_bronnen`.
+
+        Werkt op beide draadvormen (Anthropic `name`, OpenAI `function.name`);
+        de bron komt uit `scope_uit_tool`, dezelfde helper als de poort.
+        """
+        verborgen = self._verborgen_bronnen(conv_key)
         if not verborgen:
             return tools
-
-        def naam(tool: dict) -> str:
-            return str(tool.get("name") or tool.get("function", {}).get("name") or "")
-
-        return [tool for tool in tools if scope_van(naam(tool)) not in verborgen]
+        return [
+            tool
+            for tool in tools
+            if scope_uit_tool(tool.get("name") or tool.get("function", {}).get("name"))
+            not in verborgen
+        ]
 
     async def _bron_aanroep_gated(
         self, aanroep, tool_key: str, arguments: dict, conv_key: str
@@ -2617,7 +2610,7 @@ class VLAMHost:
         en de aanroeper mag daar geen `tool`-event voor tonen - dat zou de
         client iets laten zien dat niet gebeurd is.
         """
-        scope = scope_van(tool_key)
+        scope = scope_uit_tool(tool_key)
         if scope in TOESTEMMINGSPLICHTIGE_SCOPES and scope not in self.toestemming.get(
             conv_key, set()
         ):

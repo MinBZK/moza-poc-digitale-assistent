@@ -5,7 +5,7 @@
 | Status | Geaccepteerd |
 | Datum | 2026-09-03 |
 | Beslisser(s) | Projectteam poc-moza |
-| Gerelateerd | [PDR-008](PDR-008-generieke-regelrecht-tool-en-wallet.md) (toestemming per bron), [PDR-011](PDR-011-foutmeldingen-catalogus.md), [PDR-014](PDR-014-chat-geparkeerd-tot-de-vertaling-naar-wet-klopt.md) (meting van 2 september) |
+| Gerelateerd | [PDR-008](PDR-008-generieke-regelrecht-tool-en-wallet.md) (toestemming per bron), [PDR-005](PDR-005-cli-vs-mcp-transport.md) (CLI-transport zonder poort), [PDR-011](PDR-011-foutmeldingen-catalogus.md); de meting van 2 september staat in PDR-014, dat op een eigen branch ter vaststelling ligt |
 
 ## Context
 
@@ -21,9 +21,10 @@ bron uit, terwijl een variabele leegmaken in een beheer-UI de gewone handeling
 is voor "terug naar standaard". En `/health` meldde altijd `actief`, ook met een
 bron minder.
 
-Daarnaast liet de meting van 2 september (PDR-014, figuur 5) zien dat het model
-in vrijwel elke eerste beurt het Handelsregister probeerde aan te roepen vóór
-het akkoord, en de wallet drie keer. De poort uit PDR-008 weigerde alle
+Daarnaast liet een meting op 2 september (vijf doorlopen van de
+informatieplicht-flow plus losse vragen, host-log) zien dat het model in
+vrijwel elke eerste beurt het Handelsregister probeerde aan te roepen vóór het
+akkoord, en de wallet drie keer. De poort uit PDR-008 weigerde alle
 veertien, maar elke weigering kostte een extra modelbeurt en een bronfout in
 het scherm, en het statusblok in de prompt noemde altijd de Business Wallet,
 ook als de host op akkoord voor de KvK wachtte.
@@ -43,14 +44,17 @@ ook als de host op akkoord voor de KvK wachtte.
    contract voor wie `/health` leest; de readiness-probe van ZAD kijkt alleen
    naar de HTTP-status.
 3. **Tools van bronnen die akkoord vergen staan pas na het akkoord in de
-   lijst van het model**, en alleen zolang het deelverzoek in het scherm staat
-   (`wacht_op == "toestemming"`). Buiten die stand blijft de lijst heel en is
-   de poort uit PDR-008 de grens, zodat een bron waarvoor nooit een deelverzoek
-   kwam bereikbaar blijft. Het statusblok en de harde regel in de prompt noemen
+   lijst van het model.** Het filter gebruikt hetzelfde predicaat als de
+   poort uit PDR-008: een bron die akkoord vergt en dat akkoord in dit
+   gesprek nog niet heeft. Het akkoord komt via het deelverzoek van de
+   regelloop; een deelverzoek buiten die lus om bestaat niet, dus valt
+   RegelRecht weg, dan is die bron in dat gesprek niet bereikbaar. Dat was
+   met de poort al zo (een weigering opende ook geen deelverzoek) en staat
+   hier als bekend gat. Het statusblok en de harde regel in de prompt noemen
    de bron waarop het systeem wacht, voor de regeltoets en voor de
-   maatregelenlijst met dezelfde formulering. Dit geldt voor het MCP-transport;
-   het CLI-transport heeft geen poort (PDR-005) en zegt dat in zijn eigen
-   promptblok.
+   maatregelenlijst met dezelfde formulering. Dit geldt voor het
+   MCP-transport; het CLI-transport heeft geen poort (PDR-005) en zegt dat in
+   zijn eigen promptblok.
 4. **Het meetscript toetst tegen de vijf bekende bronnen**, niet tegen wat
    `servers` toevallig bevat, en meldt storing en uitgezet apart.
 
@@ -67,13 +71,14 @@ ook als de host op akkoord voor de KvK wachtte.
 - **Alleen de promptregel aanscherpen, geen tool-filter.** Afgewezen: de
   meting van 2 september liet zien dat een harde promptregel het model niet
   tegenhield; een tool die het model niet ziet, roept het niet aan.
-- **Altijd filteren zodra het akkoord ontbreekt.** Afgewezen: valt RegelRecht
-  weg of komt de regelloop niet tot een deelverzoek, dan is er geen knop die
-  het akkoord vastlegt en zou het Handelsregister onbereikbaar zijn.
+- **Alleen filteren zolang het deelverzoek in het scherm staat.** Afgewezen:
+  de poort weigert buiten die stand net zo goed, dus een zichtbare tool
+  maakt de bron niet bereikbaar; hij kost alleen een beurt en een bronfout.
+  Eén predicaat voor filter en poort is te toetsen, twee niet.
 - **De env-sleutels afleiden uit `BRON_LABELS`.** Afgewezen: `config` zou dan
   `errors` importeren (met de LLM-SDK's erachter) en een label zonder server
   zou een niet-bestaande server laten starten. De lijst staat expliciet in
-   `config.py`; een test bindt hem aan de labels.
+  `config.py`; een test bindt hem aan de labels.
 
 ## Consequenties
 
@@ -85,7 +90,12 @@ ook als de host op akkoord voor de KvK wachtte.
 - **Tests:** conftest zet `MCP_SERVER_*` leeg, zodat de suite niet van de
   `.env` van de ontwikkelaar afhangt; `host_met_bronnen` is de ene fabriek
   voor een host met uitgezette of uitgevallen bronnen.
-- **Meting:** de weigeringen uit figuur 5 van PDR-014 horen met deze PDR
-  niet meer voor te komen in de flow. Dat is na te meten met
-  `docs/superpowers/plans/toets-pdr-014/meet.py`; die hermeting is nog niet
-  gedaan.
+- **Merge-volgorde:** deze PDR verwijst in tekst naar de meting van 2
+  september; het rapport daarvan en PDR-014 staan op de branch
+  `docs/pdr-014-koerswijziging`. Tot die is gemerged mist de README-tabel het
+  nummer 014; de tekst hier blijft zonder die branch leesbaar.
+- **Meting:** de weigeringen die op 2 september werden gezien horen met deze
+  PDR niet meer voor te komen in de flow. Die hermeting is nog niet gedaan.
+- **Aanzetten met een woord:** `aan`, `on`, `true`, `1`, `ja`, `yes`,
+  `enabled` betekenen ook het standaardpad, zodat het spiegelbeeld van `uit`
+  geen storing oplevert.

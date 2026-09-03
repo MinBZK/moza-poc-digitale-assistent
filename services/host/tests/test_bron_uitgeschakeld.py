@@ -140,63 +140,48 @@ def test_regelstatus_geeft_de_bron_van_de_maatregelen_toestemming_door():
     assert status["maatregelen"]["toestemming_bron"] == "Business Wallet"
 
 
-def _tool(transport: str, naam: str) -> dict:
-    if transport == "anthropic":
+def test_verborgen_bronnen_volgen_het_akkoord_per_gesprek(host_met_bronnen):
+    """Hetzelfde predicaat als de poort: een bron die akkoord vergt en dat
+    akkoord in dit gesprek nog niet heeft, gaat niet naar het model."""
+    host = host_met_bronnen()
+    assert host._verborgen_bronnen("g1") == {"kvk", "netbeheerder"}
+    host.toestemming["g1"] = {"kvk"}
+    assert host._verborgen_bronnen("g1") == {"netbeheerder"}
+    host.toestemming["g1"] = {"kvk", "netbeheerder"}
+    assert host._verborgen_bronnen("g1") == frozenset()
+    assert host._verborgen_bronnen("ander-gesprek") == {"kvk", "netbeheerder"}
+
+
+def test_verborgen_bronnen_en_poort_zien_dezelfde_scope(host_met_bronnen):
+    """Wat het filter verbergt, weigert de poort; wat het filter toont, laat de
+    poort door. Anders toont de een een tool die de ander weigert."""
+    host = host_met_bronnen()
+    host.toestemming["g1"] = {"kvk"}
+    verborgen = host._verborgen_bronnen("g1")
+    for tool_key in ("kvk__mijn_bedrijf", "netbeheerder__verbruik", "regelrecht__execute_law"):
+        scope = vlam_host.scope_uit_tool(tool_key)
+        weigert = scope in vlam_host.TOESTEMMINGSPLICHTIGE_SCOPES and scope not in host.toestemming["g1"]
+        assert (scope in verborgen) == weigert, tool_key
+
+
+def _tool(vorm: str, naam: str) -> dict:
+    if vorm == "anthropic":
         return {"name": naam, "description": "", "input_schema": {}}
     return {"type": "function", "function": {"name": naam, "parameters": {}}}
 
 
-def _namen(tools: list[dict]) -> list[str]:
-    return [t.get("name") or t["function"]["name"] for t in tools]
-
-
-ALLE_TOOLS = ("kvk__mijn_bedrijf", "netbeheerder__verbruik", "regelrecht__execute_law",
-              "rvo__zoek_regeling", "koop__zoek")
-VRIJ = ["regelrecht__execute_law", "rvo__zoek_regeling", "koop__zoek"]
-
-
-@pytest.mark.parametrize("transport", ["anthropic", "openai"])
-def test_tools_die_akkoord_vergen_staan_pas_na_akkoord_in_de_lijst(transport, host_met_bronnen):
-    """De poort weigert een aanroep vóór akkoord al; maar een tool die het model
-    niet ziet, roept het ook niet aan, en dat scheelt een beurt en een bronfout."""
-    host = host_met_bronnen()
-    alle = [_tool(transport, n) for n in ALLE_TOOLS]
-    host._regel_status_laatst["g1"] = {"klaar": False, "wacht_op": "toestemming"}
-    assert _namen(host._tools_voor_model("g1", alle)) == VRIJ
-    host.toestemming["g1"] = {"kvk"}
-    assert "kvk__mijn_bedrijf" in _namen(host._tools_voor_model("g1", alle))
-    assert "netbeheerder__verbruik" not in _namen(host._tools_voor_model("g1", alle))
-    host.toestemming["g1"] = {"kvk", "netbeheerder"}
-    assert _namen(host._tools_voor_model("g1", alle)) == _namen(alle)
-
-
 @pytest.mark.parametrize(
-    "status",
+    ("akkoord", "verwacht"),
     [
-        None,
-        {"klaar": False, "wacht_op": None},
-        {"klaar": False, "wacht_op": "onbekend"},
-        {"klaar": True, "wacht_op": None},
-        {"klaar": False, "wacht_op": "opgave"},
+        (set(), ["regelrecht__execute_law"]),
+        ({"kvk"}, ["kvk__mijn_bedrijf", "regelrecht__execute_law"]),
+        ({"kvk", "netbeheerder"}, ["kvk__mijn_bedrijf", "netbeheerder__verbruik", "regelrecht__execute_law"]),
     ],
 )
-def test_zonder_deelverzoek_blijft_de_lijst_heel(status, host_met_bronnen):
-    """Staat er geen deelverzoek in het scherm (regelloop klaar, wacht op een
-    opgave, of kwam niet tot een deelverzoek), dan is er geen knop om akkoord te
-    geven; de tools verbergen zou een bron onbereikbaar maken. De poort blijft
-    de grens."""
+@pytest.mark.parametrize("vorm", ["anthropic", "openai"])
+def test_de_tool_lijst_laat_bronnen_zonder_akkoord_weg(akkoord, verwacht, vorm, host_met_bronnen):
     host = host_met_bronnen()
-    alle = [_tool("anthropic", n) for n in ALLE_TOOLS]
-    if status is not None:
-        host._regel_status_laatst["g1"] = status
-    assert _namen(host._tools_voor_model("g1", alle)) == _namen(alle)
-
-
-def test_een_ander_gesprek_deelt_het_akkoord_niet(host_met_bronnen):
-    host = host_met_bronnen()
-    alle = [_tool("anthropic", n) for n in ALLE_TOOLS]
-    for g in ("g1", "g2"):
-        host._regel_status_laatst[g] = {"klaar": False, "wacht_op": "toestemming"}
-    host.toestemming["g1"] = {"kvk", "netbeheerder"}
-    assert _namen(host._tools_voor_model("g1", alle)) == _namen(alle)
-    assert _namen(host._tools_voor_model("g2", alle)) == VRIJ
+    host.toestemming["g1"] = set(akkoord)
+    alle = [_tool(vorm, n) for n in ("kvk__mijn_bedrijf", "netbeheerder__verbruik", "regelrecht__execute_law")]
+    namen = [x.get("name") or x["function"]["name"] for x in host._tools_voor_model("g1", alle)]
+    assert namen == verwacht
