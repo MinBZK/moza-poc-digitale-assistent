@@ -52,9 +52,12 @@ ook als de host op akkoord voor de KvK wachtte.
    met de poort al zo (een weigering opende ook geen deelverzoek) en staat
    hier als bekend gat. Het statusblok en de harde regel in de prompt noemen
    de bron waarop het systeem wacht, voor de regeltoets en voor de
-   maatregelenlijst met dezelfde formulering. Dit geldt voor het
-   MCP-transport; het CLI-transport heeft geen poort (PDR-005) en zegt dat in
-   zijn eigen promptblok.
+   maatregelenlijst met dezelfde formulering, en de prompt noemt welke bronnen
+   dit gesprek nog geen akkoord hebben, zodat hij geen tool voorschrijft die
+   het model niet ziet. Dit geldt voor het MCP-transport; het CLI-transport
+   heeft geen poort en geen deelverzoek (open punt uit de review van
+   24 augustus), filtert daarom niet en krijgt de harde toestemmingsregel niet
+   in zijn prompt.
 4. **Het meetscript toetst tegen de vijf bekende bronnen**, niet tegen wat
    `servers` toevallig bevat, en meldt storing en uitgezet apart.
 
@@ -86,7 +89,10 @@ ook als de host op akkoord voor de KvK wachtte.
   verwijderen of leegmaken; na de uitrol `/health` controleren op
   `actief [] verbonden` (zie `docs/deploy-zad.md`).
 - **Frontend en monitoring:** `status` kan `gedegradeerd` zijn; wie op
-  `actief` toetste, moet dat als storing lezen, niet als "assistent weg".
+  `actief` toetste, moet dat als storing lezen, niet als "assistent weg". De
+  frontend (`MinBZK/moza-poc`, 3 september) leest `servers`, niet `status`.
+- **Gesprek wissen:** `clear_session` wist ook het akkoord; een nieuw gesprek
+  op dezelfde sessie begint zonder.
 - **Tests:** conftest zet `MCP_SERVER_*` leeg, zodat de suite niet van de
   `.env` van de ontwikkelaar afhangt; `host_met_bronnen` is de ene fabriek
   voor een host met uitgezette of uitgevallen bronnen.

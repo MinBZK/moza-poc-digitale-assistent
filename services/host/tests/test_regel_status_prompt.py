@@ -291,7 +291,7 @@ def test_toestemming_noemt_de_bron_waarop_het_systeem_wacht(bron):
         regel_status={"wacht_op": "toestemming", "toestemming_bron": bron},
     )
     andere = "Business Wallet" if bron != "Business Wallet" else "KvK Handelsregister"
-    assert f"toestemming van de ondernemer voor de bron {bron}" in prompt
+    assert f"De regeltoets wacht nog op toestemming van de ondernemer voor de bron {bron} (PDR-008)" in prompt
     assert f"voor de bron {andere}" not in prompt
     assert "NIET zelf aan" in prompt
 
@@ -300,8 +300,7 @@ def test_toestemming_zonder_bron_noemt_geen_bron():
     prompt = compose_system_prompt(
         "claude", has_tools=True, regel_status={"wacht_op": "toestemming"}
     )
-    assert "voor de bron waarop het systeem wacht" in prompt
-    assert "voor de bron de Business Wallet" not in prompt
+    assert "wacht nog op toestemming van de ondernemer voor de bron waarop het systeem wacht, zie het deelverzoek" in prompt
 
 
 @pytest.mark.parametrize("bron", ["Business Wallet", "KvK Handelsregister"])

@@ -85,3 +85,13 @@ def test_de_host_geeft_beide_lijsten_door(host_met_bronnen):
     assert STORING_KOP in prompt
     assert "KOOP" in prompt.split(STORING_KOP, 1)[1][:300]
     assert "NIET NOEMEN" in prompt
+
+
+def test_de_toestemmingsregel_hoort_bij_het_mcp_transport():
+    """De harde regel "roep de tool niet zelf aan, wacht op de knop" gaat over de
+    poort en het filter, die het CLI-transport niet heeft; daar zou hij de
+    CLI-instructie ("roep na toestemming kvk__mijn_bedrijf aan") tegenspreken."""
+    mcp = compose_system_prompt("claude", has_tools=True)
+    cli = compose_system_prompt("claude", has_tools=True, cli_transport=True)
+    assert "TOESTEMMING (HARDE regel, PDR-008)" in mcp
+    assert "TOESTEMMING (HARDE regel, PDR-008)" not in cli

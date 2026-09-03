@@ -170,20 +170,44 @@ def _compose_bronnen_uit(bronnen_uit: list[str]) -> str | None:
 
 
 
-def _toestemming_instructie(bron: str | None) -> str:
-    """Eén formulering voor "wacht op akkoord voor bron X", gedeeld door de
-    regeltoets en de maatregelenlijst, zodat de twee niet uit elkaar lopen.
+def _toestemming_instructie(onderwerp: str, bron: str | None) -> str:
+    """Eén formulering voor "<onderwerp> wacht op akkoord voor bron X", gedeeld
+    door de regeltoets en de maatregelenlijst, zodat de twee niet uit elkaar
+    lopen.
 
     De status draagt de bron altijd mee (`_regel_status_dict`); ontbreekt hij
     toch, dan noemt de tekst geen bron in plaats van er een te raden - het
     deelverzoek in het scherm zegt welke het is.
     """
-    bron = bron or "waarop het systeem wacht (zie het deelverzoek in het scherm)"
+    waarvoor = (
+        f"voor de bron {bron}"
+        if bron
+        else "voor de bron waarop het systeem wacht, zie het deelverzoek in het scherm"
+    )
     return (
-        f"toestemming van de ondernemer voor de bron {bron} (PDR-008). Vraag daar "
-        "EXPLICIET om voordat u gegevens uit die bron gebruikt, roep de tool van die "
-        "bron NIET zelf aan (het systeem haalt de gegevens op zodra het akkoord "
-        "is vastgelegd), en wacht op een duidelijk antwoord."
+        f"{onderwerp} wacht nog op toestemming van de ondernemer {waarvoor} "
+        "(PDR-008). Vraag daar EXPLICIET om voordat u gegevens uit die bron "
+        "gebruikt, roep de tool van die bron NIET zelf aan (het systeem haalt de "
+        "gegevens op zodra het akkoord is vastgelegd), en wacht op een duidelijk "
+        "antwoord."
+    )
+
+
+def _compose_zonder_akkoord(bronnen: list[str]) -> str | None:
+    """Welke bronnen dit gesprek nog geen akkoord hebben: hun tools staan niet in
+    de lijst van het model (PDR-015), en dat hoort in de prompt te staan, anders
+    schrijft de routeringstabel een tool voor die het model niet ziet."""
+    if not bronnen:
+        return None
+    from errors import BRON_LABELS
+
+    labels = ", ".join(BRON_LABELS.get(b, b) for b in bronnen)
+    return (
+        "AKKOORD NOG NIET VASTGELEGD: voor "
+        f"{labels} heeft de ondernemer in dit gesprek nog geen akkoord gegeven. "
+        "De tools van die bron staan daarom niet in uw lijst; ze komen erbij "
+        "zodra het akkoord via het deelverzoek in het scherm is vastgelegd. "
+        "Vraag het akkoord met de naam van de bron en roep niets aan."
     )
 
 def _regel_status_klaar_tekst(resultaat: dict) -> str:
@@ -260,8 +284,8 @@ def _maatregelen_status_tekst(
             "de categorieën NIET in uw tekst."
         )
     if wacht_op == "toestemming":
-        return "De maatregelenlijst wacht nog op " + _toestemming_instructie(
-            maatregelen.get("toestemming_bron")
+        return _toestemming_instructie(
+            "De maatregelenlijst", maatregelen.get("toestemming_bron")
         )
     if not maatregelen.get("klaar"):
         return (
@@ -429,9 +453,7 @@ def _compose_regel_status(regel_status: dict | None, feiten: dict | None = None)
     if wacht_op == "toestemming":
         # De bron waarop het systeem wacht staat in de status; een vaste naam
         # hier zou het model bij een andere bron de verkeerde tool laten kiezen.
-        status = "Voor de regeltoets is eerst " + _toestemming_instructie(
-            regel_status.get("toestemming_bron")
-        )
+        status = _toestemming_instructie("De regeltoets", regel_status.get("toestemming_bron"))
     elif wacht_op == "opgave" and regel_status.get("vraag"):
         status = (
             "Er is een gegeven nodig dat alleen de ondernemer weet. Het formulier "
@@ -474,6 +496,7 @@ def compose_system_prompt(
     regel_status: dict | None = None,
     feiten: dict | None = None,
     bronnen_uit: list[str] | None = None,
+    bronnen_zonder_akkoord: list[str] | None = None,
 ) -> str:
     """Assemble the system prompt from modular blocks.
 
@@ -516,6 +539,11 @@ def compose_system_prompt(
         # antwoorden die geen tool gebruiken maar wel een eerder feit noemen.
         blocks.append(_load("shared/slots.md"))
         blocks.append(_load("shared/tool_usage.md"))
+        if not cli_transport:
+            # De toestemmingsregel hoort bij de poort en het tool-filter van
+            # het MCP-transport; het CLI-transport heeft die niet en zegt in
+            # zijn eigen blok wat daar geldt.
+            blocks.append(_load("shared/toestemming_mcp.md"))
         blocks.extend(_load_domain_blocks(onbereikbaar))
         if cli_transport:
             # De routeringstabel is gedeeld met het MCP-transport en noemt tools
@@ -530,6 +558,9 @@ def compose_system_prompt(
             blocks.append(status)  # welke bronnen nu uitliggen
         if uit:
             blocks.append(uit)  # welke bronnen hier niet bestaan
+        zonder = _compose_zonder_akkoord(bronnen_zonder_akkoord or [])
+        if zonder:
+            blocks.append(zonder)  # welke tools het model nu niet ziet
     elif status:
         # Geen enkele tool én bronnen die hadden moeten draaien: eerlijk melden
         # dat het nu niet lukt, in plaats van op eigen kennis antwoorden.

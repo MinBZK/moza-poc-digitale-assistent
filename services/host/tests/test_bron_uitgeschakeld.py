@@ -1,12 +1,12 @@
-"""Een bron die niet geconfigureerd is, staat uit; een bron die niet opkwam, heeft
+"""Een bron die met een uitzet-woord is uitgezet, staat uit; een bron die niet opkwam, heeft
 een storing. Het model krijgt ze allebei te horen, maar anders: over een storing
 meldt het wat er mist, over een uitgezette bron zwijgt het.
 
-`bronnen_offline` keek alleen naar servers die wél in de configuratie stonden
-maar niet startten. Schakel je een bron uit door hem uit de configuratie te
-halen - bijvoorbeeld de Business Wallet, om een onderzoek op eigen opgaven te
-laten draaien - dan stond hij nergens als "weg", en bleef de assistent hem
-beloven: "uw energieverbruik haal ik op uit uw Business Wallet".
+`bronnen_offline` kijkt naar servers die ingericht zijn maar niet startten.
+Een bron die bewust uitstaat (`MCP_SERVER_NETBEHEERDER=uit`, bijvoorbeeld om
+een onderzoek op eigen opgaven te laten draaien) staat daar niet in, en hoort
+apart zichtbaar te zijn; anders blijft de assistent hem beloven: "uw
+energieverbruik haal ik op uit uw Business Wallet".
 
 Een belofte over een bron die er niet is, is precies het soort vertrouwensfout
 dat dit project wil vermijden. En het is erger dan een storing melden, want de
@@ -28,35 +28,6 @@ UIT_GEVALLEN = [[], ["netbeheerder"], ["koop", "netbeheerder"]]
 
 def _waarschuwingen(caplog) -> list[str]:
     return [r.getMessage() for r in caplog.records if r.name == LOGGER and r.levelname == "WARNING"]
-
-
-def test_elke_bron_heeft_een_omgevingsvariabele():
-    """De waarschuwing noemt de variabele uit de configuratie; een bron zonder
-    variabele zou een naam verzinnen die niemand kan zetten."""
-    assert set(BRON_LABELS) == set(MCP_SERVER_ENV_KEYS)
-
-
-def test_een_niet_geconfigureerde_bron_staat_uit_en_is_geen_storing(host_met_bronnen):
-    """De wallet uit de configuratie halen is genoeg om hem uit te schakelen."""
-    host = host_met_bronnen(uit=["netbeheerder"])
-    assert host.bronnen_uit == ["netbeheerder"]
-    assert host.bronnen_offline == []
-
-
-def test_een_gestarte_bron_telt_niet_als_weg(host_met_bronnen):
-    assert host_met_bronnen().bronnen_offline == []
-
-
-def test_een_bron_die_niet_opkwam_blijft_gemeld(host_met_bronnen):
-    """Het bestaande geval mag niet sneuvelen met deze wijziging."""
-    assert "koop" in host_met_bronnen(storing=["koop"]).bronnen_offline
-
-
-def test_de_lijsten_blijven_gesorteerd_en_gescheiden(host_met_bronnen):
-    """De lijsten gaan de prompt in; een dubbele bron leest als een fout."""
-    host = host_met_bronnen(uit=["netbeheerder"], storing=["koop"])
-    assert host.bronnen_offline == ["koop"]
-    assert host.bronnen_uit == ["netbeheerder"]
 
 
 @pytest.mark.parametrize("uit", UIT_GEVALLEN)
@@ -152,18 +123,6 @@ def test_verborgen_bronnen_volgen_het_akkoord_per_gesprek(host_met_bronnen):
     assert host._verborgen_bronnen("ander-gesprek") == {"kvk", "netbeheerder"}
 
 
-def test_verborgen_bronnen_en_poort_zien_dezelfde_scope(host_met_bronnen):
-    """Wat het filter verbergt, weigert de poort; wat het filter toont, laat de
-    poort door. Anders toont de een een tool die de ander weigert."""
-    host = host_met_bronnen()
-    host.toestemming["g1"] = {"kvk"}
-    verborgen = host._verborgen_bronnen("g1")
-    for tool_key in ("kvk__mijn_bedrijf", "netbeheerder__verbruik", "regelrecht__execute_law"):
-        scope = vlam_host.scope_uit_tool(tool_key)
-        weigert = scope in vlam_host.TOESTEMMINGSPLICHTIGE_SCOPES and scope not in host.toestemming["g1"]
-        assert (scope in verborgen) == weigert, tool_key
-
-
 def _tool(vorm: str, naam: str) -> dict:
     if vorm == "anthropic":
         return {"name": naam, "description": "", "input_schema": {}}
@@ -185,3 +144,50 @@ def test_de_tool_lijst_laat_bronnen_zonder_akkoord_weg(akkoord, verwacht, vorm, 
     alle = [_tool(vorm, n) for n in ("kvk__mijn_bedrijf", "netbeheerder__verbruik", "regelrecht__execute_law")]
     namen = [x.get("name") or x["function"]["name"] for x in host._tools_voor_model("g1", alle)]
     assert namen == verwacht
+
+
+def test_de_poort_weigert_precies_wat_het_filter_verbergt(host_met_bronnen):
+    """Filter en poort delen `_verborgen_bronnen`; dit toetst de poort zelf."""
+    import asyncio
+
+    host = host_met_bronnen()
+    host.toestemming["g1"] = {"kvk"}
+
+    async def aanroep():
+        return {"data": {"ok": True}}
+
+    async def draai():
+        uit = {}
+        for tool_key in ("kvk__mijn_bedrijf", "netbeheerder__verbruik", "regelrecht__execute_law"):
+            _, fout, aangeroepen = await host._bron_aanroep_gated(aanroep, tool_key, {}, "g1")
+            uit[tool_key] = (aangeroepen, fout.code if fout else None)
+        return uit
+
+    uit = asyncio.run(draai())
+    assert uit["kvk__mijn_bedrijf"] == (True, None)
+    assert uit["netbeheerder__verbruik"] == (False, "TOESTEMMING_VEREIST")
+    assert uit["regelrecht__execute_law"] == (True, None)
+
+
+def test_een_nieuw_gesprek_begint_zonder_akkoord(host_met_bronnen):
+    host = host_met_bronnen()
+    sleutel = host._conv_key("62345681", "s1", "claude")
+    host.toestemming[sleutel] = {"kvk", "netbeheerder"}
+    host.clear_session("62345681", "s1")
+    assert sleutel not in host.toestemming
+    assert host._verborgen_bronnen(sleutel) == {"kvk", "netbeheerder"}
+
+
+def test_de_prompt_noemt_de_bronnen_waarvan_de_tools_verborgen_zijn(host_met_bronnen):
+    """Anders schrijft de routeringstabel een tool voor die het model niet ziet."""
+    host = host_met_bronnen()
+    sleutel = host._conv_key("62345681", "s1", "claude")
+    prompt = host._system_prompt("claude", has_tools=True, conv_key=sleutel)
+    assert "AKKOORD NOG NIET VASTGELEGD" in prompt
+    assert BRON_LABELS["kvk"] in prompt and BRON_LABELS["netbeheerder"] in prompt
+    host.toestemming[sleutel] = {"kvk", "netbeheerder"}
+    assert "AKKOORD NOG NIET VASTGELEGD" not in host._system_prompt("claude", has_tools=True, conv_key=sleutel)
+    # Het CLI-transport filtert niet en krijgt het blok dus ook niet.
+    assert "AKKOORD NOG NIET VASTGELEGD" not in host._system_prompt(
+        "claude", has_tools=True, cli_transport=True, conv_key=sleutel
+    )

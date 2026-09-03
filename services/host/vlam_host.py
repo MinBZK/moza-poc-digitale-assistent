@@ -1221,10 +1221,10 @@ class VLAMHost:
 
     @property
     def bronnen_uit(self) -> list[str]:
-        """Bronnen die in deze omgeving bewust niet zijn ingericht.
+        """Bronnen die in deze omgeving bewust zijn uitgezet.
 
-        Een bron uitschakelen is een kwestie van configuratie: haal hem uit
-        `MCP_SERVERS` en de domeinblokken en voorbeelden die erop leunen vallen
+        Uitzetten is een besluit in de configuratie (`MCP_SERVER_<BRON>=uit`,
+        PDR-015): de domeinblokken en voorbeelden die op de bron leunen vallen
         weg, en de regelloop vraagt de ondernemer om wat hij zelf weet
         (`zelf_op_te_geven`). Voor het model is dat géén storing: het krijgt de
         instructie de bron nooit te noemen. Anders zegt het "uw Business Wallet
@@ -1268,6 +1268,7 @@ class VLAMHost:
         cli_transport: bool = False,
         regel_status: dict | None = None,
         feiten: dict | None = None,
+        conv_key: str | None = None,
     ) -> str:
         """Stel de systeemprompt samen, inclusief welke bronnen nu offline zijn.
 
@@ -1290,6 +1291,13 @@ class VLAMHost:
             regel_status=regel_status,
             feiten=feiten,
             bronnen_uit=self.bronnen_uit,
+            # Welke tools het model dit gesprek niet ziet (PDR-015): de prompt
+            # hoort geen tool voor te schrijven die niet in de lijst staat.
+            bronnen_zonder_akkoord=(
+                sorted(self._verborgen_bronnen(conv_key))
+                if conv_key is not None and not cli_transport
+                else []
+            ),
         )
 
     def get_status(self) -> dict:
@@ -1604,6 +1612,10 @@ class VLAMHost:
                         None,
                     )
             finally:
+                # Eén plek voor "wat de regelloop deze beurt bepaalde": elke
+                # afnemer (stream of niet) leest het hier vandaan.
+                if status is not None:
+                    self._regel_status_laatst[conv_key] = status
                 await queue.put({"type": "regel_status", "status": status})
 
         taak = asyncio.create_task(draai())
@@ -1749,10 +1761,11 @@ class VLAMHost:
                     if use_cli
                     else await self._regel_status_zonder_events(feiten, session_kvk, conv_key)
                 )
-                if regel_status is not None:
-                    self._regel_status_laatst[conv_key] = regel_status
+                # cli:* kent geen regelloop en dus geen deelverzoek: daar blijft
+                # de lijst heel (het filter zou de KvK voorgoed verbergen).
                 antwoord = await self._chat_vlam(
-                    messages, session_kvk, vlam, feiten, regel_status, conv_key
+                    messages, session_kvk, vlam, feiten, regel_status, conv_key,
+                    filter_tools=not use_cli,
                 )
             else:
                 if not claude.api_key:
@@ -1762,10 +1775,9 @@ class VLAMHost:
                     if use_cli
                     else await self._regel_status_zonder_events(feiten, session_kvk, conv_key)
                 )
-                if regel_status is not None:
-                    self._regel_status_laatst[conv_key] = regel_status
                 antwoord = await self._chat_claude(
-                    messages, session_kvk, claude, feiten, regel_status, conv_key
+                    messages, session_kvk, claude, feiten, regel_status, conv_key,
+                    filter_tools=not use_cli,
                 )
             if antwoord in _HERSTEL_TEKSTEN:
                 del messages[herstelpunt:]
@@ -1854,7 +1866,6 @@ class VLAMHost:
                         async for event in self._regel_status(feiten, session_kvk, conv_key):
                             if event["type"] == "regel_status":
                                 regel_status = event["status"]
-                                self._regel_status_laatst[conv_key] = regel_status
                             else:
                                 yield event
                     if llm == "vlam":
@@ -1924,13 +1935,18 @@ class VLAMHost:
         niet overschrijven.
         `regel_status` is de uitkomst van de regelloop van vóór deze beurt
         (`_regel_status`); `None` als die niet gedraaid is (CLI-transport).
-        `conv_key` gaat naar `_bron_aanroep_gated` (PDR-008): roept het model
+        `conv_key` gaat naar `_tools_voor_model` en `_bron_aanroep_gated` (PDR-008,
+        PDR-015): het model ziet geen tool van een bron zonder akkoord, en roept het
         zelf `netbeheerder__verbruik` aan, dan weigert die poort de aanroep
         zolang toestemming niet vastligt — zie `_execute_tools`.
         """
         tools = self._tools_voor_model(conv_key, self.registry.get_anthropic_tools())
         system_prompt = self._system_prompt(
-            "claude", regel_status=self._met_lijst_vlag(regel_status, conv_key), feiten=feiten
+            "claude",
+            has_tools=bool(tools),
+            regel_status=self._met_lijst_vlag(regel_status, conv_key),
+            feiten=feiten,
+            conv_key=conv_key,
         )
 
         # Per beurt (niet per iteratie): de tool-aanroep en het uiteindelijke
@@ -2043,7 +2059,11 @@ class VLAMHost:
         """
         tools_openai = self._tools_voor_model(conv_key, self.registry.get_openai_tools())
         system_prompt = self._system_prompt(
-            "vlam", regel_status=self._met_lijst_vlag(regel_status, conv_key), feiten=feiten
+            "vlam",
+            has_tools=bool(tools_openai),
+            regel_status=self._met_lijst_vlag(regel_status, conv_key),
+            feiten=feiten,
+            conv_key=conv_key,
         )
         openai_messages = self._to_openai_messages(messages, system_prompt)
 
@@ -2381,6 +2401,7 @@ class VLAMHost:
         feiten: dict,
         regel_status: dict | None = None,
         conv_key: str = "",
+        filter_tools: bool = True,
     ) -> str:
         """`claude` is de client van dít verzoek (MVP-02), verplicht meegegeven.
 
@@ -2393,9 +2414,15 @@ class VLAMHost:
         """
         if not claude.api_key:
             return _geen_sleutel_fout("claude").tekst
-        tools = self._tools_voor_model(conv_key, self.registry.get_anthropic_tools())
+        tools = self.registry.get_anthropic_tools()
+        if filter_tools:
+            tools = self._tools_voor_model(conv_key, tools)
         system_prompt = self._system_prompt(
-            "claude", regel_status=self._met_lijst_vlag(regel_status, conv_key), feiten=feiten
+            "claude",
+            has_tools=bool(tools),
+            regel_status=self._met_lijst_vlag(regel_status, conv_key),
+            feiten=feiten,
+            conv_key=conv_key,
         )
 
         max_iterations = 10
@@ -2447,6 +2474,7 @@ class VLAMHost:
         feiten: dict,
         regel_status: dict | None = None,
         conv_key: str = "",
+        filter_tools: bool = True,
     ) -> str:
         """`vlam` is de client van dít verzoek (MVP-02), verplicht meegegeven.
 
@@ -2457,9 +2485,15 @@ class VLAMHost:
         naar `_bron_aanroep_gated`, dat de PDR-008-poort toepast op elke
         tool-aanroep van het model.
         """
-        tools_openai = self._tools_voor_model(conv_key, self.registry.get_openai_tools())
+        tools_openai = self.registry.get_openai_tools()
+        if filter_tools:
+            tools_openai = self._tools_voor_model(conv_key, tools_openai)
         system_prompt = self._system_prompt(
-            "vlam", regel_status=self._met_lijst_vlag(regel_status, conv_key), feiten=feiten
+            "vlam",
+            has_tools=bool(tools_openai),
+            regel_status=self._met_lijst_vlag(regel_status, conv_key),
+            feiten=feiten,
+            conv_key=conv_key,
         )
         openai_messages = self._to_openai_messages(messages, system_prompt)
 
@@ -2611,9 +2645,7 @@ class VLAMHost:
         client iets laten zien dat niet gebeurd is.
         """
         scope = scope_uit_tool(tool_key)
-        if scope in TOESTEMMINGSPLICHTIGE_SCOPES and scope not in self.toestemming.get(
-            conv_key, set()
-        ):
+        if scope in self._verborgen_bronnen(conv_key):
             fout = maak_fout("TOESTEMMING_VEREIST", bron=scope)
             logger.warning(
                 "Bron %s geweigerd zonder vastgelegde toestemming [gesprek=%s]",
@@ -2776,3 +2808,7 @@ class VLAMHost:
             self._regel_status_laatst.pop(sleutel, None)
             self._toestemming_gevraagd.pop(sleutel, None)
             self._toestemming_zwevend.pop(sleutel, None)
+            # Een nieuw gesprek begint zonder akkoord: anders ziet het model de
+            # KvK-tools meteen terwijl de status zegt dat er op akkoord wordt
+            # gewacht.
+            self.toestemming.pop(sleutel, None)
