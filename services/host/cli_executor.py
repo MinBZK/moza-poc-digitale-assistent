@@ -14,6 +14,7 @@ import signal
 from pathlib import Path
 
 from config import TOOL_TIMEOUT
+from errors import scope_uit_tool
 from subprocess_env import CLI_ALLOWLIST, subprocess_env
 
 logger = logging.getLogger("vlam.cli")
@@ -254,7 +255,7 @@ async def _dispatch_cli_tool(tool_key: str, arguments: dict) -> str:
         logger.warning("Tool %r bestaat niet in het CLI-transport", str(tool_key)[:80])
         return json.dumps({"error": "TOOL_NIET_IN_TRANSPORT"}, ensure_ascii=False)
 
-    bron = tool_key.split("__", 1)[0]
+    bron = scope_uit_tool(tool_key)
     if bron not in _CLI_BRONNEN:
         # Onderscheid tussen "deze bron heeft hier geen wrapper" (wachten helpt
         # niet) en "het model verzon een naam" (opnieuw vragen kan wél helpen),

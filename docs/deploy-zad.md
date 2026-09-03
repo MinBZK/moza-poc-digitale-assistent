@@ -40,6 +40,37 @@ staat los daarvan in de component-config.
   dat opent iets wat nu dicht is.
 - Geen `ANTHROPIC_API_KEY` / `VLAM_API_KEY`: gebruikers leveren hun eigen sleutel
   via de UI (PDR-010).
+- **Geen `MCP_SERVER_NETBEHEERDER`.** De EU Business Wallet (netbeheerder-mock)
+  staat standaard **aan**: is de variabele afwezig of leeg, dan start de host
+  de server op het standaardpad; een pad als waarde (zoals `compose.yaml`
+  doet) zet hem ook aan. Uitzetten kan alleen met een uitzet-woord (`uit`,
+  `off`, `none`, `geen`, `false`, `no`, `nee`, `0`, `disabled`; de lijst is
+  `_UIT` in `services/host/config.py`, en een test bewaakt dat deze zin
+  daarmee gelijk loopt).
+  `MCP_SERVER_NETBEHEERDER=uit` was een tijdelijke instelling voor het
+  gebruikersonderzoek van augustus (de respondent gaf zijn verbruik zelf op)
+  en hoort op geen enkel component meer te staan: verwijderen of leegmaken in
+  de ZAD-UI, allebei is goed (een lege waarde die nog uit de onderzoeksperiode
+  stamt, zet de wallet nu dus aan). Staat er een uitzet-woord, dan waarschuwt de
+  host bij het opstarten (`Bron 'netbeheerder' ... staat bewust uit:
+  MCP_SERVER_NETBEHEERDER heeft een uitzet-waarde`) en toont `GET /health`
+  hem onder `bronnen_uit`.
+
+  **Controle na elke uitrol**, via de frontend-proxy (`/health` gaat mee naar
+  de backend) of vanuit de pod:
+
+  ```bash
+  curl -s https://<frontend-url>/health \
+    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['status'], d['bronnen_uit'], d['servers'].get('netbeheerder'))"
+  ```
+
+  Verwacht: `actief [] verbonden`. De drie velden zijn een contract:
+  `status` is `actief` of `gedegradeerd` (een ingerichte bron kwam niet op,
+  `niet beschikbaar` in `servers`); `bronnen_uit` noemt bronnen die bewust
+  uitstaan, wat géén storing is en `status` niet raakt; `servers` noemt per
+  ingerichte bron `verbonden` of `niet beschikbaar`. De readiness-probe van
+  ZAD kijkt alleen naar de HTTP-status en vangt geen van beide.
+  `services/host/scripts/onderzoeksflow.py` doet dezelfde controle.
 
 ### Valkuil: kale hostnamen in de nginx-proxy
 
@@ -73,7 +104,9 @@ afwijking hoort niet op `poc` te belanden:
   respondenten geen sleutel hoeven in te vullen. Dat is een bewuste, tijdelijke
   afwijking van PDR-010, beperkt tot deze niet-gepubliceerde link. **Na het
   onderzoek gaat de sleutel er weer af.** Verder dezelfde env als `dabackend`
-  (`TEST_KVK_NUMMERS`, `MCP_SERVER_NETBEHEERDER`; `ALLOWED_ORIGINS` leeg).
+  (`TEST_KVK_NUMMERS`; `ALLOWED_ORIGINS` leeg; geen `MCP_SERVER_NETBEHEERDER`,
+  want de Business Wallet staat standaard aan; tijdens de sessies van augustus
+  stond hij hier bewust uit).
 - `proef-onderzoek` heeft `BACKEND_ORIGIN` op
   `http://dabackend-onderzoek.<namespace van gebruikersonderzoek>.svc.cluster.local:8000`
   (FQDN, zie de valkuil hierboven).

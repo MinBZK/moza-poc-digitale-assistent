@@ -16,6 +16,7 @@ Beslissingen rond de Digitale Assistent. Lees de PDRs in volgorde — elke nieuw
 | [PDR-011](PDR-011-foutmeldingen-catalogus.md) | Foutmeldingen uit één catalogus, met wat er misging én wat je kunt doen | Geaccepteerd |
 | [PDR-013](PDR-013-timeoutgrenzen-op-basis-van-meting.md) | Time-outgrenzen op basis van meting, met levensteken en herkansingen | Geaccepteerd |
 | [PDR-014](PDR-014-chat-geparkeerd-tot-de-vertaling-naar-wet-klopt.md) | Chat geparkeerd tot de vertaling van vraag naar wet en invoer klopt; daarna doortrekken, eventueel in een andere vorm (Digitale assistent 2.0) | **Voorgesteld** |
+| [PDR-015](PDR-015-bronnen-standaard-aan-en-tools-na-akkoord.md) | Bronnen staan standaard aan, uitzetten is een woord, en tools die akkoord vergen staan pas na het akkoord in de lijst | Geaccepteerd |
 
 ## Vervangen of ongeldig verklaarde beslissingen
 
