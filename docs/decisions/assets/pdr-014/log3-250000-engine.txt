@@ -1,0 +1,31 @@
+2026-09-02 10:00:02 >>> POST https://ui.lac.projects.digilab.network/mcp/rpc
+2026-09-02 10:00:02     execute_law service=RVO law=omgevingswet/energiebesparing/informatieplicht
+2026-09-02 10:00:02     (1) getallen, zoals de host ze sinds 19 augustus normaliseert
+2026-09-02 10:00:02     parameters = {"KVK_NUMMER": "62345681", "IS_WOONFUNCTIE": false, "JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": 250000, "JAARLIJKS_GASVERBRUIK_M3": 90000}
+2026-09-02 10:00:02 <<< requirements_met = True   heeft_energiebesparingsplicht = True
+2026-09-02 10:00:02     input zoals de engine hem las = {"$JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": 250000, "$JAARLIJKS_GASVERBRUIK_M3": 90000}
+2026-09-02 10:00:02     toets elektriciteit: 250000 >= 50000 -> True
+
+2026-09-02 10:00:02 >>> POST https://ui.lac.projects.digilab.network/mcp/rpc
+2026-09-02 10:00:02     execute_law service=RVO law=omgevingswet/energiebesparing/informatieplicht
+2026-09-02 10:00:02     (2) de opgave zoals de ondernemer hem typte ('250.000'), ongewijzigd doorgegeven
+2026-09-02 10:00:02     parameters = {"KVK_NUMMER": "62345681", "IS_WOONFUNCTIE": false, "JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": "250.000", "JAARLIJKS_GASVERBRUIK_M3": "90.000"}
+2026-09-02 10:00:02 <<< requirements_met = False   heeft_energiebesparingsplicht = (geen uitkomst)
+2026-09-02 10:00:02     input zoals de engine hem las = {"$JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": 250, "$JAARLIJKS_GASVERBRUIK_M3": 90}
+2026-09-02 10:00:02     toets elektriciteit: 250 >= 50000 -> False
+
+2026-09-02 10:00:02 >>> POST https://ui.lac.projects.digilab.network/mcp/rpc
+2026-09-02 10:00:02     execute_law service=RVO law=omgevingswet/energiebesparing/informatieplicht
+2026-09-02 10:00:02     (3) bedrijf boven de elektriciteitsdrempel, onder de gasdrempel: 65000 kWh, 20000 m3
+2026-09-02 10:00:02     parameters = {"KVK_NUMMER": "62345681", "IS_WOONFUNCTIE": false, "JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": 65000, "JAARLIJKS_GASVERBRUIK_M3": 20000}
+2026-09-02 10:00:02 <<< requirements_met = True   heeft_energiebesparingsplicht = True
+2026-09-02 10:00:02     input zoals de engine hem las = {"$JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": 65000, "$JAARLIJKS_GASVERBRUIK_M3": 20000}
+2026-09-02 10:00:02     toets elektriciteit: 65000 >= 50000 -> True
+
+2026-09-02 10:00:02 >>> POST https://ui.lac.projects.digilab.network/mcp/rpc
+2026-09-02 10:00:02     execute_law service=RVO law=omgevingswet/energiebesparing/informatieplicht
+2026-09-02 10:00:02     (4) hetzelfde bedrijf met een tikfout: -65000, ongewijzigd doorgegeven
+2026-09-02 10:00:02     parameters = {"KVK_NUMMER": "62345681", "IS_WOONFUNCTIE": false, "JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": -65000, "JAARLIJKS_GASVERBRUIK_M3": 20000}
+2026-09-02 10:00:02 <<< requirements_met = False   heeft_energiebesparingsplicht = (geen uitkomst)
+2026-09-02 10:00:02     input zoals de engine hem las = {"$JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": -65000, "$JAARLIJKS_GASVERBRUIK_M3": 20000}
+2026-09-02 10:00:02     toets elektriciteit: -65000 >= 50000 -> False
