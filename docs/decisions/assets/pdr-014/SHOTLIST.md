@@ -1,7 +1,8 @@
 # Beeldmateriaal PDR-014 — shotlist
 
-Werkbestand, weg zodra alle beelden er staan. De PDR verwijst al naar de
-bestandsnamen hieronder; zet een beeld op die naam en de verwijzing werkt.
+Werkbestand, weg zodra alle beelden er staan. De PDR verwijst naar de zeven
+aanwezige beelden hieronder; fig8 en fig9 staan er bewust nog niet in en
+krijgen pas een verwijzing als het bestand bestaat.
 
 Uitgangspunt: in de onderbouwing staan **letterlijke logs van het moment dat
 het misgaat**, geen schema's. Schema's alleen in Context (fig1, fig2) en bij
