@@ -22,7 +22,7 @@ onderzoeksomgeving in beeld; alleen de fictieve persona's.
 | 4 | `fig4-hostlog-maatregelen-eigen-aanroep.png` | **aanwezig, gerenderd uit `log4-hostlog-model-roept-regel-zelf.txt`** (host-log 2 sept) | Onderbouwing A, verkeerde wet/bron/moment | model roept de regel zelf aan; host hergebruikt de uitkomst |
 | 5 | `fig5-hostlog-toestemming-vereist.png` | **aanwezig, gerenderd uit `log5-hostlog-toestemming-geweigerd.txt`** (host-log 2 sept) | Onderbouwing A, toestemmingspoort | model roept KvK en wallet aan vóór Delen; poort weigert |
 | 6 | `fig6-route-b5.png` | aanwezig (sessieschema) | Onderbouwing B | classificatieroute met B5 |
-| 7 | `fig7-sadee-financieel-cv.png` | aanwezig (regelrecht-repo) | Onderbouwing C | zeven regelingen op dezelfde feiten |
+| 7 | `fig7-sadee-financieel-cv.png` | aanwezig (`docs/financieel-cv/persona-sadee.png` in `MinBZK/regelrecht`, `feat/financieel_cv_RVO`, 24 juli) | Onderbouwing C | zeven regelingen op dezelfde feiten |
 | 8 | `fig8-zadlog-verbruik-als-tekst.png` | MAKEN (ZAD-log 25 aug) | Onderbouwing A, invoerwaarden (invoegen na de bullet over `af6924d`) | respondent typt verbruik als tekst; regelloop wacht op opgave; assistent vraagt opnieuw |
 | 9 | `fig9-schermschets-concept-aanvraag.png` | MAKEN | Beslissing 2 (invoegen na "de schermschets wordt eerst met ondernemers getoetst") | concept-aanvraag met bron + ophaaldatum per gegeven |
 

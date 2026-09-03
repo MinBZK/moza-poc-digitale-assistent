@@ -457,9 +457,10 @@ moment.**
 - Het zoeken naar de RVO-regeling kostte in elke live run twee extra rondes en
   een bronfout vlak voor het indienen (`84b95ec`). De maatregelenbeurt
   herhaalde op 13 augustus dezelfde twee vragen woordelijk zonder iets toe te
-  voegen; geen enkele controle in het meetscript vraagt of een beurt de
-  ondernemer verder helpt (waargenomen bij de doorloop van 13 augustus, zie
-  `docs/superpowers/plans/meting-regelloop-2026-08-13.md`).
+  voegen; geen enkele controle in het meetscript vroeg destijds of een beurt
+  de ondernemer verder helpt (teamwaarneming bij de doorloop van 13 augustus,
+  niet in deze repository vastgelegd; de controle "deze beurt voegt iets toe"
+  is er sinds 17 augustus).
 - Een beurt kost 5 tot 45 seconden op de onderzoeksomgeving (rooktest vóór de
   sessie van 25 augustus, werkdocument buiten deze repository); in de
   lokale meting van 24 augustus, met prompt-caching, was de zwaarste beurt
@@ -578,7 +579,8 @@ jurist ernaast zit.
 
 ![Casus Sadee: zeven regelingen, uitkomsten met grondslag](assets/pdr-014/fig7-sadee-financieel-cv.png)
 
-*Figuur 7. De casus Sadee in het Financieel CV (stand 14 augustus): vier
+*Figuur 7. De casus Sadee in het Financieel CV (`persona-sadee.png` uit
+`MinBZK/regelrecht`, branch `feat/financieel_cv_RVO`, stand 24 juli): vier
 statussen links, rechts de uitkomsten per regeling met wetsartikel, waaronder
 één die toen nog niet gemodelleerd was (Wajong 2:22; op 19 augustus alsnog
 gemodelleerd in `regelrecht-corpus`, branch
