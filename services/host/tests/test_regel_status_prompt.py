@@ -46,6 +46,7 @@ def test_toestemming_vraagt_expliciet_en_wacht():
         {
             "klaar": False,
             "wacht_op": "toestemming",
+            "toestemming_bron": "Business Wallet",
             "reden": "JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH komt uit Business Wallet; dat vergt akkoord van de ondernemer.",
             "resultaat": None,
         }
@@ -295,11 +296,12 @@ def test_toestemming_noemt_de_bron_waarop_het_systeem_wacht(bron):
     assert "NIET zelf aan" in prompt
 
 
-def test_toestemming_zonder_bron_valt_terug_op_de_wallet():
+def test_toestemming_zonder_bron_noemt_geen_bron():
     prompt = compose_system_prompt(
         "claude", has_tools=True, regel_status={"wacht_op": "toestemming"}
     )
-    assert "toestemming van de ondernemer voor de bron de Business Wallet" in prompt
+    assert "voor de bron waarop het systeem wacht" in prompt
+    assert "voor de bron de Business Wallet" not in prompt
 
 
 @pytest.mark.parametrize("bron", ["Business Wallet", "KvK Handelsregister"])
@@ -320,7 +322,7 @@ def test_maatregelen_toestemming_noemt_de_bron_en_verbiedt_de_eigen_aanroep(bron
     assert "NIET zelf aan" in prompt
 
 
-def test_maatregelen_toestemming_zonder_bron_valt_terug_op_de_wallet():
+def test_maatregelen_toestemming_zonder_bron_noemt_geen_bron():
     prompt = compose_system_prompt(
         "claude",
         has_tools=True,
@@ -329,4 +331,4 @@ def test_maatregelen_toestemming_zonder_bron_valt_terug_op_de_wallet():
             "maatregelen": {"klaar": False, "wacht_op": "toestemming"},
         },
     )
-    assert "maatregelenlijst wacht nog op toestemming van de ondernemer voor de bron de Business Wallet" in prompt
+    assert "maatregelenlijst wacht nog op toestemming van de ondernemer voor de bron waarop het systeem wacht" in prompt

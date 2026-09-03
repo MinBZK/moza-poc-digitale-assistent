@@ -11,28 +11,12 @@ Een bron die wél is ingericht maar niet opkwam, is een storing. Die blijft
 gemeld worden, met het alternatief voor de gebruiker (`bronnen_status.md`).
 """
 
-from pathlib import Path
 
-import pytest
-
-import vlam_host
-from config import MCP_SERVER_ENV_KEYS
 from prompts.composer import compose_system_prompt
 
 STORING_KOP = "BESCHIKBAARHEID VAN BRONNEN"
 ALLE = ("kvk", "koop", "regelrecht", "rvo", "netbeheerder")
 
-pytestmark = pytest.mark.usefixtures("configuratie_per_test")
-
-
-def _host(status: dict[str, str]) -> vlam_host.VLAMHost:
-    host = vlam_host.VLAMHost()
-    host.server_status = status
-    vlam_host.MCP_SERVERS = {naam: Path(f"{naam}/server.py") for naam in status}
-    vlam_host.MCP_SERVERS_UIT = {
-        naam: env for naam, env in MCP_SERVER_ENV_KEYS.items() if naam not in status
-    }
-    return host
 
 
 def _alles_behalve(*uit: str) -> dict[str, str]:
@@ -42,26 +26,26 @@ def _alles_behalve(*uit: str) -> dict[str, str]:
 # --- de host maakt het onderscheid -------------------------------------------
 
 
-def test_een_niet_ingerichte_bron_staat_uit_en_is_geen_storing():
-    host = _host(_alles_behalve("netbeheerder"))
+def test_een_niet_ingerichte_bron_staat_uit_en_is_geen_storing(host_met_bronnen):
+    host = host_met_bronnen(status=_alles_behalve("netbeheerder"))
     assert host.bronnen_uit == ["netbeheerder"]
     assert host.bronnen_offline == []
 
 
-def test_een_bron_die_niet_opkwam_is_een_storing_en_staat_niet_uit():
-    host = _host(_alles_behalve() | {"koop": "niet beschikbaar"})
+def test_een_bron_die_niet_opkwam_is_een_storing_en_staat_niet_uit(host_met_bronnen):
+    host = host_met_bronnen(status=_alles_behalve() | {"koop": "niet beschikbaar"})
     assert host.bronnen_offline == ["koop"]
     assert host.bronnen_uit == []
 
 
-def test_beide_tegelijk_blijven_gescheiden():
-    host = _host(_alles_behalve("netbeheerder") | {"koop": "niet beschikbaar"})
+def test_beide_tegelijk_blijven_gescheiden(host_met_bronnen):
+    host = host_met_bronnen(status=_alles_behalve("netbeheerder") | {"koop": "niet beschikbaar"})
     assert host.bronnen_offline == ["koop"]
     assert host.bronnen_uit == ["netbeheerder"]
 
 
-def test_alles_verbonden_geeft_lege_lijsten():
-    host = _host(_alles_behalve())
+def test_alles_verbonden_geeft_lege_lijsten(host_met_bronnen):
+    host = host_met_bronnen(status=_alles_behalve())
     assert host.bronnen_offline == []
     assert host.bronnen_uit == []
 
@@ -99,8 +83,8 @@ def test_voorbeelden_die_op_de_uitgezette_bron_leunen_verdwijnen_stil():
     assert "LET OP: in deze omgeving is" not in prompt
 
 
-def test_de_host_geeft_beide_lijsten_door():
-    host = _host(_alles_behalve("netbeheerder") | {"koop": "niet beschikbaar"})
+def test_de_host_geeft_beide_lijsten_door(host_met_bronnen):
+    host = host_met_bronnen(status=_alles_behalve("netbeheerder") | {"koop": "niet beschikbaar"})
     prompt = host._system_prompt("claude", has_tools=True)
     assert STORING_KOP in prompt
     assert "KOOP" in prompt.split(STORING_KOP, 1)[1][:300]

@@ -607,17 +607,15 @@ def draai(loop: Loop, persona: Persona) -> None:
     # bevat: een bewust uitgezette bron staat daar niet in en zou anders
     # ongemerkt passeren. Eén controle, met in de toelichting het verschil
     # tussen een storing en een uitgezette bron (de Business Wallet hoort aan).
-    uit = set(gezond.get("bronnen_uit", []))
-    storing = [n for n, s in gezond["servers"].items() if s != "verbonden"]
-    ontbreekt = sorted(
-        n for n in errors.BRON_LABELS if gezond["servers"].get(n) != "verbonden"
-    )
+    verbonden = {n for n, s in gezond["servers"].items() if s == "verbonden"}
+    ontbreekt = sorted(set(errors.BRON_LABELS) - verbonden)
+    uit = sorted(gezond.get("bronnen_uit", []))
+    storing = sorted(set(ontbreekt) - set(uit))
     loop.controleer(
         "health",
         not ontbreekt,
         "alle vijf de bronnen zijn verbonden (geen storing, geen bron uitgezet)",
-        f"storing: {storing}; bewust uitgezet via de omgeving: {sorted(uit)}; "
-        f"anders ontbrekend: {sorted(set(ontbreekt) - uit - set(storing))}",
+        f"storing of niet ingericht: {storing}; bewust uitgezet: {uit}",
     )
 
     print("\n=== 1. vraag naar de plicht (toestemming eerst) ===")

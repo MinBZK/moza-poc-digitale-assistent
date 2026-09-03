@@ -336,8 +336,18 @@ def _vraag_uit_uitkomst(
 # routeringstabel: één bron van waarheid. Elke tool van zo'n bron valt onder de
 # poort, ook tools die geen veld in de tabel hebben (kvk__eigenaar,
 # kvk__vestigingen) - het akkoord gaat over de bron, niet over één endpoint.
+def scope_van(tool_key: str | None) -> str:
+    """De bron (servernaam) van een tool-sleutel als `kvk__mijn_bedrijf`.
+
+    Eén plek voor die afspraak: de toestemmingspoort, het tool-filter en de
+    lijst van toestemmingsplichtige bronnen moeten dezelfde bron zien, anders
+    toont de een een tool die de ander weigert.
+    """
+    return str(tool_key or "").split("__", 1)[0]
+
+
 TOESTEMMINGSPLICHTIGE_SCOPES: frozenset[str] = frozenset(
-    (veld.tool or "").split("__", 1)[0]
+    scope_van(veld.tool)
     for veld in regelrouting.HERKOMST.values()
     if veld.toestemming and veld.tool
 )
@@ -2558,20 +2568,25 @@ class VLAMHost:
 
         De poort in `_bron_aanroep_gated` weigert zo'n aanroep al, maar een
         weigering kost een extra modelbeurt en een bronfout in het scherm. Een
-        tool die het model niet ziet, roept het ook niet aan; de instructie in
-        de prompt hoeft dan niet dragend te zijn.
+        tool die het model niet ziet, roept het ook niet aan.
+
+        Alleen zolang de regelloop het akkoord kan vragen: wacht hij op
+        toestemming (het deelverzoek staat in het scherm) of is hij klaar. Kwam
+        de regelloop niet tot een deelverzoek (RegelRecht weg, onleesbaar
+        antwoord), dan blijft de lijst heel en is de poort de grens; anders is
+        er geen weg meer naar het Handelsregister.
         """
-        toegestaan = self.toestemming.get(conv_key, set())
+        status = self._regel_status_laatst.get(conv_key)
+        if not status or not (status.get("klaar") or status.get("wacht_op") == "toestemming"):
+            return tools
+        verborgen = TOESTEMMINGSPLICHTIGE_SCOPES - self.toestemming.get(conv_key, set())
+        if not verborgen:
+            return tools
 
         def naam(tool: dict) -> str:
             return str(tool.get("name") or tool.get("function", {}).get("name") or "")
 
-        return [
-            tool
-            for tool in tools
-            if naam(tool).split("__", 1)[0] not in TOESTEMMINGSPLICHTIGE_SCOPES
-            or naam(tool).split("__", 1)[0] in toegestaan
-        ]
+        return [tool for tool in tools if scope_van(naam(tool)) not in verborgen]
 
     async def _bron_aanroep_gated(
         self, aanroep, tool_key: str, arguments: dict, conv_key: str
@@ -2598,7 +2613,7 @@ class VLAMHost:
         en de aanroeper mag daar geen `tool`-event voor tonen - dat zou de
         client iets laten zien dat niet gebeurd is.
         """
-        scope = str(tool_key or "").split("__", 1)[0]
+        scope = scope_van(tool_key)
         if scope in TOESTEMMINGSPLICHTIGE_SCOPES and scope not in self.toestemming.get(
             conv_key, set()
         ):

@@ -1,9 +1,12 @@
 """Configuratie voor de VLAM MCP-host."""
 
+import logging
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+from errors import BRON_LABELS
 
 # Pad-basis relatief aan dit bestand
 BASE_DIR = Path(__file__).resolve().parent
@@ -58,7 +61,16 @@ def _resolve_server_path(env_key: str, default: Path) -> Path | None:
     regel, en alleen door een woord dat uitzetten betekent.
     """
     raw = os.getenv(env_key)
-    if raw is None or not raw.strip():
+    if raw is None:
+        return default
+    if not raw.strip():
+        # Vóór september zette een lege waarde de bron uit; nu is leeg
+        # "standaard". Een omgeving die de oude betekenis nog draagt, hoort dat
+        # in de log terug te zien in plaats van stil een bron aan te krijgen.
+        logging.getLogger("vlam.config").info(
+            "%s is leeg: standaardpad (een lege waarde zette de bron vroeger uit)",
+            env_key,
+        )
         return default
     if raw.strip().lower() in _UIT:
         return None
@@ -71,11 +83,7 @@ def _resolve_server_path(env_key: str, default: Path) -> Path | None:
 # waarschuwing bij het opstarten en /health dezelfde naam noemen als de
 # configuratie leest.
 MCP_SERVER_ENV_KEYS: dict[str, str] = {
-    "kvk": "MCP_SERVER_KVK",
-    "koop": "MCP_SERVER_KOOP",
-    "regelrecht": "MCP_SERVER_REGELRECHT",
-    "rvo": "MCP_SERVER_RVO",
-    "netbeheerder": "MCP_SERVER_NETBEHEERDER",
+    naam: f"MCP_SERVER_{naam.upper()}" for naam in BRON_LABELS
 }
 
 _MCP_SERVERS_RUW: dict[str, Path | None] = {

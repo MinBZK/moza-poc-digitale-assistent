@@ -84,7 +84,9 @@ def test_de_uitzet_woorden_in_de_documentatie_zijn_die_van_de_code(bestand):
     """De lijst leeft in `config._UIT`; de docs herhalen hem voor beheerders.
     Loopt een woord uit de pas, dan belooft een doc iets dat de host negeert."""
     tekst = bestand.read_text(encoding="utf-8")
-    for woord in _UIT:
-        assert re.search(rf"(?<!\w){re.escape(woord)}(?!\w)", tekst), (
-            f"{bestand.name} mist uitzet-woord {woord!r}"
-        )
+    m = re.search(r"uitzet-woord \(([^;)]*)", tekst)
+    assert m, f"{bestand.name}: geen 'uitzet-woord (...)'-lijst gevonden"
+    gedocumenteerd = {w.strip(" \n#`") for w in m.group(1).split(",")}
+    assert gedocumenteerd == set(_UIT), (
+        f"{bestand.name}: docs {sorted(gedocumenteerd)} vs code {sorted(_UIT)}"
+    )

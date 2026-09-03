@@ -170,13 +170,15 @@ def _compose_bronnen_uit(bronnen_uit: list[str]) -> str | None:
 
 
 
-TOESTEMMING_BRON_STANDAARD = "de Business Wallet"
-
-
 def _toestemming_instructie(bron: str | None) -> str:
     """Eén formulering voor "wacht op akkoord voor bron X", gedeeld door de
-    regeltoets en de maatregelenlijst, zodat de twee niet uit elkaar lopen."""
-    bron = bron or TOESTEMMING_BRON_STANDAARD
+    regeltoets en de maatregelenlijst, zodat de twee niet uit elkaar lopen.
+
+    De status draagt de bron altijd mee (`_regel_status_dict`); ontbreekt hij
+    toch, dan noemt de tekst geen bron in plaats van er een te raden - het
+    deelverzoek in het scherm zegt welke het is.
+    """
+    bron = bron or "waarop het systeem wacht (zie het deelverzoek in het scherm)"
     return (
         f"toestemming van de ondernemer voor de bron {bron} (PDR-008). Vraag daar "
         "EXPLICIET om voordat u die bron noemt of gebruikt, roep de tool van die "

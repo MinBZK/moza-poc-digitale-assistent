@@ -67,11 +67,34 @@ def schone_redactie_state():
 
 
 @pytest.fixture
-def configuratie_per_test(monkeypatch):
-    """Voor tests die `vlam_host.MCP_SERVERS` / `MCP_SERVERS_UIT` zelf herzetten
-    om een uitgezette bron na te bootsen: monkeypatch draait dat na de test
-    terug. Aanzetten met `pytestmark = pytest.mark.usefixtures(...)`."""
+def host_met_bronnen(monkeypatch):
+    """Fabriek voor een host met bronnen die uitstaan (`uit`) of niet opkwamen
+    (`storing`). Zet `vlam_host.MCP_SERVERS_UIT` via monkeypatch, zodat de
+    standaardconfiguratie na de test terug is; `server_status` staat voor de
+    overige bronnen op verbonden, tenzij `status` hem helemaal voorschrijft."""
     import vlam_host
+    from config import MCP_SERVER_ENV_KEYS
+    from errors import BRON_LABELS
 
-    monkeypatch.setattr(vlam_host, "MCP_SERVERS", vlam_host.MCP_SERVERS)
-    monkeypatch.setattr(vlam_host, "MCP_SERVERS_UIT", vlam_host.MCP_SERVERS_UIT)
+    def maak(uit=(), storing=(), status=None):
+        uit = list(uit)
+        if status is not None and not uit:
+            # Een status zonder een bron betekent: die bron is niet ingericht.
+            uit = [n for n in BRON_LABELS if n not in status]
+        host = vlam_host.VLAMHost()
+        monkeypatch.setattr(
+            vlam_host,
+            "MCP_SERVERS_UIT",
+            {n: MCP_SERVER_ENV_KEYS[n] for n in uit},
+        )
+        if status is not None:
+            host.server_status = dict(status)
+        else:
+            host.server_status = {
+                n: ("niet beschikbaar" if n in storing else "verbonden")
+                for n in BRON_LABELS
+                if n not in uit
+            }
+        return host
+
+    return maak
