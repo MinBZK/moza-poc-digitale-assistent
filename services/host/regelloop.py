@@ -13,6 +13,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 import regelrouting
+from errors import scope_uit_tool
 from feiten import feiten_uit_tool, samenvoegen
 
 CallTool = Callable[[str, dict], Awaitable[str]]
@@ -171,7 +172,7 @@ async def volg_regel(
                     )
                 ),
             )
-        scope = (veld.tool or "").split("__", 1)[0] or None
+        scope = scope_uit_tool(veld.tool) or None
         if veld.toestemming and scope not in toestemming:
             return Uitkomst(
                 klaar=False,

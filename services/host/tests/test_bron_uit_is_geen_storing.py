@@ -11,46 +11,37 @@ Een bron die wél is ingericht maar niet opkwam, is een storing. Die blijft
 gemeld worden, met het alternatief voor de gebruiker (`bronnen_status.md`).
 """
 
-import vlam_host
+
 from prompts.composer import compose_system_prompt
 
 STORING_KOP = "BESCHIKBAARHEID VAN BRONNEN"
-ALLE = ("kvk", "koop", "regelrecht", "rvo", "netbeheerder")
 
 
-def _host(status: dict[str, str]) -> vlam_host.VLAMHost:
-    host = vlam_host.VLAMHost()
-    host.server_status = status
-    return host
-
-
-def _alles_behalve(*uit: str) -> dict[str, str]:
-    return {naam: "verbonden" for naam in ALLE if naam not in uit}
 
 
 # --- de host maakt het onderscheid -------------------------------------------
 
 
-def test_een_niet_ingerichte_bron_staat_uit_en_is_geen_storing():
-    host = _host(_alles_behalve("netbeheerder"))
+def test_een_niet_ingerichte_bron_staat_uit_en_is_geen_storing(host_met_bronnen):
+    host = host_met_bronnen(uit=["netbeheerder"])
     assert host.bronnen_uit == ["netbeheerder"]
     assert host.bronnen_offline == []
 
 
-def test_een_bron_die_niet_opkwam_is_een_storing_en_staat_niet_uit():
-    host = _host(_alles_behalve() | {"koop": "niet beschikbaar"})
+def test_een_bron_die_niet_opkwam_is_een_storing_en_staat_niet_uit(host_met_bronnen):
+    host = host_met_bronnen(storing=["koop"])
     assert host.bronnen_offline == ["koop"]
     assert host.bronnen_uit == []
 
 
-def test_beide_tegelijk_blijven_gescheiden():
-    host = _host(_alles_behalve("netbeheerder") | {"koop": "niet beschikbaar"})
+def test_beide_tegelijk_blijven_gescheiden(host_met_bronnen):
+    host = host_met_bronnen(uit=["netbeheerder"], storing=["koop"])
     assert host.bronnen_offline == ["koop"]
     assert host.bronnen_uit == ["netbeheerder"]
 
 
-def test_alles_verbonden_geeft_lege_lijsten():
-    host = _host(_alles_behalve())
+def test_alles_verbonden_geeft_lege_lijsten(host_met_bronnen):
+    host = host_met_bronnen()
     assert host.bronnen_offline == []
     assert host.bronnen_uit == []
 
@@ -88,9 +79,19 @@ def test_voorbeelden_die_op_de_uitgezette_bron_leunen_verdwijnen_stil():
     assert "LET OP: in deze omgeving is" not in prompt
 
 
-def test_de_host_geeft_beide_lijsten_door():
-    host = _host(_alles_behalve("netbeheerder") | {"koop": "niet beschikbaar"})
+def test_de_host_geeft_beide_lijsten_door(host_met_bronnen):
+    host = host_met_bronnen(uit=["netbeheerder"], storing=["koop"])
     prompt = host._system_prompt("claude", has_tools=True)
     assert STORING_KOP in prompt
     assert "KOOP" in prompt.split(STORING_KOP, 1)[1][:300]
     assert "NIET NOEMEN" in prompt
+
+
+def test_de_toestemmingsregel_hoort_bij_het_mcp_transport():
+    """De harde regel "roep de tool niet zelf aan, wacht op de knop" gaat over de
+    poort en het filter, die het CLI-transport niet heeft; daar zou hij de
+    CLI-instructie ("roep na toestemming kvk__mijn_bedrijf aan") tegenspreken."""
+    mcp = compose_system_prompt("claude", has_tools=True)
+    cli = compose_system_prompt("claude", has_tools=True, cli_transport=True)
+    assert "TOESTEMMING (HARDE regel, PDR-008)" in mcp
+    assert "TOESTEMMING (HARDE regel, PDR-008)" not in cli

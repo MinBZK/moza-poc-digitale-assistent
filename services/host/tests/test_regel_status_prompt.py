@@ -6,6 +6,8 @@ precies wat er gebeurde met de "voldoet_aan_voorwaarden"-lek en de interne
 veldnamen uit `reden` (C2/I3/I4 uit de taak-4-review).
 """
 
+import pytest
+
 from prompts.composer import _compose_regel_status, compose_system_prompt
 
 KOP = "STATUS VAN DE REGELTOETS"
@@ -44,6 +46,7 @@ def test_toestemming_vraagt_expliciet_en_wacht():
         {
             "klaar": False,
             "wacht_op": "toestemming",
+            "toestemming_bron": "Business Wallet",
             "reden": "JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH komt uit Business Wallet; dat vergt akkoord van de ondernemer.",
             "resultaat": None,
         }
@@ -272,3 +275,59 @@ def test_zonder_bruikbare_feiten_geen_lege_zin():
         feiten={"current": _feit("x"), "maatregelen": _feit([1, 2])},
     )
     assert "Al opgehaald" not in blok
+
+
+@pytest.mark.parametrize(
+    "bron",
+    ["KvK Handelsregister", "Business Wallet"],
+)
+def test_toestemming_noemt_de_bron_waarop_het_systeem_wacht(bron):
+    """Het statusblok noemde altijd de Business Wallet, ook als de host op akkoord
+    voor het Handelsregister wachtte; het model riep dan de KvK-tool aan en de
+    poort moest hem weigeren. De status weet welke bron het is."""
+    prompt = compose_system_prompt(
+        "claude",
+        has_tools=True,
+        regel_status={"wacht_op": "toestemming", "toestemming_bron": bron},
+    )
+    andere = "Business Wallet" if bron != "Business Wallet" else "KvK Handelsregister"
+    assert f"De regeltoets wacht nog op toestemming van de ondernemer voor de bron {bron} (PDR-008)" in prompt
+    assert f"voor de bron {andere}" not in prompt
+    assert "NIET zelf aan" in prompt
+
+
+def test_toestemming_zonder_bron_noemt_geen_bron():
+    prompt = compose_system_prompt(
+        "claude", has_tools=True, regel_status={"wacht_op": "toestemming"}
+    )
+    assert "wacht nog op toestemming van de ondernemer voor de bron waarop het systeem wacht, zie het deelverzoek" in prompt
+
+
+@pytest.mark.parametrize("bron", ["Business Wallet", "KvK Handelsregister"])
+def test_maatregelen_toestemming_noemt_de_bron_en_verbiedt_de_eigen_aanroep(bron):
+    """De maatregelen-tak had dezelfde blinde vlek als de eerste regel: "een
+    bron" zonder naam, en niets over de tool niet zelf aanroepen."""
+    prompt = compose_system_prompt(
+        "claude",
+        has_tools=True,
+        regel_status={
+            "klaar": True,
+            "wacht_op": None,
+            "resultaat": {},
+            "maatregelen": {"klaar": False, "wacht_op": "toestemming", "toestemming_bron": bron},
+        },
+    )
+    assert f"toestemming van de ondernemer voor de bron {bron}" in prompt
+    assert "NIET zelf aan" in prompt
+
+
+def test_maatregelen_toestemming_zonder_bron_noemt_geen_bron():
+    prompt = compose_system_prompt(
+        "claude",
+        has_tools=True,
+        regel_status={
+            "klaar": True, "wacht_op": None, "resultaat": {},
+            "maatregelen": {"klaar": False, "wacht_op": "toestemming"},
+        },
+    )
+    assert "maatregelenlijst wacht nog op toestemming van de ondernemer voor de bron waarop het systeem wacht" in prompt

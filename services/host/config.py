@@ -41,46 +41,68 @@ VLAM_MODEL_ID = os.getenv(
 
 # MCP-servers: naam → pad naar server.py
 # Relatieve paden uit .env worden opgelost t.o.v. de host-directory (BASE_DIR)
-# Waarden waarmee een bron bewust wordt uitgezet. Een lege of afwezige waarde
-# betekende "gebruik het standaardpad", dus een bron weglaten uit de configuratie
-# schakelde hem niet uit - hij startte gewoon. De enige uitweg was hem laten
-# falen, en dan staat er een fout in de log voor iets dat je expres deed.
-_UIT = frozenset({"", "uit", "off", "none", "geen"})
+# Waarden waarmee een bron bewust wordt uitgezet. Een afwezige of lege waarde
+# betekent "gebruik het standaardpad": elke bron staat aan tenzij iemand hem
+# met een van deze woorden uitzet. Leeg is bewust géén uitzet-waarde, want een
+# variabele leegmaken in een beheer-UI is de gewone handeling voor "terug naar
+# standaard", en die mag de Business Wallet niet stil uitzetten.
+_UIT = frozenset({"uit", "off", "none", "geen", "false", "no", "nee", "0", "disabled"})
+# Het spiegelbeeld: wie "aan" schrijft bedoelt het standaardpad, geen bestand
+# dat `aan` heet en dus als storing zou opkomen.
+_AAN = frozenset({"aan", "on", "true", "1", "ja", "yes", "enabled"})
 
 
 def _resolve_server_path(env_key: str, default: Path) -> Path | None:
     """Het pad naar een MCP-server, of None als die bewust uitstaat.
 
-    Uitzetten is een besluit en hoort er ook zo uit te zien: `MCP_SERVER_X=` (of
-    `uit`) laat de bron weg, terwijl de variabele helemaal weglaten het
-    standaardpad houdt. Zo verdwijnt een bron nooit door een vergeten regel.
+    Uitzetten is een besluit en hoort er ook zo uit te zien: `MCP_SERVER_X=uit`
+    laat de bron weg; de variabele weglaten of leeg laten houdt het
+    standaardpad. Zo verdwijnt een bron nooit door een vergeten of gewiste
+    regel, en alleen door een woord dat uitzetten betekent.
     """
     raw = os.getenv(env_key)
     if raw is None:
         return default
-    if raw.strip().lower() in _UIT:
+    woord = raw.strip().lower()
+    if not woord or woord in _AAN:
+        return default
+    if woord in _UIT:
         return None
-    p = Path(raw)
+    p = Path(raw.strip())
     if not p.is_absolute():
         p = (BASE_DIR / p).resolve()
     return p
 
+# Per bron de omgevingsvariabele die hem aan- of uitzet. Eén plek, zodat de
+# waarschuwing bij het opstarten en /health dezelfde naam noemen als de
+# configuratie leest.
+MCP_SERVER_ENV_KEYS: dict[str, str] = {
+    "kvk": "MCP_SERVER_KVK",
+    "koop": "MCP_SERVER_KOOP",
+    "regelrecht": "MCP_SERVER_REGELRECHT",
+    "rvo": "MCP_SERVER_RVO",
+    "netbeheerder": "MCP_SERVER_NETBEHEERDER",
+}
+
 _MCP_SERVERS_RUW: dict[str, Path | None] = {
-    "kvk": _resolve_server_path("MCP_SERVER_KVK", SERVERS_DIR / "kvk" / "server.py"),
-    "koop": _resolve_server_path("MCP_SERVER_KOOP", SERVERS_DIR / "koop" / "server.py"),
-    "regelrecht": _resolve_server_path("MCP_SERVER_REGELRECHT", SERVERS_DIR / "regelrecht" / "server.py"),
-    "rvo": _resolve_server_path("MCP_SERVER_RVO", SERVERS_DIR / "rvo" / "server.py"),
-    "netbeheerder": _resolve_server_path(
-        "MCP_SERVER_NETBEHEERDER", SERVERS_DIR / "netbeheerder" / "server.py"
-    ),
+    naam: _resolve_server_path(env_key, SERVERS_DIR / naam / "server.py")
+    for naam, env_key in MCP_SERVER_ENV_KEYS.items()
 }
 
 # Alleen de bronnen die aanstaan. Een uitgezette bron is geen storing: hij hoort
 # niet in `server_status` als "niet beschikbaar" te belanden, maar simpelweg
-# afwezig te zijn - `bronnen_offline` telt hem dan mee en de assistent belooft
-# hem niet meer.
+# afwezig te zijn - de host meldt hem onder `bronnen_uit` (niet onder
+# `bronnen_offline`) en de assistent belooft hem niet meer.
 MCP_SERVERS: dict[str, Path] = {
     naam: pad for naam, pad in _MCP_SERVERS_RUW.items() if pad is not None
+}
+
+# De bronnen die bewust uitstaan, met de variabele waardoor dat komt. Standaard
+# is dit leeg: elke bron staat aan tenzij iemand hem uitzet.
+MCP_SERVERS_UIT: dict[str, str] = {
+    naam: MCP_SERVER_ENV_KEYS[naam]
+    for naam, pad in _MCP_SERVERS_RUW.items()
+    if pad is None
 }
 
 # Host
@@ -188,7 +210,9 @@ __all__ = [
     "ANTHROPIC_API_KEY",
     "CLAUDE_MODEL",
     "MAX_VRAAG_TEKENS",
+    "MCP_SERVER_ENV_KEYS",
     "MCP_SERVERS",
+    "MCP_SERVERS_UIT",
     "TOOL_TIMEOUT",
     "TEST_KVK_NUMMERS",
     "kvk_uit_header",

@@ -11,11 +11,32 @@ te zijn - en hoort de assistent hem ook niet te beloven.
 """
 
 import importlib
+import re
+from pathlib import Path
 
 import pytest
 
+from config import _AAN, _UIT
+
+
+@pytest.fixture(autouse=True)
+def _config_terug_na_de_test(monkeypatch):
+    """`_config_met` herlaadt `config`; na de test moet de module weer de
+    configuratie van de testomgeving dragen, anders leest een latere test die
+    `config` vers importeert de omgeving van deze test."""
+    yield
+    monkeypatch.undo()
+    import config
+
+    importlib.reload(config)
+
 
 def _config_met(monkeypatch, **env):
+    import dotenv
+
+    # Anders vult load_dotenv een gewiste sleutel weer aan uit de .env van de
+    # ontwikkelaar, en test je zijn omgeving in plaats van de configuratie.
+    monkeypatch.setattr(dotenv, "load_dotenv", lambda *a, **k: False)
     for k, v in env.items():
         if v is None:
             monkeypatch.delenv(k, raising=False)
@@ -26,10 +47,21 @@ def _config_met(monkeypatch, **env):
     return importlib.reload(config)
 
 
-def test_een_lege_waarde_schakelt_de_bron_uit(monkeypatch):
-    config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER="")
+@pytest.mark.parametrize("waarde", sorted(_UIT) + [" Uit "])
+def test_een_uitzet_woord_schakelt_de_bron_uit(monkeypatch, waarde):
+    config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER=waarde)
     assert "netbeheerder" not in config.MCP_SERVERS
+    assert config.MCP_SERVERS_UIT == {"netbeheerder": "MCP_SERVER_NETBEHEERDER"}
     assert "kvk" in config.MCP_SERVERS
+
+
+@pytest.mark.parametrize("waarde", ["", "   "])
+def test_een_lege_waarde_houdt_de_bron_aan(monkeypatch, waarde):
+    """Leegmaken in een beheer-UI is de gewone handeling voor "terug naar
+    standaard"; die mag de Business Wallet niet stil uitzetten."""
+    config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER=waarde)
+    assert "netbeheerder" in config.MCP_SERVERS
+    assert config.MCP_SERVERS_UIT == {}
 
 
 def test_zonder_variabele_blijft_de_bron_gewoon_staan(monkeypatch):
@@ -39,14 +71,49 @@ def test_zonder_variabele_blijft_de_bron_gewoon_staan(monkeypatch):
     assert "netbeheerder" in config.MCP_SERVERS
 
 
-@pytest.mark.parametrize("waarde", ["", "  ", "uit"])
+@pytest.mark.parametrize("waarde", ["uit", "UIT", " off "])
 def test_uitzetten_kan_op_meer_dan_een_manier(monkeypatch, waarde):
-    """Leeg, spaties of het woord 'uit' - wie een bron wil uitzetten moet niet
-    hoeven raden welke schrijfwijze werkt."""
+    """Hoofdletters en spaties eromheen maken niet uit - wie een bron wil
+    uitzetten moet niet hoeven raden welke schrijfwijze werkt. Leeg hoort er
+    bewust niet bij: dat is "terug naar standaard"."""
     config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER=waarde)
     assert "netbeheerder" not in config.MCP_SERVERS
 
 
 def test_de_andere_bronnen_blijven_ongemoeid(monkeypatch):
-    config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER="")
+    config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER="uit")
     assert set(config.MCP_SERVERS) == {"kvk", "koop", "regelrecht", "rvo"}
+
+
+@pytest.mark.parametrize(
+    "bestand",
+    [
+        Path(__file__).parents[1] / ".env.example",
+        Path(__file__).parents[3] / "docs" / "deploy-zad.md",
+    ],
+)
+def test_de_uitzet_woorden_in_de_documentatie_zijn_die_van_de_code(bestand):
+    """De lijst leeft in `config._UIT`; de docs herhalen hem voor beheerders.
+    Loopt een woord uit de pas, dan belooft een doc iets dat de host negeert."""
+    tekst = bestand.read_text(encoding="utf-8")
+    m = re.search(r"uitzet-woord \(([^;)]*)", tekst)
+    assert m, f"{bestand.name}: geen 'uitzet-woord (...)'-lijst gevonden"
+    gedocumenteerd = {w.strip(" \n#`") for w in m.group(1).split(",")}
+    assert gedocumenteerd == set(_UIT), (
+        f"{bestand.name}: docs {sorted(gedocumenteerd)} vs code {sorted(_UIT)}"
+    )
+
+
+@pytest.mark.parametrize("waarde", sorted(_AAN) + [" Aan "])
+def test_een_aanzet_woord_houdt_de_bron_aan(monkeypatch, waarde):
+    """Wie het spiegelbeeld van `uit` schrijft, bedoelt geen bestand dat zo heet."""
+    config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER=waarde)
+    assert config.MCP_SERVERS["netbeheerder"].name == "server.py"
+    assert config.MCP_SERVERS_UIT == {}
+
+
+def test_een_pad_met_spaties_eromheen_wordt_gestript(monkeypatch, tmp_path):
+    server = tmp_path / "server.py"
+    server.write_text("")
+    config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER=f"  {server}  ")
+    assert config.MCP_SERVERS["netbeheerder"] == server
