@@ -19,6 +19,18 @@ import pytest
 from config import _UIT
 
 
+@pytest.fixture(autouse=True)
+def _config_terug_na_de_test(monkeypatch):
+    """`_config_met` herlaadt `config`; na de test moet de module weer de
+    configuratie van de testomgeving dragen, anders leest een latere test die
+    `config` vers importeert de omgeving van deze test."""
+    yield
+    monkeypatch.undo()
+    import config
+
+    importlib.reload(config)
+
+
 def _config_met(monkeypatch, **env):
     import dotenv
 
@@ -50,7 +62,6 @@ def test_een_lege_waarde_houdt_de_bron_aan(monkeypatch, waarde):
     config = _config_met(monkeypatch, MCP_SERVER_NETBEHEERDER=waarde)
     assert "netbeheerder" in config.MCP_SERVERS
     assert config.MCP_SERVERS_UIT == {}
-    assert "MCP_SERVER_NETBEHEERDER" in config.MCP_SERVERS_LEEG
 
 
 def test_zonder_variabele_blijft_de_bron_gewoon_staan(monkeypatch):

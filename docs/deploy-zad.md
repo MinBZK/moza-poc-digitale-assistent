@@ -50,7 +50,8 @@ staat los daarvan in de component-config.
   `MCP_SERVER_NETBEHEERDER=uit` was een tijdelijke instelling voor het
   gebruikersonderzoek van augustus (de respondent gaf zijn verbruik zelf op)
   en hoort op geen enkel component meer te staan: verwijderen of leegmaken in
-  de ZAD-UI, allebei is goed. Staat er een uitzet-woord, dan waarschuwt de
+  de ZAD-UI, allebei is goed (een lege waarde die nog uit de onderzoeksperiode
+  stamt, zet de wallet nu dus aan). Staat er een uitzet-woord, dan waarschuwt de
   host bij het opstarten (`Bron 'netbeheerder' ... staat bewust uit:
   MCP_SERVER_NETBEHEERDER heeft een uitzet-waarde`) en toont `GET /health`
   hem onder `bronnen_uit`.

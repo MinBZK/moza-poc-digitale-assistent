@@ -5,8 +5,6 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from errors import BRON_LABELS
-
 # Pad-basis relatief aan dit bestand
 BASE_DIR = Path(__file__).resolve().parent
 SERVERS_DIR = BASE_DIR.parent / "mcp"
@@ -51,10 +49,6 @@ VLAM_MODEL_ID = os.getenv(
 _UIT = frozenset({"uit", "off", "none", "geen", "false", "no", "nee", "0", "disabled"})
 
 
-# Variabelen die leeg stonden: leeg betekent standaardpad, maar vroeger uit.
-MCP_SERVERS_LEEG: list[str] = []
-
-
 def _resolve_server_path(env_key: str, default: Path) -> Path | None:
     """Het pad naar een MCP-server, of None als die bewust uitstaat.
 
@@ -67,11 +61,6 @@ def _resolve_server_path(env_key: str, default: Path) -> Path | None:
     if raw is None:
         return default
     if not raw.strip():
-        # Vóór september zette een lege waarde de bron uit; nu is leeg
-        # "standaard". Een omgeving die de oude betekenis nog draagt, hoort dat
-        # bij het opstarten in de log terug te zien (de host meldt het; hier is
-        # logging nog niet ingericht) in plaats van stil een bron aan te krijgen.
-        MCP_SERVERS_LEEG.append(env_key)
         return default
     if raw.strip().lower() in _UIT:
         return None
@@ -84,7 +73,11 @@ def _resolve_server_path(env_key: str, default: Path) -> Path | None:
 # waarschuwing bij het opstarten en /health dezelfde naam noemen als de
 # configuratie leest.
 MCP_SERVER_ENV_KEYS: dict[str, str] = {
-    naam: f"MCP_SERVER_{naam.upper()}" for naam in BRON_LABELS
+    "kvk": "MCP_SERVER_KVK",
+    "koop": "MCP_SERVER_KOOP",
+    "regelrecht": "MCP_SERVER_REGELRECHT",
+    "rvo": "MCP_SERVER_RVO",
+    "netbeheerder": "MCP_SERVER_NETBEHEERDER",
 }
 
 _MCP_SERVERS_RUW: dict[str, Path | None] = {
@@ -215,7 +208,6 @@ __all__ = [
     "MAX_VRAAG_TEKENS",
     "MCP_SERVER_ENV_KEYS",
     "MCP_SERVERS",
-    "MCP_SERVERS_LEEG",
     "MCP_SERVERS_UIT",
     "TOOL_TIMEOUT",
     "TEST_KVK_NUMMERS",

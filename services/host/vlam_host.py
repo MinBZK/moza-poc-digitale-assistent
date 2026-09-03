@@ -31,7 +31,6 @@ from config import (
     LLM_HERKANSINGEN,
     LLM_MAX_TOKENS,
     MCP_SERVERS,
-    MCP_SERVERS_LEEG,
     MCP_SERVERS_UIT,
     TOOL_TIMEOUT,
     VLAM_API_KEY,
@@ -42,6 +41,7 @@ from config import (
 )
 from errors import (
     BRON_LABELS,
+    bron_uit_tool,
     classificeer_llm_fout,
     classificeer_tool_fout,
     maak_fout,
@@ -340,11 +340,11 @@ def _vraag_uit_uitkomst(
 def scope_van(tool_key: str | None) -> str:
     """De bron (servernaam) van een tool-sleutel als `kvk__mijn_bedrijf`.
 
-    Eén plek voor die afspraak: de toestemmingspoort, het tool-filter en de
-    lijst van toestemmingsplichtige bronnen moeten dezelfde bron zien, anders
-    toont de een een tool die de ander weigert.
+    Dezelfde afspraak als `errors.bron_uit_tool`, met een lege string voor een
+    onbekende bron: de toestemmingspoort, het tool-filter en de lijst van
+    toestemmingsplichtige bronnen moeten dezelfde bron zien.
     """
-    return str(tool_key or "").split("__", 1)[0]
+    return bron_uit_tool(tool_key or "") or ""
 
 
 TOESTEMMINGSPLICHTIGE_SCOPES: frozenset[str] = frozenset(
@@ -1207,11 +1207,6 @@ class VLAMHost:
         elke bron aan; hier wordt een afwijking zichtbaar zonder in de
         configuratie te hoeven kijken.
         """
-        for env_key in MCP_SERVERS_LEEG:
-            logger.info(
-                "%s is leeg: standaardpad (een lege waarde zette de bron vroeger uit)",
-                env_key,
-            )
         for naam, env_key in sorted(MCP_SERVERS_UIT.items()):
             logger.warning(
                 "Bron '%s' (%s) staat bewust uit: %s heeft een uitzet-waarde. "
@@ -1764,6 +1759,8 @@ class VLAMHost:
                     if use_cli
                     else await self._regel_status_zonder_events(feiten, session_kvk, conv_key)
                 )
+                if regel_status is not None:
+                    self._regel_status_laatst[conv_key] = regel_status
                 antwoord = await self._chat_vlam(
                     messages, session_kvk, vlam, feiten, regel_status, conv_key
                 )
@@ -1775,6 +1772,8 @@ class VLAMHost:
                     if use_cli
                     else await self._regel_status_zonder_events(feiten, session_kvk, conv_key)
                 )
+                if regel_status is not None:
+                    self._regel_status_laatst[conv_key] = regel_status
                 antwoord = await self._chat_claude(
                     messages, session_kvk, claude, feiten, regel_status, conv_key
                 )
@@ -2569,21 +2568,20 @@ class VLAMHost:
 
 
     def _tools_voor_model(self, conv_key: str, tools: list[dict]) -> list[dict]:
-        """De tool-lijst voor het model, zonder bronnen waarvoor het akkoord van
-        dit gesprek nog niet is vastgelegd (PDR-008).
+        """De tool-lijst voor het model zonder de bronnen die akkoord vergen,
+        zolang de regelloop op dat akkoord wacht (PDR-008).
 
         De poort in `_bron_aanroep_gated` weigert zo'n aanroep al, maar een
         weigering kost een extra modelbeurt en een bronfout in het scherm. Een
         tool die het model niet ziet, roept het ook niet aan.
 
-        Alleen zolang de regelloop het akkoord kan vragen: wacht hij op
-        toestemming (het deelverzoek staat in het scherm) of is hij klaar. Kwam
-        de regelloop niet tot een deelverzoek (RegelRecht weg, onleesbaar
-        antwoord), dan blijft de lijst heel en is de poort de grens; anders is
-        er geen weg meer naar het Handelsregister.
+        Alleen terwijl het deelverzoek in het scherm staat (`wacht_op ==
+        "toestemming"`): dan is er een knop die het akkoord vastlegt. In elke
+        andere stand blijft de lijst heel en is de poort de grens; anders is
+        er geen weg meer naar een bron waarvoor nooit een deelverzoek kwam.
         """
         status = self._regel_status_laatst.get(conv_key)
-        if not status or not (status.get("klaar") or status.get("wacht_op") == "toestemming"):
+        if not status or status.get("wacht_op") != "toestemming":
             return tools
         verborgen = TOESTEMMINGSPLICHTIGE_SCOPES - self.toestemming.get(conv_key, set())
         if not verborgen:

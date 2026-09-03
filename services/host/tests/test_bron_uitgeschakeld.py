@@ -30,6 +30,12 @@ def _waarschuwingen(caplog) -> list[str]:
     return [r.getMessage() for r in caplog.records if r.name == LOGGER and r.levelname == "WARNING"]
 
 
+def test_elke_bron_heeft_een_omgevingsvariabele():
+    """De waarschuwing noemt de variabele uit de configuratie; een bron zonder
+    variabele zou een naam verzinnen die niemand kan zetten."""
+    assert set(BRON_LABELS) == set(MCP_SERVER_ENV_KEYS)
+
+
 def test_een_niet_geconfigureerde_bron_staat_uit_en_is_geen_storing(host_met_bronnen):
     """De wallet uit de configuratie halen is genoeg om hem uit te schakelen."""
     host = host_met_bronnen(uit=["netbeheerder"])
@@ -166,12 +172,19 @@ def test_tools_die_akkoord_vergen_staan_pas_na_akkoord_in_de_lijst(transport, ho
 
 @pytest.mark.parametrize(
     "status",
-    [None, {"klaar": False, "wacht_op": None}, {"klaar": False, "wacht_op": "onbekend"}],
+    [
+        None,
+        {"klaar": False, "wacht_op": None},
+        {"klaar": False, "wacht_op": "onbekend"},
+        {"klaar": True, "wacht_op": None},
+        {"klaar": False, "wacht_op": "opgave"},
+    ],
 )
 def test_zonder_deelverzoek_blijft_de_lijst_heel(status, host_met_bronnen):
-    """Kwam de regelloop niet tot een deelverzoek (RegelRecht weg, onleesbaar
-    antwoord), dan is er geen knop om akkoord te geven; de tools verbergen zou
-    het Handelsregister dan onbereikbaar maken. De poort blijft de grens."""
+    """Staat er geen deelverzoek in het scherm (regelloop klaar, wacht op een
+    opgave, of kwam niet tot een deelverzoek), dan is er geen knop om akkoord te
+    geven; de tools verbergen zou een bron onbereikbaar maken. De poort blijft
+    de grens."""
     host = host_met_bronnen()
     alle = [_tool("anthropic", n) for n in ALLE_TOOLS]
     if status is not None:
@@ -183,18 +196,7 @@ def test_een_ander_gesprek_deelt_het_akkoord_niet(host_met_bronnen):
     host = host_met_bronnen()
     alle = [_tool("anthropic", n) for n in ALLE_TOOLS]
     for g in ("g1", "g2"):
-        host._regel_status_laatst[g] = {"klaar": True, "wacht_op": None}
+        host._regel_status_laatst[g] = {"klaar": False, "wacht_op": "toestemming"}
     host.toestemming["g1"] = {"kvk", "netbeheerder"}
     assert _namen(host._tools_voor_model("g1", alle)) == _namen(alle)
     assert _namen(host._tools_voor_model("g2", alle)) == VRIJ
-
-
-def test_een_lege_variabele_wordt_bij_het_opstarten_gemeld(caplog, host_met_bronnen, monkeypatch):
-    """Leeg is standaard, maar zette de bron vroeger uit; een omgeving met de
-    oude betekenis hoort dat terug te zien in plaats van stil een bron aan."""
-    monkeypatch.setattr(vlam_host, "MCP_SERVERS_LEEG", ["MCP_SERVER_NETBEHEERDER"])
-    with caplog.at_level("INFO", logger=LOGGER):
-        host_met_bronnen()._meld_uitgezette_bronnen()
-    infos = [r.getMessage() for r in caplog.records if r.name == LOGGER and r.levelname == "INFO"]
-    assert infos == ["MCP_SERVER_NETBEHEERDER is leeg: standaardpad (een lege waarde zette de bron vroeger uit)"]
-    assert _waarschuwingen(caplog) == []

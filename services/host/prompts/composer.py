@@ -427,9 +427,8 @@ def _compose_regel_status(regel_status: dict | None, feiten: dict | None = None)
         return None
     wacht_op = regel_status.get("wacht_op")
     if wacht_op == "toestemming":
-        # De bron waarop het systeem wacht staat in de status; die was eerder
-        # hard "de Business Wallet", waardoor het model bij een KvK-wachtstand
-        # de KvK-tool gewoon aanriep en de poort hem moest weigeren.
+        # De bron waarop het systeem wacht staat in de status; een vaste naam
+        # hier zou het model bij een andere bron de verkeerde tool laten kiezen.
         status = "Voor de regeltoets is eerst " + _toestemming_instructie(
             regel_status.get("toestemming_bron")
         )
