@@ -48,6 +48,14 @@ Sessies worden per mode gescheiden (`{session_id}:vlam` / `{session_id}:claude`)
 
 ### Configuratie
 
+> **Achterhaalde voorbeeldwaarden (20 oktober 2026).** De besluiten in deze PDR
+> staan nog. De VLAM-waarden hieronder kloppen niet meer: `api.demo.vlam.ai` is
+> alleen nog bereikbaar via de ZAD-dienst VLAM-API, en de Mistral-deployments
+> zijn vervangen door modellen als `Kimi-K3-prepaid`. De host heeft geen
+> hardcoded base-URL meer. Hij gebruikt `VLAM_BASE_URL`, anders
+> `{VLAM_API_URL}/v1` van de ZAD-dienst. Zie `services/host/config.py` en
+> [`deploy-zad.md`](../deploy-zad.md).
+
 Alle waarden zijn instelbaar via environment variabelen:
 
 ```bash

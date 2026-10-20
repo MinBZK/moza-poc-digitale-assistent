@@ -472,6 +472,10 @@ def _geen_sleutel_fout(backend: str = ""):
     advies waar de gebruiker eindeloos in blijft hangen. Staat de override aan,
     dan noemt de melding wélke sleutel: er zijn er twee.
     """
+    # Zonder VLAM-adres helpt geen enkele sleutel; "vul uw sleutel in" zou de
+    # gebruiker laten herhalen wat net al gedaan is.
+    if backend == "vlam" and not VLAM_BASE_URL:
+        return maak_fout("LLM_NIET_INGESTELD")
     if ALLOW_API_KEY_OVERRIDE:
         return maak_fout("LLM_GEEN_SLEUTEL", backend=backend)
     return maak_fout("LLM_NIET_INGESTELD")
@@ -1466,12 +1470,12 @@ class VLAMHost:
                     own_clients.append(claude)
                 if vlam_api_key_override and wants_vlam:
                     if not VLAM_BASE_URL:
-                        # Anders verdwijnt de sleutel zonder spoor en krijgt de
-                        # gebruiker "vul uw sleutel in" — wat hij net deed.
+                        # Anders verdwijnt de sleutel zonder spoor in de log.
                         logger.warning(
-                            "VLAM-sleutel meegegeven, maar VLAM_BASE_URL is leeg: "
+                            "VLAM-sleutel meegegeven, maar er is geen VLAM-adres: "
                             "de sleutel wordt genegeerd en het verzoek meldt dat de "
-                            "backend niet geconfigureerd is. Zet VLAM_BASE_URL."
+                            "backend niet geconfigureerd is. Zet de ZAD-dienst "
+                            "VLAM-API aan (VLAM_API_URL) of zet VLAM_BASE_URL."
                         )
                     else:
                         vlam = openai.AsyncOpenAI(

@@ -40,6 +40,13 @@ staat los daarvan in de component-config.
   dat opent iets wat nu dicht is.
 - Geen `ANTHROPIC_API_KEY` / `VLAM_API_KEY`: gebruikers leveren hun eigen sleutel
   via de UI (PDR-010).
+- **Dienst VLAM-API aan op `dabackend`** (Operations Manager → project →
+  component → services). VLAM zit achter een IP-slot en is alleen via deze
+  dienst bereikbaar. De dienst zet `VLAM_API_URL`, en de host gebruikt
+  `{VLAM_API_URL}/v1`. De dienst levert alleen de netwerkroute, geen sleutel: die
+  blijft van de gebruiker. Ontbreekt de dienst, dan meldt de VLAM-modus dat de
+  omgeving niet is ingesteld. Zet `VLAM_BASE_URL` hier niet: die gaat voor op de
+  dienst. `VLAM_MODEL_ID` is optioneel (standaard `Kimi-K3-prepaid`).
 - **Geen `MCP_SERVER_NETBEHEERDER`.** De EU Business Wallet (netbeheerder-mock)
   staat standaard **aan**: is de variabele afwezig of leeg, dan start de host
   de server op het standaardpad; een pad als waarde (zoals `compose.yaml`
