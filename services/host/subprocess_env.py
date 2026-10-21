@@ -45,6 +45,9 @@ _MCP_CONFIG = (
 _CLI_CONFIG = (
     "KVK_API_BASE", "KVK_API_KEY", "KVK_SESSIE_NUMMER", "KVK_AUDIT_LOG",
     "REGELRECHT_RPC_URL", "KOOP_SRU_URL", "KOOP_SRU_CONNECTION",
+    # uitleg-cli: adres van de host, sessie-identiteit, python en auditlog.
+    # Geen LLM-sleutels: die leest de wrapper uit een bestand (--sleutel-bestand).
+    "UITLEG_HOST_URL", "UITLEG_KVK", "UITLEG_PYTHON", "UITLEG_AUDIT_LOG",
 )
 
 MCP_ALLOWLIST: tuple[str, ...] = _SYSTEM + _MCP_CONFIG

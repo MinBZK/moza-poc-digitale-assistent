@@ -39,6 +39,11 @@ Handmatige integratie-scripts (vereisen een `.env` met echte API-keys) staan in
   door `composer.py`).
 - **`services/mcp/{kvk,koop,regelrecht,rvo,netbeheerder}/server.py`** — vijf
   MCP-servers (Python, als stdio-subprocessen gestart door de host).
+- **`services/mcp/uitleg/server.py`** en **`services/cli/uitleg-cli`** — de
+  uitleg in gewone taal (PDR-016) als losse MCP-server (via sampling, geen eigen
+  sleutel) en CLI, op dezelfde module als `POST /uitleg`
+  (`services/host/uitleg.py`). Geen bron van de host; wordt niet door de host
+  gestart.
 - **`services/cli/`** — Bash CLI-wrappers (alternatief transport, on-demand).
 - **`docs/`** — `architecture.md` (routering + scenario's), `decisions/` (PDR's),
   `deploy-zad.md` (deployen + debug-valkuilen), `test-vragen.md`,

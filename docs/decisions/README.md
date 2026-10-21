@@ -16,6 +16,7 @@ Beslissingen rond de Digitale Assistent. Lees de PDRs in volgorde — elke nieuw
 | [PDR-011](PDR-011-foutmeldingen-catalogus.md) | Foutmeldingen uit één catalogus, met wat er misging én wat je kunt doen | Geaccepteerd |
 | [PDR-013](PDR-013-timeoutgrenzen-op-basis-van-meting.md) | Time-outgrenzen op basis van meting, met levensteken en herkansingen | Geaccepteerd |
 | [PDR-015](PDR-015-bronnen-standaard-aan-en-tools-na-akkoord.md) | Bronnen staan standaard aan, uitzetten is een woord, en tools die akkoord vergen staan pas na het akkoord in de lijst | Geaccepteerd |
+| [PDR-016](PDR-016-uitleg-in-gewone-taal-uit-de-beslisgraaf.md) | Uitleg in gewone taal komt uit de beslisgraaf van de regelrecht-engine, als eigen dienst (`/uitleg`) naast het gesprek, met een toets tegen de graaf | Voorgesteld |
 
 ## Vervangen of ongeldig verklaarde beslissingen
 
