@@ -1,0 +1,284 @@
+#!/usr/bin/env bash
+# uitleg-cli — een beslisgraaf van de regelrecht-engine in gewone taal (PDR-016)
+#
+# Equivalent van services/mcp/uitleg/server.py en het endpoint /uitleg van de
+# host. De deterministische stappen (regels, toets, verzoek) draaien lokaal via
+# services/host/uitleg.py; `verwoord` roept de host aan, die het taalmodel
+# aanspreekt en het antwoord toetst. `batch` doet dat voor een map met
+# bestanden en telt de toetsuitkomsten: de meting voor het gebruikersonderzoek.
+#
+# Gebruik:
+#   uitleg-cli regels   <bestand> [--output <uitkomst>] [--regeling <naam>]
+#   uitleg-cli toets    <bestand> --tekst "<tekst>" | --tekst-bestand <pad>
+#   uitleg-cli verzoek  <bestand> [--output <uitkomst>] [--regeling <naam>]
+#   uitleg-cli verwoord <bestand> [--output <uitkomst>] [--regeling <naam>] [--mode claude|vlam] [--sleutel-bestand <pad>]
+#   uitleg-cli batch    <map> [--mode claude|vlam] [--sleutel-bestand <pad>] [--bewaar <map>]
+#   uitleg-cli --help
+#
+# <bestand> is een verzoek voor /uitleg ({regeling, graaf, samenvatting}) of de
+# uitvoer van `uitleg bereken` uit regelrecht-uitleg; --output kiest dan de uitkomst.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+source "$SCRIPT_DIR/lib/output.sh"
+source "$SCRIPT_DIR/lib/provenance.sh"
+source "$SCRIPT_DIR/lib/audit.sh"
+
+# ---------------------------------------------------------------------------
+# Configuratie
+# ---------------------------------------------------------------------------
+
+UITLEG_HOST_URL="${UITLEG_HOST_URL:-http://localhost:8000}"
+# De sessie-identiteit van de host (PDR-009); een nummer uit TEST_KVK_NUMMERS.
+UITLEG_KVK="${UITLEG_KVK:-}"
+# De sleutel van de gebruiker (PDR-010) komt uit een bestand (--sleutel-bestand),
+# nooit uit de omgeving: een subprocess krijgt geen sleutels mee.
+UITLEG_PYTHON="${UITLEG_PYTHON:-uv run --project $REPO_ROOT python}"
+KVK_AUDIT_LOG="${UITLEG_AUDIT_LOG:-}"
+
+UITLEG_SOURCE_LABEL="Uitleg in gewone taal (regelrecht-beslisgraaf, via uitleg-cli)"
+UITLEG_VERSION="0.1.0"
+
+# ---------------------------------------------------------------------------
+# Globals
+# ---------------------------------------------------------------------------
+
+OPT_OUTPUT_MODE="pretty"
+OPT_FIELDS=""
+OPT_SELECT=""
+OPT_PROVENANCE="false"
+OPT_DRY_RUN="false"
+OPT_UITKOMST=""
+OPT_REGELING=""
+OPT_MODE="claude"
+OPT_TEKST=""
+OPT_TEKST_BESTAND=""
+OPT_SLEUTEL_BESTAND=""
+OPT_BEWAAR=""
+ACTION=""
+BESTAND=""
+
+show_help() {
+    sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    cat <<'EOF'
+
+Algemene opties:
+  --fields <v1,v2>          Alleen opgegeven velden retourneren
+  --select <jq-expr>        jq-filter toepassen op het resultaat
+  --output-mode <mode>      Uitvoerformaat: raw, pretty (standaard), table
+  --provenance              Provenance metadata toevoegen
+  --dry-run                 Toon het verzoek aan de host zonder uit te voeren
+  --sleutel-bestand <pad>   Bestand met de API-sleutel voor --mode (één regel);
+                            weglaten als de host een eigen sleutel heeft
+  --bewaar <map>            batch: schrijf per uitkomst het volledige antwoord
+                            (tekst en toets) als JSON in deze map
+
+Omgeving:
+  UITLEG_HOST_URL           Host met /uitleg (standaard http://localhost:8000)
+  UITLEG_KVK                Sessie-identiteit voor de host (X-Test-User)
+  UITLEG_PYTHON             Python met de host-afhankelijkheden
+  UITLEG_AUDIT_LOG          Auditregels naar dit bestand in plaats van stderr
+
+Voorbeelden:
+  uitleg-cli regels bereken.json --output hoogte_lks_eurocent_per_maand
+  uitleg-cli toets verzoek.json --tekst "U krijgt € 897,41 per maand (artikel 10d)."
+  UITLEG_KVK=85234567 uitleg-cli verwoord bereken.json --output heeft_recht_op_lks --regeling Loonkostensubsidie
+  UITLEG_KVK=85234567 uitleg-cli batch ./grafen --mode claude
+EOF
+}
+
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help|-h) show_help; exit 0 ;;
+            --fields) OPT_FIELDS="$2"; shift 2 ;;
+            --select) OPT_SELECT="$2"; shift 2 ;;
+            --output-mode) OPT_OUTPUT_MODE="$2"; shift 2 ;;
+            --provenance) OPT_PROVENANCE="true"; shift ;;
+            --dry-run) OPT_DRY_RUN="true"; shift ;;
+            --output) OPT_UITKOMST="$2"; shift 2 ;;
+            --regeling) OPT_REGELING="$2"; shift 2 ;;
+            --mode) OPT_MODE="$2"; shift 2 ;;
+            --tekst) OPT_TEKST="$2"; shift 2 ;;
+            --tekst-bestand) OPT_TEKST_BESTAND="$2"; shift 2 ;;
+            --sleutel-bestand) OPT_SLEUTEL_BESTAND="$2"; shift 2 ;;
+            --bewaar) OPT_BEWAAR="$2"; shift 2 ;;
+            -*) echo "Onbekende optie: $1" >&2; exit 1 ;;
+            *)
+                if [[ -z "$ACTION" ]]; then ACTION="$1"
+                elif [[ -z "$BESTAND" ]]; then BESTAND="$1"
+                fi
+                shift ;;
+        esac
+    done
+}
+
+# ---------------------------------------------------------------------------
+# Lokale stappen via services/host/uitleg.py
+# ---------------------------------------------------------------------------
+
+python_uitleg() {
+    local opdracht="$1"; shift
+    local args=("$opdracht")
+    [[ -n "$BESTAND" ]] && args+=("$BESTAND")
+    [[ -n "$OPT_UITKOMST" ]] && args+=(--output "$OPT_UITKOMST")
+    [[ -n "$OPT_REGELING" ]] && args+=(--regeling "$OPT_REGELING")
+    args+=("$@")
+    # shellcheck disable=SC2086
+    $UITLEG_PYTHON "$REPO_ROOT/services/host/uitleg.py" "${args[@]}"
+}
+
+do_lokaal() {
+    local opdracht="$1"; shift
+    local response
+    if ! response=$(python_uitleg "$opdracht" "$@"); then
+        exit 2
+    fi
+    process_response "$response" "$opdracht"
+}
+
+# ---------------------------------------------------------------------------
+# verwoord: via de host, die het model aanroept en toetst
+# ---------------------------------------------------------------------------
+
+do_verwoord() {
+    local verzoek
+    if ! verzoek=$(python_uitleg verzoek); then
+        exit 2
+    fi
+    verzoek=$(echo "$verzoek" | jq -c --arg mode "$OPT_MODE" '. + {mode: $mode}')
+
+    if [[ "$OPT_DRY_RUN" == "true" ]]; then
+        echo "[dry-run] POST $UITLEG_HOST_URL/uitleg"
+        echo "[dry-run] Payload:"
+        echo "$verzoek" | jq '.'
+        exit 0
+    fi
+    if [[ -z "$UITLEG_KVK" ]]; then
+        echo '{"error":"ONTBREKEND_VELD","velden":["UITLEG_KVK"],"message":"Zet UITLEG_KVK: de host eist een sessie-identiteit."}' >&2
+        exit 1
+    fi
+
+    local headers=(-H "Content-Type: application/json" -H "X-Test-User: $UITLEG_KVK")
+    if [[ -n "$OPT_SLEUTEL_BESTAND" ]]; then
+        local sleutel
+        sleutel=$(head -n 1 "$OPT_SLEUTEL_BESTAND" | tr -d '[:space:]')
+        if [[ "$OPT_MODE" == "vlam" ]]; then
+            headers+=(-H "X-VLAM-API-Key: $sleutel")
+        else
+            headers+=(-H "X-Claude-API-Key: $sleutel")
+        fi
+    fi
+
+    local antwoord status body
+    antwoord=$(curl -s --max-time 200 -w $'\n%{http_code}' -X POST "$UITLEG_HOST_URL/uitleg" \
+        "${headers[@]}" --data "$verzoek") || {
+        echo '{"error":"SOURCE_UNAVAILABLE","message":"De host met /uitleg is niet bereikbaar."}' >&2
+        exit 2
+    }
+    status="${antwoord##*$'\n'}"
+    body="${antwoord%$'\n'*}"
+    if [[ "$status" != "200" ]]; then
+        local code
+        code=$(echo "$body" | jq -r '.code // empty' 2>/dev/null || true)
+        echo "{\"error\":\"EXECUTION_ERROR\",\"message\":\"De host weigerde (HTTP $status${code:+, $code}).\"}" >&2
+        echo "$body" >&2
+        exit 2
+    fi
+    process_response "$body" "verwoord"
+}
+
+# ---------------------------------------------------------------------------
+# batch: elke uitkomst in een map verwoorden en de toets tellen
+# ---------------------------------------------------------------------------
+
+do_batch() {
+    local map="$BESTAND"
+    [[ -d "$map" ]] || { echo "Geen map: $map" >&2; exit 1; }
+    local totaal=0 geslaagd=0
+    [[ -n "$OPT_BEWAAR" ]] && mkdir -p "$OPT_BEWAAR"
+    printf 'bestand\tuitkomst\tgeslaagd\twoorden\tzin\topmerkingen\n'
+    local bestand uitkomsten uitkomst
+    for bestand in "$map"/*.json; do
+        [[ -e "$bestand" ]] || continue
+        # Een `uitleg bereken`-uitvoer heeft meerdere uitkomsten; een verzoek één.
+        uitkomsten=$(jq -r 'if has("afleidingen") then .afleidingen | keys[] else "-" end' "$bestand")
+        for uitkomst in $uitkomsten; do
+            BESTAND="$bestand"
+            OPT_UITKOMST=$([[ "$uitkomst" == "-" ]] && echo "" || echo "$uitkomst")
+            local resultaat
+            if resultaat=$(OPT_OUTPUT_MODE=raw OPT_PROVENANCE=false OPT_SELECT="" OPT_FIELDS="" do_verwoord 2>/dev/null); then
+                totaal=$((totaal + 1))
+                if [[ -n "$OPT_BEWAAR" ]]; then
+                    echo "$resultaat" > "$OPT_BEWAAR/$(basename "$bestand" .json)__${uitkomst}.json"
+                fi
+                local ok
+                ok=$(echo "$resultaat" | jq -r '.toets.geslaagd')
+                [[ "$ok" == "true" ]] && geslaagd=$((geslaagd + 1))
+                printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$(basename "$bestand")" "$uitkomst" "$ok" \
+                    "$(echo "$resultaat" | jq -r '.toets.woorden')" \
+                    "$(echo "$resultaat" | jq -r '.toets.gemiddelde_zinslengte')" \
+                    "$(echo "$resultaat" | jq -r '.toets.opmerkingen | join("; ")')"
+            else
+                printf '%s\t%s\tfout\t\t\t\n' "$(basename "$bestand")" "$uitkomst"
+            fi
+        done
+    done
+    printf '# %d van %d geslaagd\n' "$geslaagd" "$totaal" >&2
+}
+
+# ---------------------------------------------------------------------------
+# Response verwerking (zelfde pijplijn als de andere wrappers)
+# ---------------------------------------------------------------------------
+
+process_response() {
+    local response="$1"
+    local tool_name="$2"
+
+    audit_log "$tool_name" "$response"
+
+    if [[ -n "$OPT_SELECT" ]]; then
+        response=$(echo "$response" | jq "$OPT_SELECT")
+    fi
+    if [[ -n "$OPT_FIELDS" ]]; then
+        response=$(apply_fields_filter "$response" "$OPT_FIELDS")
+    fi
+    if [[ "$OPT_PROVENANCE" == "true" ]]; then
+        PROVENANCE_SOURCE="$UITLEG_SOURCE_LABEL"
+        CLI_VERSION="$UITLEG_VERSION"
+        response=$(wrap_provenance "$response")
+    fi
+    format_output "$response" "$OPT_OUTPUT_MODE"
+}
+
+route_command() {
+    case "$ACTION" in
+        regels|verzoek)
+            [[ -z "$BESTAND" ]] && { echo "Bestand is verplicht." >&2; exit 1; }
+            do_lokaal "$ACTION" ;;
+        toets)
+            [[ -z "$BESTAND" ]] && { echo "Bestand is verplicht." >&2; exit 1; }
+            local extra=()
+            [[ -n "$OPT_TEKST" ]] && extra+=(--tekst "$OPT_TEKST")
+            [[ -n "$OPT_TEKST_BESTAND" ]] && extra+=(--tekst-bestand "$OPT_TEKST_BESTAND")
+            do_lokaal toets "${extra[@]}" ;;
+        verwoord)
+            [[ -z "$BESTAND" ]] && { echo "Bestand is verplicht." >&2; exit 1; }
+            do_verwoord ;;
+        batch)
+            [[ -z "$BESTAND" ]] && { echo "Map is verplicht." >&2; exit 1; }
+            do_batch ;;
+        --help|-h|"") show_help ;;
+        *) echo "Onbekende actie: $ACTION" >&2; exit 1 ;;
+    esac
+}
+
+main() {
+    parse_args "$@"
+    route_command
+}
+
+main "$@"
