@@ -44,6 +44,11 @@ Handmatige integratie-scripts (vereisen een `.env` met echte API-keys) staan in
   sleutel) en CLI, op dezelfde module als `POST /uitleg`
   (`services/host/uitleg.py`). Geen bron van de host; wordt niet door de host
   gestart.
+- **`services/rekenkern/`** — de rekenkern (Rust → WASM) die in de browser van
+  de afnemer rekent: regelrecht-engine (gepinde commit), beslisgraaf, uitleg
+  zonder taalmodel en de oriëntatie "iemand aannemen". Geen endpoint; het
+  contract staat in `docs/rekenkern/contract.md` (PDR-017, PDR-018). De host
+  rekent niet; `/uitleg` aanvaardt de graaf van de kern.
 - **`services/cli/`** — Bash CLI-wrappers (alternatief transport, on-demand).
 - **`docs/`** — `architecture.md` (routering + scenario's), `decisions/` (PDR's),
   `deploy-zad.md` (deployen + debug-valkuilen), `test-vragen.md`,

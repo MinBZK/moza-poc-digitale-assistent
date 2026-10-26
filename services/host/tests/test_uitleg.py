@@ -304,3 +304,71 @@ def test_uitleg_zonder_sleutel_meldt_welke_sleutel(monkeypatch):
     r = client.post("/uitleg", json=_body(), headers=HEADERS)
     assert r.status_code != 200
     assert r.json()["code"] in ("LLM_GEEN_SLEUTEL", "LLM_NIET_INGESTELD")
+
+
+# --- graaf van de rekenkern (PDR-018) -------------------------------------------
+
+REKENKERN = json.loads(
+    (Path(__file__).parent / "fixtures" / "uitleg_graaf_rekenkern_lks.json").read_text()
+)
+
+
+def test_rekenkern_graaf_is_geldig_en_wordt_een_boom():
+    graaf = REKENKERN["graaf"]
+    assert uitleg.graaf_geldig(graaf) is True
+    boom = uitleg.normaliseer_graaf(graaf)
+    assert boom["soort"] == "uitkomst"
+    assert boom["naam"] == "heeft_recht_op_lks"
+    assert boom["waarde"] is True
+    assert boom["grond"]["artikel"] == "10d"
+    # Het bedrag staat als tweede uitkomst direct onder de hoofduitkomst.
+    assert boom["doorslaggevend"][0]["naam"] == "hoogte_lks_eurocent_per_maand"
+
+
+def test_rekenkern_graaf_regels_noemen_bedrag_drempel_en_grond():
+    regels = uitleg.graaf_regels(REKENKERN["graaf"])
+    tekst = "\n".join(regels)
+    assert regels[0].startswith("- uitkomst: heeft_recht_op_lks = ja [grond:")
+    assert "€ 897,41" in tekst
+    # Een letterlijke drempel uit het model komt mee in de voorwaarde.
+    assert "≤" in tekst or "≥" in tekst
+    assert "(bron: wet)" in tekst
+    assert len(regels) <= uitleg.MAX_REGELS
+
+
+def test_rekenkern_graaf_door_de_toets():
+    regels = uitleg.graaf_regels(REKENKERN["graaf"])
+    tekst = (
+        "Uw werknemer werkt 32 uur. U krijgt loonkostensubsidie van € 897,41 per maand "
+        "(artikel 10d Participatiewet)."
+    )
+    assert uitleg.toets(tekst, regels, REKENKERN["samenvatting"]).geslaagd
+
+
+@pytest.mark.parametrize(
+    "kapot",
+    [
+        {"beslissingen": [], "knopen": [], "randen": []},
+        {"beslissingen": ["x"], "knopen": [], "randen": []},
+        {"beslissingen": ["a"], "knopen": [{"id": "a"}], "randen": [{"van": "a", "naar": "b"}]},
+        {"beslissingen": ["a"], "knopen": ["a"], "randen": []},
+    ],
+    ids=["leeg", "beslissing-onbekend", "rand-naar-niets", "knoop-geen-dict"],
+)
+def test_kapotte_rekenkern_graaf_is_ongeldig(kapot):
+    assert uitleg.graaf_geldig(kapot) is False
+    # Een ongeldige graaf blijft ongewijzigd; graaf_geldig houdt hem tegen.
+    assert uitleg.normaliseer_graaf(kapot) is kapot
+
+
+def test_uitleg_endpoint_aanvaardt_rekenkern_graaf(monkeypatch):
+    nep = _met_nep_claude(monkeypatch, "U krijgt € 897,41 per maand (artikel 10d Participatiewet).")
+    r = client.post(
+        "/uitleg",
+        json=_body(graaf=REKENKERN["graaf"], samenvatting=REKENKERN["samenvatting"]),
+        headers=HEADERS,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["toets"]["geslaagd"] is True
+    (aanroep,) = nep.ontvangen
+    assert "€ 897,41" in aanroep["messages"][0]["content"]
