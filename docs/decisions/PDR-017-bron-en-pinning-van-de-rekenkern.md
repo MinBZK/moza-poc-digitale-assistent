@@ -10,20 +10,29 @@
 ## Context
 
 De oriëntatie "iemand aannemen" in moza-portaal rekent in de browser met een
-WASM-kern. Die kern kwam uit `regelrecht-uitleg` (privérepo, persoonlijk
-account), met een eigen uitleglaag (presentaties, sjablonen, afleidingen). In
-het portaal zat daarbovenop een laag met de vertaling van vier antwoorden naar
-feiten, de keuze welke uitkomsten te rekenen, en de vertaling naar het scherm
-(`_uitkomsten.ts`).
+WASM-kern. Die kern kwam uit `regelrecht-uitleg`, een onderzoeksprototype voor
+uitleg bij RegelRecht, met een eigen uitleglaag (presentaties, sjablonen,
+afleidingen). In het portaal zat daarbovenop een laag met de vertaling van
+vier antwoorden naar feiten, de keuze welke uitkomsten te rekenen, en de
+vertaling naar het scherm (`_uitkomsten.ts`).
 
-Drie problemen:
+Vier problemen:
 
-- De DA-repo is publiek en de kern niet. CI kan de kern niet bouwen, en de
-  herkomst van wat het portaal laadt is niet na te gaan.
-- De rekenlaag zat in het portaal. Een tweede afnemer moest hem kopiëren.
-- Het corpus van Financieel CV staat sinds 21 oktober in een eigen repo
-  (`MinBZK/regelrecht-corpus-FCV`) en is op 25 oktober gereviewd. De oude
-  bundel rekende nog op `regelrecht-corpus` `42054d7d`.
+- **Doel en eigenaar lopen uiteen.** regelrecht-uitleg verkent hoe je uitlegt;
+  de DA levert een dienst aan afnemers. Een afnemer heeft een vast contract,
+  een allowlist en versies nodig die met het product meegaan, niet met een
+  verkenning. Wijzigingen aan wat het portaal laadt horen door de reviewroute
+  van de DA (pull request, CODEOWNERS; zie `docs/ai-verantwoording.md`).
+- **Te veel schakels.** Een wijziging in engine of corpus moest via
+  regelrecht-uitleg naar de bundel en dan naar het portaal: drie repo's om
+  gelijk te trekken. De herkomst van een bedrag op het scherm was daardoor
+  lastig na te gaan.
+- **De rekenlaag zat in het portaal.** Een tweede afnemer moest hem kopiëren,
+  en een wijziging in het corpus merkte het portaal niet.
+- **Het corpus was verouderd.** Het corpus van Financieel CV staat sinds 21
+  oktober in een eigen repo (`MinBZK/regelrecht-corpus-FCV`) en is op 25
+  oktober gereviewd. De oude bundel rekende nog op `regelrecht-corpus`
+  `42054d7d`.
 
 De uitleglaag moet bovendien de vorm krijgen van de Graph-conditie uit het
 paper (zie regelrecht.rijks.app/research/citizen-explanation), als nieuwe
@@ -56,11 +65,14 @@ functionaliteit van de DA.
 
 ## Alternatieven overwogen
 
-- **De uitleglaag van regelrecht-uitleg als dependency.** Afgewezen: privé,
-  dus niet te bouwen in de publieke DA. En de uitleg moet een nieuwe vorm
-  krijgen (getypeerde graaf), niet de presentaties en sjablonen van toen.
-- **regelrecht-uitleg vendoren.** Afgewezen: daarmee wordt privécode
-  gepubliceerd, en de DA erft een laag die hij niet wil.
+- **De uitleglaag van regelrecht-uitleg als dependency.** Afgewezen. Die
+  laag is gebouwd voor presentatie (scènes, sjablonen, een afleidingsboom per
+  uitkomst), niet voor een getypeerde graaf die `/uitleg` kan toetsen. De DA
+  zou dan twee vormen van uitleg moeten vertalen. Elke wijziging zou ook een
+  release in een andere repo vragen voordat het contract van de DA kan
+  bewegen.
+- **regelrecht-uitleg kopiëren in de DA.** Afgewezen: de DA erft dan een laag
+  die hij niet gebruikt, en twee kopieën lopen uit elkaar.
 - **De graaf in JavaScript naast de engine-WASM.** Overwogen. Gekozen is Rust
   in dezelfde WASM: één artefact, de graaf werkt op de typen van de engine,
   en native tests draaien dezelfde code als de browser.
