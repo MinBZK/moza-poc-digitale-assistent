@@ -5,7 +5,7 @@
 | Status | Geaccepteerd |
 | Datum | 2026-09-03 |
 | Beslisser(s) | Projectteam poc-moza |
-| Gerelateerd | [PDR-008](PDR-008-generieke-regelrecht-tool-en-wallet.md) (toestemming per bron), [PDR-005](PDR-005-cli-vs-mcp-transport.md) (CLI-transport zonder poort), [PDR-011](PDR-011-foutmeldingen-catalogus.md); de meting van 2 september staat in PDR-014, dat op een eigen branch ter vaststelling ligt |
+| Gerelateerd | [PDR-008](PDR-008-generieke-regelrecht-tool-en-wallet.md) (toestemming per bron), [PDR-005](PDR-005-cli-vs-mcp-transport.md) (CLI-transport zonder poort), [PDR-011](PDR-011-foutmeldingen-catalogus.md), [PDR-014](PDR-014-chat-geparkeerd-tot-de-vertaling-naar-wet-klopt.md) (de meting van 2 september) |
 
 ## Context
 
@@ -21,8 +21,8 @@ bron uit, terwijl een variabele leegmaken in een beheer-UI de gewone handeling
 is voor "terug naar standaard". En `/health` meldde altijd `actief`, ook met een
 bron minder.
 
-Daarnaast liet een meting op 2 september (vijf doorlopen van de
-informatieplicht-flow plus losse vragen, host-log) zien dat het model in
+Daarnaast liet de meting van 2 september (PDR-014, figuur 5; vijf doorlopen
+van de informatieplicht-flow plus losse vragen) zien dat het model in
 vrijwel elke eerste beurt het Handelsregister probeerde aan te roepen vóór het
 akkoord, en de wallet drie keer. De poort uit PDR-008 weigerde alle
 veertien, maar elke weigering kostte een extra modelbeurt en een bronfout in
@@ -96,10 +96,6 @@ ook als de host op akkoord voor de KvK wachtte.
 - **Tests:** conftest zet `MCP_SERVER_*` leeg, zodat de suite niet van de
   `.env` van de ontwikkelaar afhangt; `host_met_bronnen` is de ene fabriek
   voor een host met uitgezette of uitgevallen bronnen.
-- **Merge-volgorde:** deze PDR verwijst in tekst naar de meting van 2
-  september; het rapport daarvan en PDR-014 staan op de branch
-  `docs/pdr-014-koerswijziging`. Tot die is gemerged mist de README-tabel het
-  nummer 014; de tekst hier blijft zonder die branch leesbaar.
 - **Meting:** de weigeringen die op 2 september werden gezien horen met deze
   PDR niet meer voor te komen in de flow. Die hermeting is nog niet gedaan.
 - **Aanzetten met een woord:** `aan`, `on`, `true`, `1`, `ja`, `yes`,

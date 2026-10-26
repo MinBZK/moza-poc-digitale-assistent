@@ -1,0 +1,198 @@
+[
+ {
+  "label": "main",
+  "vraag": "Ik wil iemand aannemen met een afstand tot de arbeidsmarkt. Wat zijn mijn mogelijkheden?",
+  "run": 1,
+  "seconden": 7.6,
+  "tools": [
+   "regelrecht__execute_law"
+  ],
+  "fouten": [],
+  "antwoord": "Dit gaat over het aannemen van personeel en arbeidsmarktregelingen. Deze vraag valt buiten mijn kennisgebied. Voor informatie over het in dienst nemen van mensen met een afstand tot de arbeidsmarkt kunt u terecht bij UWV (uwv.nl) of de gemeente. Ook RVO biedt soms regelingen op dit gebied; uw gemeente of het UWV-werkbedrijf kan u verder helpen.\n\nIk ben de digitale assistent van MijnOverheid Zakelijk. Ik help u nu met bedrijfsgegevens, verplichtingen, regelgeving en subsidies. Daar komt steeds meer bij.\n\nWilt u bijvoorbeeld weten of er subsidies of regelingen beschikbaar zijn voor uw bedrijf? Vraag dan: \"Welke subsidies zijn er voor mijn bedrijf?\""
+ },
+ {
+  "label": "main",
+  "vraag": "Ik wil iemand aannemen met een afstand tot de arbeidsmarkt. Wat zijn mijn mogelijkheden?",
+  "run": 2,
+  "seconden": 12.1,
+  "tools": [
+   "regelrecht__execute_law"
+  ],
+  "fouten": [],
+  "antwoord": "Dit gaat over arbeidsmarktbeleid en het aannemen van personeel. Deze vraag valt buiten mijn kennisgebied. Voor informatie over regelingen zoals loonkostensubsidie of de banenafspraak kunt u terecht bij het UWV of uw gemeente.\n\nIk ben de digitale assistent van MijnOverheid Zakelijk. Ik help u nu met bedrijfsgegevens, verplichtingen, regelgeving en subsidies. Daar komt steeds meer bij.\n\nWilt u bijvoorbeeld weten of er subsidies beschikbaar zijn via RVO? Vraag dan: \"Welke subsidies zijn er voor mijn bedrijf?\""
+ },
+ {
+  "label": "main",
+  "vraag": "Ik wil iemand aannemen met een afstand tot de arbeidsmarkt. Wat zijn mijn mogelijkheden?",
+  "run": 3,
+  "seconden": 5.7,
+  "tools": [
+   "regelrecht__execute_law"
+  ],
+  "fouten": [],
+  "antwoord": "Dit gaat over arbeidsmarktbeleid en het aannemen van personeel. Deze vraag valt buiten mijn kennisgebied. Voor informatie over het aannemen van mensen met een afstand tot de arbeidsmarkt kunt u terecht bij het UWV of de website van de Rijksdienst voor Ondernemend Nederland (rvo.nl).\n\nIk ben de digitale assistent van MijnOverheid Zakelijk. Ik help u nu met bedrijfsgegevens, verplichtingen, regelgeving en subsidies. Daar komt steeds meer bij.\n\nWilt u bijvoorbeeld weten of er subsidies beschikbaar zijn voor energiebesparing? Vraag dan: \"Zijn er subsidies voor energiebesparing voor mijn bedrijf?\""
+ },
+ {
+  "label": "main",
+  "vraag": "Welke subsidies en verplichtingen gelden er voor mijn bedrijf?",
+  "run": 1,
+  "seconden": 10.7,
+  "tools": [
+   "regelrecht__execute_law",
+   "rvo__zoek_regeling"
+  ],
+  "fouten": [
+   "TOESTEMMING_VEREIST"
+  ],
+  "antwoord": "Voor het ophalen van uw bedrijfsgegevens is eerst uw akkoord nodig. Dat geldt ook voor het toetsen van verplichtingen.\n\nGeef toestemming via de \"Delen\"-knop en stel uw vraag daarna opnieuw. Dan kan ik uw gegevens ophalen en de juiste verplichtingen voor u controleren.\n\nWel kan ik u alvast de beschikbare subsidies en regelingen laten zien:\n\n**Open regelingen:**\n\n- Informatieplicht Energiebesparing (EBR-2026): bedrijven die meer dan 50.000 kWh elektriciteit of 25.000 m³ gas verbruiken, moeten vierjaarlijks rapporteren. Of dit voor u geldt, kan ik controleren zodra ik uw bedrijfsgegevens mag inzien.\n- Energie-investeringsaftrek (EIA): fiscaal voordeel bij investering in energiebesparende bedrijfsmiddelen of duurzame energie.\n- Investeringssubsidie Duurzame Energie (ISDE): subsidie voor warmtepompen, zonneboilers, isolatie of aansluiting op een warmtenet.\n\n**Gesloten regeling:**\n\n- SDE++ (Stimulering Duurzame Energieproductie): de openstellingsronde voor 2026 is gesloten.\n\nBron: RVO\n\nGeef toestemming via de \"Delen\"-knop, zodat ik uw bedrijfsgegevens kan ophalen en kan controleren welke verplichtingen voor u gelden."
+ },
+ {
+  "label": "main",
+  "vraag": "Welke subsidies en verplichtingen gelden er voor mijn bedrijf?",
+  "run": 2,
+  "seconden": 11.2,
+  "tools": [
+   "regelrecht__execute_law",
+   "rvo__zoek_regeling"
+  ],
+  "fouten": [
+   "TOESTEMMING_VEREIST"
+  ],
+  "antwoord": "Voor het opvragen van uw bedrijfsgegevens uit het KvK Handelsregister is eerst uw toestemming nodig. Geef toestemming via de \"Delen\"-knop en stuur uw vraag daarna opnieuw.\n\nIk kan u wel alvast de gevonden subsidies en regelingen laten zien.\n\nBeschikbare regelingen (RVO):\n\n1. Informatieplicht Energiebesparing (EBR-2026) - open\n   Bedrijven die veel energie verbruiken, moeten elke vier jaar rapporteren over energiebesparende maatregelen. Deadline: 1 december 2026.\n\n2. Energie-investeringsaftrek (EIA) - open\n   Fiscaal voordeel als u investeert in energiebesparende bedrijfsmiddelen. Deadline: 31 december 2026.\n\n3. Investeringssubsidie Duurzame Energie (ISDE) - open\n   Subsidie voor investeringen in warmtepompen, zonneboilers, isolatie of aansluiting op een warmtenet. Deadline: 31 december 2026.\n\n4. SDE++ - gesloten\n   Subsidie voor hernieuwbare energieproductie. De ronde 2026 is gesloten.\n\nOf de Informatieplicht Energiebesparing voor u geldt, kan ik toetsen zodra ik uw bedrijfsgegevens heb. Daarvoor is uw toestemming nodig via de \"Delen\"-knop.\n\nBron: RVO"
+ },
+ {
+  "label": "main",
+  "vraag": "Welke subsidies en verplichtingen gelden er voor mijn bedrijf?",
+  "run": 3,
+  "seconden": 10.6,
+  "tools": [
+   "regelrecht__execute_law",
+   "rvo__zoek_regeling"
+  ],
+  "fouten": [
+   "TOESTEMMING_VEREIST"
+  ],
+  "antwoord": "Voor het opvragen van uw bedrijfsgegevens is uw akkoord nodig. Kunt u toestemming geven via de \"Delen\"-knop en daarna uw vraag opnieuw stellen?\n\nOndertussen heb ik al wel relevante subsidies en regelingen gevonden.\n\nBeschikbare regelingen voor energiebesparing:\n\n1. Informatieplicht Energiebesparing (EBR-2026) - open\n   Verbruikt u meer dan 50.000 kWh elektriciteit of 25.000 m3 gas per jaar? Dan moet u vierjaarlijks rapporteren over uw energiebesparende maatregelen.\n\n2. Energie-investeringsaftrek (EIA-2026) - open\n   Investeert u in energiebesparende bedrijfsmiddelen? Dan kunt u fiscaal voordeel aanvragen. Deadline: 31 december 2026.\n\n3. Investeringssubsidie Duurzame Energie (ISDE-2026) - open\n   Investeert u in een warmtepomp, zonneboiler, isolatie of warmtenet? Dan kunt u subsidie aanvragen. Deadline: 31 december 2026.\n\n4. SDE++ - gesloten\n   De openstellingsronde 2026 voor subsidie op duurzame energieproductie is gesloten.\n\nZodra u toestemming heeft gegeven, kan ik uw bedrijfsgegevens opvragen en bekijken welke verplichtingen specifiek voor uw bedrijf gelden.\n\nBron: RVO"
+ },
+ {
+  "label": "main",
+  "vraag": "Moet ik een energiebesparingsrapportage indienen? Zo ja, doe dat dan met de maatregelen LED-verlichting en warmtepomp.",
+  "run": 1,
+  "seconden": 8.8,
+  "tools": [
+   "regelrecht__execute_law"
+  ],
+  "fouten": [
+   "TOESTEMMING_VEREIST",
+   "TOESTEMMING_VEREIST"
+  ],
+  "antwoord": "Om uw vraag te beantwoorden heb ik toestemming nodig voor twee bronnen:\n\n1. Het KvK Handelsregister - voor uw bedrijfsgegevens. Geef hiervoor akkoord via de \"Delen\"-knop en verstuur uw vraag daarna opnieuw.\n\n2. Uw Business Wallet - voor uw energieverbruik (elektriciteit en gas), afgegeven door uw netbeheerder. Geef ook hiervoor akkoord via de \"Delen\"-knop.\n\nMag ik beide bronnen raadplegen om te bepalen of de energiebesparingsplicht voor u geldt?"
+ },
+ {
+  "label": "main",
+  "vraag": "Moet ik een energiebesparingsrapportage indienen? Zo ja, doe dat dan met de maatregelen LED-verlichting en warmtepomp.",
+  "run": 2,
+  "seconden": 8.1,
+  "tools": [
+   "regelrecht__execute_law"
+  ],
+  "fouten": [
+   "TOESTEMMING_VEREIST"
+  ],
+  "antwoord": "Voordat ik verder kan, zijn er twee toestemmingen nodig.\n\nVoor het KvK Handelsregister is eerst uw akkoord nodig. Geeft u dat via de \"Delen\"-knop en stuurt u uw vraag daarna opnieuw?\n\nZodra ik uw bedrijfsgegevens heb, vraag ik ook toestemming voor uw energieverbruik uit de Business Wallet. Zo hoef ik maar één keer te vragen wat er nodig is."
+ },
+ {
+  "label": "main",
+  "vraag": "Moet ik een energiebesparingsrapportage indienen? Zo ja, doe dat dan met de maatregelen LED-verlichting en warmtepomp.",
+  "run": 3,
+  "seconden": 6.8,
+  "tools": [
+   "regelrecht__execute_law"
+  ],
+  "fouten": [
+   "TOESTEMMING_VEREIST"
+  ],
+  "antwoord": "Om uw bedrijfsgegevens op te halen, heb ik uw toestemming nodig. Voor het Handelsregister van de KvK is akkoord van u vereist. Geeft u toestemming via de \"Delen\"-knop en stuurt u uw vraag daarna opnieuw?"
+ },
+ {
+  "label": "f22f063",
+  "vraag": "Ik wil iemand aannemen met een afstand tot de arbeidsmarkt. Wat zijn mijn mogelijkheden?",
+  "run": 1,
+  "seconden": 7.2,
+  "tools": [],
+  "fouten": [],
+  "antwoord": "Dit gaat over arbeidsmarktbeleid en het aannemen van personeel. Deze vraag valt buiten mijn kennisgebied. Voor informatie over regelingen rondom mensen met een afstand tot de arbeidsmarkt kunt u terecht bij het UWV, de gemeente, of uw branchevereniging. Ook een HR-adviseur of het Juridisch Loket kan u helpen.\n\nIk ben de digitale assistent van MijnOverheid Zakelijk. Ik help u nu met bedrijfsgegevens, verplichtingen, regelgeving en subsidies. Daar komt steeds meer bij.\n\nWilt u bijvoorbeeld weten welke subsidies of regelingen van RVO beschikbaar zijn voor uw bedrijf? Vraag dan: \"Welke subsidies zijn er voor mijn bedrijf?\""
+ },
+ {
+  "label": "f22f063",
+  "vraag": "Ik wil iemand aannemen met een afstand tot de arbeidsmarkt. Wat zijn mijn mogelijkheden?",
+  "run": 2,
+  "seconden": 7.4,
+  "tools": [],
+  "fouten": [],
+  "antwoord": "Dit gaat over arbeidsmarktbeleid en subsidies voor werkgevers. Deze vraag valt buiten mijn kennisgebied. Voor informatie over het in dienst nemen van mensen met een afstand tot de arbeidsmarkt kunt u terecht bij het UWV (uwv.nl) of uw gemeente. Ook de Rijksdienst voor Ondernemend Nederland (rvo.nl) en het Juridisch Loket kunnen u verder helpen.\n\nIk ben de digitale assistent van MijnOverheid Zakelijk. Ik help u nu met bedrijfsgegevens, verplichtingen, regelgeving en subsidies. Daar komt steeds meer bij.\n\nWilt u bijvoorbeeld weten of de energiebesparingsplicht voor uw bedrijf geldt? Vraag dan: \"Geldt de energiebesparingsplicht voor mijn bedrijf?\""
+ },
+ {
+  "label": "f22f063",
+  "vraag": "Ik wil iemand aannemen met een afstand tot de arbeidsmarkt. Wat zijn mijn mogelijkheden?",
+  "run": 3,
+  "seconden": 6.2,
+  "tools": [],
+  "fouten": [],
+  "antwoord": "Dit gaat over arbeidsmarkt en personeelsbeleid. Deze vraag valt buiten mijn kennisgebied. Voor informatie over het aannemen van mensen met een afstand tot de arbeidsmarkt kunt u terecht bij het UWV, de gemeente of een arbeidsdeskundige. Ook de Rijksdienst voor Ondernemend Nederland (RVO) en het Juridisch Loket kunnen u soms verder helpen.\n\nIk ben de digitale assistent van MijnOverheid Zakelijk. Ik help u nu met bedrijfsgegevens, verplichtingen, regelgeving en subsidies. Daar komt steeds meer bij.\n\nWilt u bijvoorbeeld weten welke subsidies er voor uw bedrijf beschikbaar zijn? Vraag dan: \"Welke subsidies kan ik aanvragen voor mijn bedrijf?\""
+ },
+ {
+  "label": "f22f063",
+  "vraag": "Welke subsidies en verplichtingen gelden er voor mijn bedrijf?",
+  "run": 1,
+  "seconden": 3.7,
+  "tools": [],
+  "fouten": [],
+  "antwoord": "Om dit te beoordelen, wil ik een aantal gegevens ophalen en gebruiken:\n\n- Uw bedrijfsgegevens uit het KvK Handelsregister\n- Uw energieverbruik uit uw Business Wallet - een attestatie, afgegeven door uw netbeheerder\n\nMag ik deze gegevens voor u ophalen en gebruiken?"
+ },
+ {
+  "label": "f22f063",
+  "vraag": "Welke subsidies en verplichtingen gelden er voor mijn bedrijf?",
+  "run": 2,
+  "seconden": 3.1,
+  "tools": [],
+  "fouten": [],
+  "antwoord": "Om dit te beoordelen, wil ik een paar dingen raadplegen en gebruiken:\n\n- Uw bedrijfsgegevens uit het KvK Handelsregister\n- Uw energieverbruik uit uw Business Wallet - een attestatie, afgegeven door uw netbeheerder\n\nMag ik deze gegevens voor u ophalen en gebruiken?"
+ },
+ {
+  "label": "f22f063",
+  "vraag": "Welke subsidies en verplichtingen gelden er voor mijn bedrijf?",
+  "run": 3,
+  "seconden": 3.1,
+  "tools": [],
+  "fouten": [],
+  "antwoord": "Om dit te beoordelen, wil ik gegevens raadplegen en gebruiken:\n\n- Uw bedrijfsgegevens uit het KvK Handelsregister\n- Uw energieverbruik uit uw Business Wallet - een attestatie, afgegeven door uw netbeheerder\n\nMag ik deze gegevens voor u ophalen en gebruiken?"
+ },
+ {
+  "label": "f22f063",
+  "vraag": "Moet ik een energiebesparingsrapportage indienen? Zo ja, doe dat dan met de maatregelen LED-verlichting en warmtepomp.",
+  "run": 1,
+  "seconden": 3.8,
+  "tools": [],
+  "fouten": [],
+  "antwoord": "Om dit te beoordelen, wil ik twee dingen raadplegen en gebruiken:\n\n- Uw bedrijfsgegevens uit het KvK Handelsregister\n- Uw energieverbruik uit uw Business Wallet - een attestatie, afgegeven door uw netbeheerder\n\nMag ik deze gegevens voor u ophalen en gebruiken?"
+ },
+ {
+  "label": "f22f063",
+  "vraag": "Moet ik een energiebesparingsrapportage indienen? Zo ja, doe dat dan met de maatregelen LED-verlichting en warmtepomp.",
+  "run": 2,
+  "seconden": 3.3,
+  "tools": [],
+  "fouten": [],
+  "antwoord": "Om dit te beoordelen, wil ik twee dingen raadplegen en gebruiken:\n\n- Uw bedrijfsgegevens uit het KvK Handelsregister\n- Uw energieverbruik uit uw Business Wallet - een attestatie, afgegeven door uw netbeheerder\n\nMag ik deze gegevens voor u ophalen en gebruiken?"
+ },
+ {
+  "label": "f22f063",
+  "vraag": "Moet ik een energiebesparingsrapportage indienen? Zo ja, doe dat dan met de maatregelen LED-verlichting en warmtepomp.",
+  "run": 3,
+  "seconden": 10.3,
+  "tools": [],
+  "fouten": [],
+  "antwoord": "Om dit te beoordelen, wil ik twee dingen raadplegen en gebruiken:\n\n- Uw bedrijfsgegevens uit het KvK Handelsregister\n- Uw energieverbruik uit uw Business Wallet - een attestatie, afgegeven door uw netbeheerder\n\nMag ik deze gegevens voor u ophalen en gebruiken?"
+ }
+]
