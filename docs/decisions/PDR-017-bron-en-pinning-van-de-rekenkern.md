@@ -16,23 +16,27 @@ afleidingen). In het portaal zat daarbovenop een laag met de vertaling van
 vier antwoorden naar feiten, de keuze welke uitkomsten te rekenen, en de
 vertaling naar het scherm (`_uitkomsten.ts`).
 
-Vier problemen:
+Het grootste probleem is **onderhoud, en daarmee meerdere waarheden**. Wat
+de oriëntatie rekent en uitlegt, stond op drie plekken:
 
-- **Doel en eigenaar lopen uiteen.** regelrecht-uitleg verkent hoe je uitlegt;
-  de DA levert een dienst aan afnemers. Een afnemer heeft een vast contract,
-  een allowlist en versies nodig die met het product meegaan, niet met een
-  verkenning. Wijzigingen aan wat het portaal laadt horen door de reviewroute
-  van de DA (pull request, CODEOWNERS; zie `docs/ai-verantwoording.md`).
-- **Te veel schakels.** Een wijziging in engine of corpus moest via
-  regelrecht-uitleg naar de bundel en dan naar het portaal: drie repo's om
-  gelijk te trekken. De herkomst van een bedrag op het scherm was daardoor
-  lastig na te gaan.
-- **De rekenlaag zat in het portaal.** Een tweede afnemer moest hem kopiëren,
-  en een wijziging in het corpus merkte het portaal niet.
-- **Het corpus was verouderd.** Het corpus van Financieel CV staat sinds 21
-  oktober in een eigen repo (`MinBZK/regelrecht-corpus-FCV`) en is op 25
-  oktober gereviewd. De oude bundel rekende nog op `regelrecht-corpus`
-  `42054d7d`.
+- de kern en de uitleglaag in regelrecht-uitleg, met een eigen pin van engine
+  en corpus (`bronnen.json`);
+- de rekenlaag in het portaal (`_uitkomsten.ts`): welke feiten bij een
+  antwoord horen, welke uitkomsten gerekend worden, wat het scherm toont;
+- de vorm van de beslisgraaf die `/uitleg` in de DA verwacht.
+
+Elke plek moest apart bijgehouden worden, en ze liepen uit elkaar. De bundel
+van het portaal rekende op `regelrecht-corpus` `42054d7d`, terwijl het corpus
+van Financieel CV sinds 21 oktober in een eigen repo staat
+(`MinBZK/regelrecht-corpus-FCV`) en op 25 oktober is gereviewd. Na die review
+pasten twee feiten van het portaal niet meer bij het corpus. Dat bleek pas
+bij de overgang: op het gereviewde corpus gaf de portaallaag "onbekend" voor
+loonkostensubsidie en een fout bij jobcoaching. Een tweede afnemer had de
+rekenlaag moeten kopiëren, met een vierde waarheid als gevolg.
+
+Daarbij kwam dat een wijziging in engine of corpus via regelrecht-uitleg naar
+de bundel en dan naar het portaal moest. De herkomst van een bedrag op het
+scherm was zo lastig na te gaan.
 
 De uitleglaag moet bovendien de vorm krijgen van de Graph-conditie uit het
 paper (zie regelrecht.rijks.app/research/citizen-explanation), als nieuwe
@@ -65,14 +69,19 @@ functionaliteit van de DA.
 
 ## Alternatieven overwogen
 
-- **De uitleglaag van regelrecht-uitleg als dependency.** Afgewezen. Die
-  laag is gebouwd voor presentatie (scènes, sjablonen, een afleidingsboom per
-  uitkomst), niet voor een getypeerde graaf die `/uitleg` kan toetsen. De DA
-  zou dan twee vormen van uitleg moeten vertalen. Elke wijziging zou ook een
-  release in een andere repo vragen voordat het contract van de DA kan
-  bewegen.
-- **regelrecht-uitleg kopiëren in de DA.** Afgewezen: de DA erft dan een laag
-  die hij niet gebruikt, en twee kopieën lopen uit elkaar.
+- **De uitleglaag van regelrecht-uitleg als dependency.** Afgewezen: dan
+  blijven er twee waarheden over uitleg. Die laag is gebouwd voor presentatie
+  (scènes, sjablonen, een afleidingsboom per uitkomst), en `/uitleg` verwacht
+  een graaf die hij kan toetsen; de DA zou de ene vorm in de andere moeten
+  blijven vertalen. Een wijziging zou ook eerst een release in een andere repo
+  vragen voordat het contract van de DA kan bewegen.
+- **regelrecht-uitleg kopiëren in de DA.** Afgewezen: twee kopieën om te
+  onderhouden, die uit elkaar lopen; en de DA erft een laag die hij niet
+  gebruikt.
+- **De rekenlaag in het portaal laten.** Afgewezen: dan blijft het portaal een
+  eigen waarheid over welke feiten bij een antwoord horen, en merkt het een
+  wijziging in het corpus niet. In de kern toetst de referentietest dat bij
+  elke nieuwe pin.
 - **De graaf in JavaScript naast de engine-WASM.** Overwogen. Gekozen is Rust
   in dezelfde WASM: één artefact, de graaf werkt op de typen van de engine,
   en native tests draaien dezelfde code als de browser.
