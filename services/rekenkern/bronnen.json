@@ -1,0 +1,52 @@
+{
+  "toelichting": "Pin van de rekenkern (PDR-017). De engine-revisie moet gelijk zijn aan rev in Cargo.toml; de corpus-bestanden worden bij het bouwen opgehaald en tegen hun blobhash getoetst. Bijwerken met: uv run python services/rekenkern/bouw.py pin --corpus <checkout>.",
+  "engine": {
+    "repo": "MinBZK/regelrecht",
+    "revisie": "abfce035dbb46fea8a4461c55dc12f742dc329b8"
+  },
+  "corpus": {
+    "repo": "MinBZK/regelrecht-corpus-FCV",
+    "url": "https://github.com/MinBZK/regelrecht-corpus-FCV.git",
+    "revisie": "b030cb1c052d7d7953c11cd4963af9ac4b8dbc9c",
+    "bestanden": {
+      "regulation/nl/amvb/besluit_advisering_beschut_werk/2022-07-01.yaml": "602246ebcaee5161a2915c93bbf0a4dc8f794242",
+      "regulation/nl/amvb/besluit_loonkostensubsidie_en_minimumbedragen_studietoeslag_participatiewet_2021/2026-07-01.yaml": "ed613aa37ea1db08f8620db684a3bdb6384390f3",
+      "regulation/nl/amvb/besluit_loonkostensubsidie_participatiewet/2017-07-01.yaml": "1fc900466e3cbf409a4af1fc959768b89c979730",
+      "regulation/nl/amvb/besluit_suwi/2026-05-02.yaml": "d6964b98d041f5e9808695f557c8619d0e02bfb1",
+      "regulation/nl/amvb/besluit_wfsv/2024-01-01.yaml": "02fb99501e6df96a0ca14d54f0315c2ad341131a",
+      "regulation/nl/amvb/besluit_wfsv/2026-04-01.yaml": "55b043f0dd8ef81c54bea7b9ea10cb64bf07bbab",
+      "regulation/nl/amvb/dagloonbesluit_werknemersverzekeringen/2017-09-01.yaml": "6234d722b132d3ae8bfdb769ebb7d522a5b10b42",
+      "regulation/nl/amvb/dagloonbesluit_werknemersverzekeringen/2025-01-01.yaml": "992e69503972681681a9ea1726bac65547713188",
+      "regulation/nl/amvb/reintegratiebesluit/2024-01-01.yaml": "f8ce2554cb6080e8fa7e29bd74e0f7ee2e4b782c",
+      "regulation/nl/amvb/reintegratiebesluit/2026-05-02.yaml": "ab51cc5a2d1b7f431df83acfa38cba60a232f5fc",
+      "regulation/nl/wet/besluit_loondispensatie_wajong/2010-08-19.yaml": "0c2d3cb0057b32a94776e338c248781275dcc78e",
+      "regulation/nl/wet/participatiewet/2022-03-15.yaml": "8efa7c3529b33019ba5b1768970552462438e3b9",
+      "regulation/nl/wet/participatiewet/2024-01-01.yaml": "ea6ef78a729441489bfd7b5150df532d30fc9ff7",
+      "regulation/nl/wet/participatiewet/2025-01-01.yaml": "5fb25a0d6a909a51f9bf5cd1f221f0de6deb16d4",
+      "regulation/nl/wet/participatiewet/2026-07-01.yaml": "b8a59e000f44f5f1c4bafc928439debbeb856e64",
+      "regulation/nl/wet/regeling_loonkostensubsidie_participatiewet_2021/2021-07-01.yaml": "5f2e404f077d3a21a19ee2c9e5360b3f746fa797",
+      "regulation/nl/wet/regeling_loonkostensubsidie_participatiewet_2021/2025-01-01.yaml": "a072ce89e7fa8429df68f74c62ac08238fc02c29",
+      "regulation/nl/wet/werkloosheidswet/2024-01-01.yaml": "0a1b3e450bc14fe9e0d37f9fb7ac3172249a32dd",
+      "regulation/nl/wet/werkloosheidswet/2026-07-01.yaml": "ca1e2c59a43b2adc9df909ce0853a02564398109",
+      "regulation/nl/wet/wet_arbeidsongeschiktheidsvoorziening_jonggehandicapten/2024-01-01.yaml": "9cc12579ecea369b1f82960e4eddc75eea16741b",
+      "regulation/nl/wet/wet_arbeidsongeschiktheidsvoorziening_jonggehandicapten/2025-01-01.yaml": "08e38094919aea8177d566823f13e6e7e1c246d3",
+      "regulation/nl/wet/wet_arbeidsongeschiktheidsvoorziening_jonggehandicapten/2026-07-01.yaml": "5405f6bc5f40c14d8ba56151b1e2634ebeab83b1",
+      "regulation/nl/wet/wet_financiering_sociale_verzekeringen/2024-01-01.yaml": "d37d50d857fadb6f3931c8d8c7d38cc5d6b04135",
+      "regulation/nl/wet/wet_financiering_sociale_verzekeringen/2025-01-01.yaml": "7c5394cdb3223ef00f6012b9218cafa3a473b8c4",
+      "regulation/nl/wet/wet_financiering_sociale_verzekeringen/2026-07-01.yaml": "25bb5f38bf795885efae58236885e1eca020b2ca",
+      "regulation/nl/wet/wet_minimumloon_en_minimumvakantiebijslag/2024-01-01.yaml": "aa5abcf54fb2d9ab8287b13e053e7d55e22d4f01",
+      "regulation/nl/wet/wet_minimumloon_en_minimumvakantiebijslag/2025-01-01.yaml": "1d3a3c4af91610cac23c9821d7a6a765cdec23b3",
+      "regulation/nl/wet/wet_minimumloon_en_minimumvakantiebijslag/2026-07-01.yaml": "6e5d9c6026f5b6aa1b4fc6e804335c03e4787715",
+      "regulation/nl/wet/wet_tegemoetkomingen_loondomein/2024-01-01.yaml": "c9e61e95b9299bebe8463dfc7e212b0c436f26c8",
+      "regulation/nl/wet/wet_tegemoetkomingen_loondomein/2025-01-01.yaml": "db6f8e394aed671be13f176424397b0cb94dd294",
+      "regulation/nl/wet/wet_tegemoetkomingen_loondomein/2026-01-01.yaml": "3adfef93879d743f6d2ccf94bd0e989a767debed",
+      "regulation/nl/wet/wet_werk_en_inkomen_naar_arbeidsvermogen/2024-01-01.yaml": "451cfc348b37e440898a1d7bf454eba49a1c1730",
+      "regulation/nl/wet/wet_werk_en_inkomen_naar_arbeidsvermogen/2025-01-01.yaml": "d0af32b017b93f8936c1c129f3bb81841fad83b9",
+      "regulation/nl/wet/wet_werk_en_inkomen_naar_arbeidsvermogen/2026-07-01.yaml": "a4b56fd884e7b5ad843ca944ef5fc0d18ee52de9",
+      "regulation/nl/wet/ziektewet/2024-01-01.yaml": "6d4b6768d0141cd0a4ddb9d40505342b5ba61d26",
+      "regulation/nl/wet/ziektewet/2025-01-01.yaml": "aec8e0ac276210662b208dea0517a432d2783adf",
+      "regulation/nl/wet/ziektewet/2026-07-01.yaml": "eaefe4c861f897d822535e29818b2eff01a12982"
+    }
+  },
+  "contract": "1.0.0"
+}

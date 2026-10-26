@@ -17,6 +17,9 @@ Beslissingen rond de Digitale Assistent. Lees de PDRs in volgorde — elke nieuw
 | [PDR-013](PDR-013-timeoutgrenzen-op-basis-van-meting.md) | Time-outgrenzen op basis van meting, met levensteken en herkansingen | Geaccepteerd |
 | [PDR-015](PDR-015-bronnen-standaard-aan-en-tools-na-akkoord.md) | Bronnen staan standaard aan, uitzetten is een woord, en tools die akkoord vergen staan pas na het akkoord in de lijst | Geaccepteerd |
 | [PDR-016](PDR-016-uitleg-in-gewone-taal-uit-de-beslisgraaf.md) | Uitleg in gewone taal komt uit de beslisgraaf van de regelrecht-engine, als eigen dienst (`/uitleg`) naast het gesprek, met een toets tegen de graaf | Voorgesteld |
+| [PDR-017](PDR-017-bron-en-pinning-van-de-rekenkern.md) | De DA is de bron van de rekenkern in de browser: eigen crate, engine gepind op een commit, corpus opgehaald en getoetst op blobhash, bundel als release-asset | Voorgesteld |
+| [PDR-018](PDR-018-clientcontract-rekenkern.md) | Rekenen gebeurt bij de afnemer volgens een clientcontract met allowlist, beslisgraaf en uitleg, niet via een endpoint | Voorgesteld |
+| [PDR-019](PDR-019-reken-dit-uit-in-het-gesprek.md) | De assistent kan in een gesprek een berekening voorstellen; de browser rekent en de uitkomst gaat alleen terug als de ondernemer dat kiest | Voorgesteld (ontwerp) |
 
 ## Vervangen of ongeldig verklaarde beslissingen
 

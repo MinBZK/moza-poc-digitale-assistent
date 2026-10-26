@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MinBZK/moza-poc-digitale-assistent/services/rekenkern/schema/verzoek.schema.json",
+  "title": "Verzoek aan de rekenkern",
+  "description": "Eén uitkomst van één wet. Alleen de combinaties van de allowlist; zie docs/rekenkern/contract.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "wet",
+    "output",
+    "peildatum",
+    "parameters"
+  ],
+  "properties": {
+    "wet": {
+      "type": "string"
+    },
+    "output": {
+      "type": "string"
+    },
+    "peildatum": {
+      "enum": [
+        "2026-07-01"
+      ]
+    },
+    "parameters": {
+      "type": "object",
+      "description": "Gegevens op naam, zoals het corpus ze declareert.",
+      "additionalProperties": {
+        "type": [
+          "boolean",
+          "number",
+          "string",
+          "null"
+        ]
+      }
+    },
+    "uitleggen": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true,
+      "description": "Extra outputs bij dezelfde uitkomst (bedragen)."
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "wet": {
+          "const": "participatiewet"
+        },
+        "output": {
+          "const": "heeft_recht_op_lks"
+        },
+        "uitleggen": {
+          "items": {
+            "enum": [
+              "hoogte_lks_eurocent_per_maand"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "wet": {
+          "const": "wet_arbeidsongeschiktheidsvoorziening_jonggehandicapten"
+        },
+        "output": {
+          "const": "heeft_recht_op_loondispensatie"
+        },
+        "uitleggen": {
+          "items": {
+            "enum": [
+              "aanspraak_beloning_per_uur_eurocent"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "wet": {
+          "const": "wet_tegemoetkomingen_loondomein"
+        },
+        "output": {
+          "const": "heeft_recht_op_lkv"
+        },
+        "uitleggen": {
+          "items": {
+            "enum": [
+              "hoogte_lkv_per_jaar_eurocent",
+              "categorie_lkv"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "wet": {
+          "const": "ziektewet"
+        },
+        "output": {
+          "const": "heeft_recht_op_no_risk_polis"
+        },
+        "uitleggen": {
+          "items": {
+            "enum": [
+              "duur_no_risk_polis_jaren"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "wet": {
+          "const": "participatiewet"
+        },
+        "output": {
+          "const": "mag_proefplaatsing_aangaan"
+        },
+        "uitleggen": {
+          "items": false
+        }
+      }
+    },
+    {
+      "properties": {
+        "wet": {
+          "const": "participatiewet"
+        },
+        "output": {
+          "const": "heeft_aanspraak_op_begeleiding_op_de_werkplek"
+        },
+        "uitleggen": {
+          "items": false
+        }
+      }
+    },
+    {
+      "properties": {
+        "wet": {
+          "const": "wet_werk_en_inkomen_naar_arbeidsvermogen"
+        },
+        "output": {
+          "const": "mag_jobcoaching_toekennen"
+        },
+        "uitleggen": {
+          "items": {
+            "enum": [
+              "mag_werkplekaanpassing_toekennen"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
