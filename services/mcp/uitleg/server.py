@@ -176,7 +176,7 @@ def _lees(arguments: dict) -> tuple[dict, dict | None]:
         samenvatting = []
     return {
         "graaf": graaf,
-        "regeling": str(arguments.get("regeling") or "").strip()[:120],
+        "regeling": str(arguments.get("regeling") or "").strip()[: uitleg.MAX_REGELING_TEKENS],
         "samenvatting": [str(z)[:400] for z in samenvatting[:12]],
     }, None
 
@@ -187,7 +187,7 @@ async def _verwoord(arguments: dict) -> dict:
         return fout
     if not invoer["regeling"]:
         return {"error": "ONTBREKEND_VELD", "velden": ["regeling"], "message": "Parameter 'regeling' is verplicht."}
-    regels = uitleg.graaf_regels(invoer["graaf"])
+    regels = uitleg.graaf_regels(invoer["graaf"], invoer["samenvatting"])
     prompt = uitleg.bouw_prompt(regels, invoer["regeling"], invoer["samenvatting"])
     if len(prompt) > uitleg.MAX_VRAAG_TEKENS:
         return {
@@ -237,7 +237,7 @@ def _toets(arguments: dict) -> dict:
     tekst = str(arguments.get("tekst") or "")
     if not tekst.strip():
         return {"error": "ONTBREKEND_VELD", "velden": ["tekst"], "message": "Parameter 'tekst' is verplicht."}
-    regels = uitleg.graaf_regels(invoer["graaf"])
+    regels = uitleg.graaf_regels(invoer["graaf"], invoer["samenvatting"])
     return uitleg.toets(tekst, regels, invoer["samenvatting"]).als_dict()
 
 
@@ -245,7 +245,7 @@ def _regels(arguments: dict) -> dict:
     invoer, fout = _lees(arguments)
     if fout:
         return fout
-    regels = uitleg.graaf_regels(invoer["graaf"])
+    regels = uitleg.graaf_regels(invoer["graaf"], invoer["samenvatting"])
     return {
         "regels": regels,
         "prompt": uitleg.bouw_prompt(regels, invoer["regeling"] or "de regeling", invoer["samenvatting"]),

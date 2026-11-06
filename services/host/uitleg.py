@@ -13,7 +13,7 @@ wetsartikel genoemd is.
 Drie stappen, elk los te gebruiken en te testen:
 
 1. `graaf_regels()`  -- de graaf als ingesprongen regels (diepte-eerst, alleen
-   de doorslaggevende knopen, begrensd in aantal en diepte).
+   de doorslaggevende knopen met hun drempels, zo diep als in het prompt past).
 2. `bouw_prompt()`   -- de regels in een prompt met de spelregels voor het model.
 3. `toets()`         -- de tekst van het model tegen de graaf.
 
@@ -27,6 +27,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import partial
 from typing import TYPE_CHECKING
@@ -44,12 +45,34 @@ logger = logging.getLogger("uitleg")
 # Dezelfde grens als `config.MAX_VRAAG_TEKENS`.
 MAX_VRAAG_TEKENS = int(os.getenv("MAX_VRAAG_TEKENS", "4000"))
 
-# Grenzen op de graaf: dieper dan dit zegt een ondernemer niets meer, en meer
-# regels passen niet binnen MAX_VRAAG_TEKENS zonder de instructies te raken.
+# Grenzen op de graaf. `graaf_regels` gaat zo diep als binnen MAX_REGELS en de
+# ruimte die het prompt naast regeling en samenvatting laat past, zodat elke
+# tak haar top houdt en de drempels onderin meekomen zolang er ruimte is;
+# MAX_DIEPTE is alleen de harde bovengrens.
 MAX_REGELS = 60
-MAX_DIEPTE = 6
+MAX_DIEPTE = 20
+# De afnemers (endpoint, MCP-server) kappen de naam van de regeling hierop af.
+# De ruimte rekent met dit maximum, zodat de regels niet van de naam afhangen
+# en de toets dezelfde regels ziet als het model.
+MAX_REGELING_TEKENS = 120
 # Een uitleg is kort; meer tokens nodigt uit tot bijverzinnen.
 MAX_UITLEG_TOKENS = 600
+
+
+def _temperature_uit(waarde: str) -> float | None:
+    """Een temperature uit de omgeving; leeg of onleesbaar betekent: niet meesturen."""
+    try:
+        return float(waarde) if waarde.strip() else None
+    except ValueError:
+        logger.warning("UITLEG_VLAM_TEMPERATURE is geen getal; uitleg zonder temperature.")
+        return None
+
+
+# Lage temperature zoals in de Graph-conditie van het paper: minder variatie
+# tussen twee uitleggen van dezelfde graaf. Alleen voor VLAM: de huidige
+# Claude-modellen weigeren `temperature` met een 400. Leeg zetten voor een
+# VLAM-model dat de parameter niet accepteert.
+VLAM_TEMPERATURE = _temperature_uit(os.getenv("UITLEG_VLAM_TEMPERATURE", "0.2"))
 
 # Woorden die een graaf-knoop beschrijven; alles daarbuiten in een knoop is
 # data van de engine en gaat niet mee (geen url's, geen citaties).
@@ -70,17 +93,32 @@ def _eenheid(knoop: dict) -> str | None:
     eenheid = knoop.get("eenheid")
     if eenheid:
         return str(eenheid)
-    if "eurocent" in str(knoop.get("naam") or ""):
+    naam = str(knoop.get("naam") or "")
+    if "eurocent" in naam:
         return "eurocent"
+    if "percentage" in naam:
+        return "procent"
     return None
 
 
-def _waarde_tekst(knoop: dict) -> str | None:
+# Operatoren waarvan de operanden dezelfde eenheid hebben. Een vaste waarde uit
+# de wet (een `letterlijk`) draagt zelf geen eenheid; naast een bedrag in een
+# vergelijking is ze een bedragsgrens. Bij vermenigvuldigen en delen is ze een
+# factor, en daar klopt die afleiding niet.
+_ZELFDE_EENHEID = frozenset({
+    "EQUALS", "NOT_EQUALS", "GREATER_THAN", "GREATER_THAN_OR_EQUAL",
+    "LESS_THAN", "LESS_THAN_OR_EQUAL", "MIN", "MAX", "ADD", "SUBTRACT",
+})
+
+
+def _waarde_tekst(knoop: dict, eenheid: str | None = None) -> str | None:
     """De waarde voor de regel, of None als die de lezer niets zegt.
 
     Een tussenresultaat van een operator (DIVIDE = 89740.8) heeft geen naam en
-    geen eenheid; het model kan er alleen een verzonnen getal van maken. De
-    ja/nee van een voorwaarde of keuze blijft: die zegt welke tak gold.
+    geen eenheid; het model kan er alleen een verzonnen getal van maken. Een
+    vaste waarde uit de wet blijft wel: dat is de drempel waartegen een
+    voorwaarde is getoetst. De ja/nee van een voorwaarde of keuze blijft: die
+    zegt welke tak gold.
     """
     waarde = knoop.get("waarde")
     if waarde is True:
@@ -89,11 +127,37 @@ def _waarde_tekst(knoop: dict) -> str | None:
         return "nee"
     if waarde is None:
         return "geen waarde"
-    if not knoop.get("naam") and isinstance(waarde, int | float):
+    getal = isinstance(waarde, int | float)
+    if getal and not knoop.get("naam") and knoop.get("soort") != "letterlijk":
         return None
-    if _eenheid(knoop) == "eurocent":
+    eenheid = _eenheid(knoop) or eenheid
+    if getal and eenheid == "eurocent":
         return _euro(waarde)
+    if getal and eenheid == "procent":
+        return f"{waarde:g}".replace(".", ",") + "%"
     return str(waarde)
+
+
+def _vouw(knoop: dict) -> dict:
+    """Een gegeven uit een eerdere stap en de uitkomst van die stap als één knoop.
+
+    De engine legt een berekend gegeven vast als gegeven met daaronder de
+    uitkomst van dezelfde naam. Voor de lezer is dat één feit; als twee regels
+    kost het per stap een niveau diepte, en dan valt de rest van de afleiding
+    onder `MAX_DIEPTE` weg.
+    """
+    kinderen = knoop.get("doorslaggevend") or []
+    if knoop.get("soort") != "gegeven" or len(kinderen) != 1:
+        return knoop
+    (stap,) = kinderen
+    if stap.get("soort") != "uitkomst" or stap.get("naam") != knoop.get("naam"):
+        return knoop
+    return {
+        **knoop,
+        "grond": knoop.get("grond") or stap.get("grond"),
+        "eenheid": knoop.get("eenheid") or stap.get("eenheid"),
+        "doorslaggevend": stap.get("doorslaggevend") or [],
+    }
 
 
 def _grond_tekst(knoop: dict) -> str:
@@ -126,24 +190,57 @@ def graaf_geldig(graaf: object) -> bool:
     return isinstance(kinderen, list) and all(graaf_geldig(k) for k in kinderen)
 
 
-def graaf_regels(graaf: dict) -> list[str]:
-    """De graaf als ingesprongen regels: diepte-eerst, alleen doorslaggevende knopen."""
+def graaf_regels(graaf: dict, samenvatting: Sequence[str] = ()) -> list[str]:
+    """De graaf als ingesprongen regels: diepte-eerst, alleen doorslaggevende knopen.
+
+    Geef de samenvatting mee die ook in het prompt komt: die bepaalt hoeveel
+    ruimte er voor de graaf overblijft.
+    """
+    ruimte = MAX_VRAAG_TEKENS - MAX_REGELING_TEKENS - len(bouw_prompt([], "", samenvatting))
+    beste = _regels_tot(graaf, 1)
+    for diepte in range(2, MAX_DIEPTE + 1):
+        regels = _regels_tot(graaf, diepte)
+        if len(regels) > MAX_REGELS or sum(len(r) + 1 for r in regels) > ruimte:
+            break
+        if len(regels) == len(beste):
+            # Dieper dan de graaf zelf: niets meer te winnen.
+            break
+        beste = regels
+    return beste
+
+
+def _regels_tot(graaf: dict, max_diepte: int) -> list[str]:
     regels: list[str] = []
 
-    def loop(knoop: dict, diepte: int) -> None:
-        if len(regels) >= MAX_REGELS or diepte > MAX_DIEPTE:
+    def loop(knoop: dict, diepte: int, buur_eenheid: str | None) -> None:
+        if len(regels) >= MAX_REGELS or diepte > max_diepte:
+            return
+        knoop = _vouw(knoop)
+        if knoop.get("soort") == "keuze" and knoop.get("operator") == "IF":
+            # De IF zelf zegt niets wat de gekozen tak eronder niet zegt.
+            for kind in knoop.get("doorslaggevend") or []:
+                loop(kind, diepte, buur_eenheid)
             return
         soort = str(knoop.get("soort", "stap"))
-        naam = knoop.get("naam") or knoop.get("operator") or soort
-        waarde = _waarde_tekst(knoop)
-        regels.append(
-            f"{'  ' * diepte}- {soort}: {naam}{'' if waarde is None else f' = {waarde}'}"
-            f"{_grond_tekst(knoop)}{_herkomst_tekst(knoop)}"
-        )
-        for kind in knoop.get("doorslaggevend") or []:
-            loop(kind, diepte + 1)
+        waarde = _waarde_tekst(knoop, buur_eenheid if soort == "letterlijk" else None)
+        if soort == "letterlijk":
+            kop = f"- letterlijk = {waarde}"
+        else:
+            naam = knoop.get("naam") or knoop.get("operator") or soort
+            kop = f"- {soort}: {naam}{'' if waarde is None else f' = {waarde}'}"
+        regels.append(f"{'  ' * diepte}{kop}{_grond_tekst(knoop)}{_herkomst_tekst(knoop)}")
 
-    loop(graaf, 0)
+        kinderen = [_vouw(k) for k in knoop.get("doorslaggevend") or []]
+        eenheid = None
+        if knoop.get("operator") in _ZELFDE_EENHEID:
+            eenheid = next(
+                (e for k in kinderen if k.get("soort") != "letterlijk" and (e := _eenheid(k))),
+                None,
+            )
+        for kind in kinderen:
+            loop(kind, diepte + 1, eenheid)
+
+    loop(graaf, 0, None)
     return regels
 
 
@@ -162,6 +259,8 @@ SYSTEEMPROMPT = (
     "- Noem elke voorwaarde die voldaan is en elke voorwaarde die niet voldaan is.\n"
     "- Noem bedragen en percentages precies zoals ze in de graaf staan.\n"
     "- Een berekening MAX kiest het hoogste bedrag, MIN het laagste; draai dat niet om.\n"
+    "- Een regel 'letterlijk' is een vaste waarde uit de wet, zoals een termijn of "
+    "een grens. Noem een grens alleen als die in de graaf staat.\n"
     "- Hoogstens 120 woorden, geen opsommingstekens, geen kopjes.\n"
     "- Eindig met het wetsartikel waarop de uitkomst rust, bijvoorbeeld "
     "'(artikel 10d Participatiewet)'.\n"
@@ -169,7 +268,7 @@ SYSTEEMPROMPT = (
 )
 
 
-def bouw_prompt(regels: list[str], regeling: str, samenvatting: list[str]) -> str:
+def bouw_prompt(regels: list[str], regeling: str, samenvatting: Sequence[str]) -> str:
     """Het gebruikersbericht: de regeling, de graaf en de korte samenvatting van de kern."""
     delen = [f'Regeling: "{regeling}".', "", "Beslisgraaf (uitkomst bovenaan):"]
     delen.extend(regels)
@@ -341,7 +440,7 @@ async def verwoord(
     from errors import maak_fout
     from vlam_host import _geen_sleutel_fout, _llm_aanroep
 
-    regels = graaf_regels(graaf)
+    regels = graaf_regels(graaf, samenvatting)
     prompt = bouw_prompt(regels, regeling, samenvatting)
     if len(prompt) > MAX_VRAAG_TEKENS:
         return maak_fout("UITLEG_GRAAF_TE_GROOT", maximum=f"{MAX_VRAAG_TEKENS} tekens")
@@ -353,10 +452,12 @@ async def verwoord(
         if backend == "vlam":
             if not vlam:
                 return _geen_sleutel_fout("vlam")
+            sampling = {} if VLAM_TEMPERATURE is None else {"temperature": VLAM_TEMPERATURE}
             aanroep = partial(
                 vlam.chat.completions.create,
                 model=VLAM_MODEL_ID,
                 max_tokens=MAX_UITLEG_TOKENS,
+                **sampling,
                 messages=[
                     {"role": "system", "content": SYSTEEMPROMPT},
                     {"role": "user", "content": prompt},
@@ -473,7 +574,7 @@ def _cli(argv: list[str]) -> int:
             file=sys.stderr,
         )
         return 2
-    regels = graaf_regels(verzoek["graaf"])
+    regels = graaf_regels(verzoek["graaf"], verzoek["samenvatting"])
 
     if args.opdracht == "verzoek":
         uit = verzoek
