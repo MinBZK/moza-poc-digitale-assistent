@@ -59,9 +59,86 @@ def test_graaf_regels_laat_tussenresultaten_van_operatoren_weg():
     assert any(r.strip() == "- keuze: CASE_0 = nee" for r in regels)
 
 
+def test_graaf_regels_voegt_een_gegeven_en_zijn_eigen_uitkomst_samen():
+    """Een gegeven uit een eerdere stap staat er één keer, met de grond van die stap.
+
+    Twee regels voor hetzelfde feit kosten een niveau diepte per stap; dan valt
+    de rest van de afleiding (termijnen, loonwaarde) onder de dieptegrens weg.
+    """
+    regels = uitleg.graaf_regels(RECHT["graaf"])
+    assert not any("uitkomst: heeft_recht_op_lks_lid_2" in r for r in regels)
+    assert (
+        "      - gegeven: heeft_recht_op_lks_lid_2 = ja [grond: participatiewet art. 10d]"
+        in regels
+    )
+
+
+def test_graaf_regels_noemt_de_drempels_uit_de_wet():
+    """De Graph-conditie geeft elke voorwaarde met haar drempel (Bos e.a., JURIX 2026)."""
+    recht = "\n".join(uitleg.graaf_regels(RECHT["graaf"]))
+    # De termijn van zes maanden na de aanvang van de dienstbetrekking.
+    assert "berekening: DATE_ADD = 2026-07-01" in recht
+    assert "- letterlijk = 6" in recht
+    bedrag = "\n".join(uitleg.graaf_regels(BEDRAG["graaf"]))
+    assert "minimumloon_plus_vakantiebijslag_eurocent_per_maand = € 2.523,96" in bedrag
+    assert "loonwaarde_eurocent_per_maand = € 1.514,38" in bedrag
+    assert "grens: normarbeidsduur_uren_per_week = 36" in bedrag
+
+
+def test_graaf_regels_toont_een_percentage_met_procentteken():
+    """Anders keurt de toets "60%" af omdat de graaf alleen "60" kent."""
+    regels = uitleg.graaf_regels(BEDRAG["graaf"])
+    assert any(r.strip() == "- gegeven: loonwaarde_percentage = 60%" for r in regels)
+    assert uitleg.toets("Uw werknemer heeft een loonwaarde van 60% (artikel 10d).", regels).geslaagd
+
+
+@pytest.mark.parametrize(
+    ("operator", "verwacht"),
+    [
+        # Vergelijken en optellen: de vaste waarde heeft de eenheid van wat ernaast staat.
+        ("GREATER_THAN", "- letterlijk = € 35.000,00"),
+        ("MIN", "- letterlijk = € 35.000,00"),
+        # Vermenigvuldigen: de vaste waarde is een factor, geen bedrag.
+        ("MULTIPLY", "- letterlijk = 3500000"),
+    ],
+)
+def test_graaf_regels_geeft_een_vaste_waarde_de_eenheid_van_haar_buren(operator, verwacht):
+    graaf = {
+        "soort": "voorwaarde", "operator": operator, "waarde": True,
+        "doorslaggevend": [
+            {"soort": "gegeven", "naam": "inkomen_eurocent", "waarde": 3000000},
+            {"soort": "letterlijk", "waarde": 3500000},
+        ],
+    }
+    regels = uitleg.graaf_regels(graaf)
+    assert regels[-1].strip() == verwacht
+
+
+@pytest.mark.parametrize(
+    ("waarde", "verwacht"),
+    [(None, "- letterlijk = geen waarde"), (True, "- letterlijk = ja"), ("2026-01-01", "- letterlijk = 2026-01-01")],
+)
+def test_graaf_regels_toont_elke_vaste_waarde(waarde, verwacht):
+    graaf = {"soort": "voorwaarde", "operator": "EQUALS", "waarde": False,
+             "doorslaggevend": [{"soort": "letterlijk", "waarde": waarde}]}
+    assert uitleg.graaf_regels(graaf)[1].strip() == verwacht
+
+
+def test_graaf_regels_neemt_de_hele_lks_afleiding_mee_binnen_de_vraaggrens():
+    """Na het samenvoegen past de afleiding tot aan de invoer binnen de grenzen."""
+    for geval in (RECHT, BEDRAG):
+        regels = uitleg.graaf_regels(geval["graaf"], geval["samenvatting"])
+        assert len(regels) <= uitleg.MAX_REGELS
+        prompt = uitleg.bouw_prompt(regels, "Loonkostensubsidie", geval["samenvatting"])
+        assert len(prompt) <= MAX_VRAAG_TEKENS
+    bedrag = "\n".join(uitleg.graaf_regels(BEDRAG["graaf"], BEDRAG["samenvatting"]))
+    assert "loonwaarde_percentage = 60%" in bedrag
+    assert "overeengekomen_arbeidsduur_uren_per_week = 32" in bedrag
+
+
 def test_graaf_regels_blijft_binnen_de_grenzen():
     diep = {"soort": "gegeven", "waarde": 1, "doorslaggevend": []}
-    for _ in range(12):
+    for _ in range(uitleg.MAX_DIEPTE + 10):
         diep = {"soort": "voorwaarde", "waarde": True, "doorslaggevend": [diep]}
     assert len(uitleg.graaf_regels(diep)) == uitleg.MAX_DIEPTE + 1
     breed = {
@@ -216,6 +293,68 @@ async def test_verwoord_stuurt_alleen_de_graaf_zonder_tools(monkeypatch):
     assert aanroep["system"] == uitleg.SYSTEEMPROMPT
     assert aanroep["messages"][0]["content"].startswith('Regeling: "Loonkostensubsidie"')
     assert "€ 897,41" in aanroep["messages"][0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_verwoord_stuurt_geen_temperature_naar_claude(monkeypatch):
+    """De huidige Claude-modellen weigeren `temperature` met een 400."""
+    nep = _met_nep_claude(monkeypatch, "U krijgt € 897,41 per maand (artikel 10d).")
+    await uitleg.verwoord(
+        api.host, graaf=BEDRAG["graaf"], regeling="Loonkostensubsidie",
+        samenvatting=BEDRAG["samenvatting"], mode="claude",
+    )
+    (aanroep,) = nep.ontvangen
+    assert "temperature" not in aanroep
+
+
+class _NepVlam:
+    """Een OpenAI-compatibele client die de aanroep onthoudt."""
+
+    def __init__(self, tekst: str):
+        self.tekst = tekst
+        self.ontvangen: list[dict] = []
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+
+    async def _create(self, **kwargs):
+        self.ontvangen.append(kwargs)
+        bericht = SimpleNamespace(content=self.tekst)
+        return SimpleNamespace(choices=[SimpleNamespace(message=bericht)], usage=None)
+
+
+def _met_nep_vlam(monkeypatch, tekst: str) -> _NepVlam:
+    from contextlib import asynccontextmanager
+
+    nep = _NepVlam(tekst)
+
+    @asynccontextmanager
+    async def _clients(self, vlam_api_key_override="", claude_api_key_override="", mode=""):
+        yield None, nep
+
+    monkeypatch.setattr(type(api.host), "_request_clients", _clients)
+    return nep
+
+
+@pytest.mark.parametrize(("instelling", "verwacht"), [(0.2, 0.2), (None, None)])
+@pytest.mark.asyncio
+async def test_verwoord_stuurt_de_lage_temperature_naar_vlam(monkeypatch, instelling, verwacht):
+    """Lage temperature zoals in de Graph-conditie; uit te zetten voor een model dat haar weigert."""
+    monkeypatch.setattr(uitleg, "VLAM_TEMPERATURE", instelling)
+    nep = _met_nep_vlam(monkeypatch, "U krijgt € 897,41 per maand (artikel 10d).")
+    resultaat = await uitleg.verwoord(
+        api.host, graaf=BEDRAG["graaf"], regeling="Loonkostensubsidie",
+        samenvatting=BEDRAG["samenvatting"], mode="vlam",
+    )
+    assert isinstance(resultaat, uitleg.Uitleg)
+    (aanroep,) = nep.ontvangen
+    assert aanroep.get("temperature") == verwacht
+    assert ("temperature" in aanroep) is (verwacht is not None)
+
+
+@pytest.mark.parametrize(
+    ("waarde", "verwacht"), [("", None), ("0.2", 0.2), ("0", 0.0), ("geen getal", None)]
+)
+def test_vlam_temperature_uit_de_omgeving(waarde, verwacht):
+    assert uitleg._temperature_uit(waarde) == verwacht
 
 
 @pytest.mark.asyncio

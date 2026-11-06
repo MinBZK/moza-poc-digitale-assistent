@@ -600,7 +600,7 @@ async def uitleg(body: UitlegRequest, request: Request):
     resultaat = await uitleg_module.verwoord(
         host,
         graaf=body.graaf,
-        regeling=body.regeling.strip()[:120],
+        regeling=body.regeling.strip()[: uitleg_module.MAX_REGELING_TEKENS],
         samenvatting=[str(z)[:400] for z in body.samenvatting[:12]],
         mode=mode,
         **api_keys,
