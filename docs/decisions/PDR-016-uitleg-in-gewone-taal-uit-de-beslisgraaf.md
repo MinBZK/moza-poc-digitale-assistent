@@ -85,9 +85,32 @@ prompt moeten kopiëren.
 
 - Het portaal stuurt de graaf en de samenvatting, niet een prompt. De
   frontendcode wordt kleiner en kent geen modelinstructies meer.
-- De prompt-grens `MAX_VRAAG_TEKENS` geldt ook hier. De graaf wordt diepte-eerst
-  ingekort tot zestig regels en zes niveaus; past hij dan nog niet, dan komt
-  `UITLEG_GRAAF_TE_GROOT` terug en toont het portaal alleen de afleiding.
+- De prompt-grens `MAX_VRAAG_TEKENS` geldt ook hier. De graaf gaat zo diep
+  mee als binnen zestig regels en de ruimte naast regeling en samenvatting
+  past, zodat elke tak haar top houdt; past ook het eerste niveau niet, dan
+  komt `UITLEG_GRAAF_TE_GROOT` terug en toont het portaal alleen de
+  afleiding. Een berekend gegeven en de uitkomst van zijn eigen stap staan als
+  één regel, en een `IF` zonder eigen inhoud vervalt; anders kost elke stap
+  twee niveaus en vallen de drempels onderin weg.
+- Ten opzichte van de Graph-conditie uit het paper:
+  - *Gelijk:* alleen de graaf en een beperkt prompt, doorslaggevende
+    voorwaarden expliciet, bedragen in de vorm van de engine, de wet als
+    grond bij elke stap, leesbaarheid als Flesch-Douma.
+  - *Drempels:* vaste waarden uit de wet (`letterlijk`, zoals de termijn van
+    zes maanden) gaan mee, met de eenheid van wat ernaast staat in een
+    vergelijking of optelling. Het paper geeft *alle* geëvalueerde
+    voorwaarden; de kern van regelrecht-uitleg levert alleen de
+    doorslaggevende. Daardoor ontbreekt de niet-gekozen kant van een MIN of
+    MAX (bij loonkostensubsidie: het maximum van € 2.208,47 staat alleen in
+    de samenvatting). Dat hoort in de kern, niet in de host.
+  - *Temperature:* laag (0,2) voor VLAM, instelbaar met
+    `UITLEG_VLAM_TEMPERATURE`. Voor Claude niet mogelijk: de huidige modellen
+    weigeren de parameter met een 400. De variatie tussen twee Claude-teksten
+    is daarom groter dan in het paper.
+  - *Toets:* de toets zoekt wat de tekst te veel zegt (bedragen,
+    percentages, een omgedraaide rekenstap); het paper zoekt wat de tekst
+    moet zeggen (uitkomst, bedrag, doorslaggevende voorwaarde). Die tweede
+    richting en de betwistbaarheid (wat-als, volgende stap) ontbreken nog.
 - De graaf bevat waarden, namen van variabelen en artikelnummers, geen
   persoonsgegevens. Het KVK-nummer uit de sessie wordt niet aan het model
   gegeven.
