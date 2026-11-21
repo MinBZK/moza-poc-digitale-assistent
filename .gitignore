@@ -54,3 +54,7 @@ node_modules/
 
 # Next steps set-up repo
 NEXT_STEPS.md
+
+# Rekenkern: build-uitvoer en opgehaald corpus (wet-YAML komt niet in git)
+services/rekenkern/target/
+services/rekenkern/.bron/

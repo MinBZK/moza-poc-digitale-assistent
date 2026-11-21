@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MinBZK/moza-poc-digitale-assistent/services/rekenkern/schema/keuzes.schema.json",
+  "title": "Antwoorden op de vier vragen van de oriëntatie iemand aannemen",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "doelgroepen",
+    "uren",
+    "loonwaarde",
+    "uurloon"
+  ],
+  "properties": {
+    "doelgroepen": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "register",
+          "wajong",
+          "wia",
+          "bijstand",
+          "wsw",
+          "beschut",
+          "geen"
+        ]
+      }
+    },
+    "uren": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 168
+    },
+    "loonwaarde": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "uurloon": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Bruto uurloon in eurocent."
+    }
+  }
+}

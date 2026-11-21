@@ -1,0 +1,933 @@
+{
+ "bron": "services/rekenkern, orienteer Koen (bijstand, 32 uur, loonwaarde 60), corpus regelrecht-corpus-FCV b030cb1",
+ "regeling": "Loonkostensubsidie",
+ "graaf": {
+  "beslissingen": [
+   "participatiewet#heeft_recht_op_lks",
+   "participatiewet#hoogte_lks_eurocent_per_maand"
+  ],
+  "knopen": [
+   {
+    "id": "participatiewet#heeft_recht_op_lks",
+    "soort": "decision",
+    "naam": "heeft_recht_op_lks",
+    "omschrijving": "Lid 1 of lid 2, met inachtneming van de uitsluiting van lid 3. De twee leden zijn zelfstandige grondslagen.",
+    "waarde": true,
+    "status": "ja"
+   },
+   {
+    "id": "law:participatiewet:10d:",
+    "soort": "law",
+    "naam": "artikel 10d",
+    "vindplaats": {
+     "wet": "participatiewet",
+     "artikel": "10d",
+     "url": "https://wetten.overheid.nl/BWBR0015703/2026-07-01#Artikel10d",
+     "geldig_vanaf": "2026-07-01"
+    }
+   },
+   {
+    "id": "participatiewet#heeft_recht_op_lks_lid_2",
+    "soort": "rule",
+    "naam": "heeft_recht_op_lks_lid_2",
+    "omschrijving": "Lid 2: het college verleent op aanvraag binnen zes maanden na het begin van de dienstbetrekking, na vaststelling dat de persoon met voltijdse arbeid het minimumloon niet kan verdienen en aan onderdeel a, b of c is voldaan.",
+    "waarde": true,
+    "status": "ja"
+   },
+   {
+    "id": "fact:behoort_tot_doelgroep_lks",
+    "soort": "fact",
+    "naam": "behoort_tot_doelgroep_lks",
+    "omschrijving": "Artikel 10da: behoort tot de doelgroep loonkostensubsidie. Doorgegeven aan artikel 10da, dat de aanspraak op begeleiding op de werkplek toekent. Bron: gemeente.",
+    "waarde": true,
+    "bron": "invoer"
+   },
+   {
+    "id": "fact:kan_minimumloon_niet_verdienen",
+    "soort": "fact",
+    "naam": "kan_minimumloon_niet_verdienen",
+    "omschrijving": "Artikel 10d lid 2: college heeft vastgesteld dat persoon met voltijdse arbeid niet in staat is tot het verdienen van het wettelijk minimumloon.",
+    "waarde": true,
+    "bron": "invoer"
+   },
+   {
+    "id": "participatiewet#aanvraag_lks_binnen_zes_maanden",
+    "soort": "rule",
+    "naam": "aanvraag_lks_binnen_zes_maanden",
+    "omschrijving": "Lid 2: de aanvraag is gedaan binnen zes maanden na het begin van de dienstbetrekking.",
+    "waarde": true,
+    "status": "ja"
+   },
+   {
+    "id": "law:participatiewet:10d:2",
+    "soort": "law",
+    "naam": "artikel 10d lid 2",
+    "vindplaats": {
+     "wet": "participatiewet",
+     "wetnaam": "Participatiewet",
+     "artikel": "10d",
+     "lid": "2",
+     "url": "https://wetten.overheid.nl/BWBR0015703/2026-07-01#Artikel10d",
+     "geldig_vanaf": "2026-07-01",
+     "toelichting": "\"op aanvraag van de werkgever of werknemer, gedaan binnen zes\nmaanden na het begin van de dienstbetrekking\": op of na de\naanvang, en uiterlijk zes maanden erna. Zonder aanvraagdatum\nof aanvangsdatum is niet voldaan."
+    }
+   },
+   {
+    "id": "participatiewet#aanvraag_lks_binnen_zes_maanden/n5.0.0.0.0",
+    "soort": "rule",
+    "naam": "datum_aanvraag_lks = leeg",
+    "waarde": false,
+    "status": "nee",
+    "vergelijking": {
+     "operator": "=",
+     "operanden": [
+      {
+       "naam": "datum_aanvraag_lks",
+       "waarde": "2026-02-01",
+       "letterlijk": false
+      },
+      {
+       "waarde": null,
+       "letterlijk": true
+      }
+     ]
+    }
+   },
+   {
+    "id": "fact:datum_aanvraag_lks",
+    "soort": "fact",
+    "naam": "datum_aanvraag_lks",
+    "omschrijving": "Artikel 10d lid 2: de dag waarop de werkgever of werknemer de aanvraag om loonkostensubsidie deed. Afwezig zonder aanvraag. Bron: gemeente.",
+    "waarde": "2026-02-01",
+    "bron": "invoer"
+   },
+   {
+    "id": "participatiewet#aanvraag_lks_binnen_zes_maanden/n5.0.0.0.1",
+    "soort": "rule",
+    "naam": "datum_aanvang_dienstbetrekking = leeg",
+    "waarde": false,
+    "status": "nee",
+    "vergelijking": {
+     "operator": "=",
+     "operanden": [
+      {
+       "naam": "datum_aanvang_dienstbetrekking",
+       "waarde": "2026-01-01",
+       "letterlijk": false
+      },
+      {
+       "waarde": null,
+       "letterlijk": true
+      }
+     ]
+    }
+   },
+   {
+    "id": "fact:datum_aanvang_dienstbetrekking",
+    "soort": "fact",
+    "naam": "datum_aanvang_dienstbetrekking",
+    "omschrijving": "Aanvang van de dienstbetrekking. Lid 5, eerste zin, begrenst de 50%-regel tot maximaal de eerste zes maanden daarvan. Bron: werkgever / polisadministratie.",
+    "waarde": "2026-01-01",
+    "bron": "invoer"
+   },
+   {
+    "id": "participatiewet#aanvraag_lks_binnen_zes_maanden/n5.0.1.0.0",
+    "soort": "rule",
+    "naam": "datum_aanvraag_lks ≥ datum_aanvang_dienstbetrekking",
+    "waarde": true,
+    "status": "ja",
+    "vergelijking": {
+     "operator": "≥",
+     "operanden": [
+      {
+       "naam": "datum_aanvraag_lks",
+       "waarde": "2026-02-01",
+       "letterlijk": false
+      },
+      {
+       "naam": "datum_aanvang_dienstbetrekking",
+       "waarde": "2026-01-01",
+       "letterlijk": false
+      }
+     ]
+    }
+   },
+   {
+    "id": "participatiewet#aanvraag_lks_binnen_zes_maanden/n5.0.1.0.1",
+    "soort": "rule",
+    "naam": "datum_aanvraag_lks ≤ berekening",
+    "waarde": true,
+    "status": "ja",
+    "vergelijking": {
+     "operator": "≤",
+     "operanden": [
+      {
+       "naam": "datum_aanvraag_lks",
+       "waarde": "2026-02-01",
+       "letterlijk": false
+      },
+      {
+       "waarde": "2026-07-01",
+       "letterlijk": false
+      }
+     ]
+    }
+   },
+   {
+    "id": "participatiewet#voorafgaand_relevante_onderwijsroute_of_doelgroep",
+    "soort": "rule",
+    "naam": "voorafgaand_relevante_onderwijsroute_of_doelgroep",
+    "omschrijving": "Lid 2 onderdelen a, b en c: in de zes maanden voorafgaand aan de dienstbetrekking een van de drie routes.",
+    "waarde": true,
+    "status": "ja"
+   },
+   {
+    "id": "participatiewet#voorafgaand_relevante_onderwijsroute_of_doelgroep/n4.0.1.0.0.0",
+    "soort": "rule",
+    "naam": "datum_laatst_persoon_7_lid_1_a_of_7a_lid_2_b = leeg",
+    "waarde": false,
+    "status": "nee",
+    "vergelijking": {
+     "operator": "=",
+     "operanden": [
+      {
+       "naam": "datum_laatst_persoon_7_lid_1_a_of_7a_lid_2_b",
+       "waarde": "2025-12-31",
+       "letterlijk": false
+      },
+      {
+       "waarde": null,
+       "letterlijk": true
+      }
+     ]
+    }
+   },
+   {
+    "id": "fact:datum_laatst_persoon_7_lid_1_a_of_7a_lid_2_b",
+    "soort": "fact",
+    "naam": "datum_laatst_persoon_7_lid_1_a_of_7a_lid_2_b",
+    "omschrijving": "Artikel 10d lid 2 onderdeel b: de laatste dag waarop de persoon een persoon was als bedoeld in artikel 7 lid 1 onderdeel a of artikel 7a lid 1 onderdeel a. Was hij dat tot de aanvang van de dienstbetrekking, dan de dag vóór die aanvang. Afwezig als hij dat nooit was. Het model toetst of die dag in de zes maanden voorafgaand aan de dienstbetrekking valt, zoals bij onderdeel a. Bron: gemeente.",
+    "waarde": "2025-12-31",
+    "bron": "invoer"
+   },
+   {
+    "id": "participatiewet#voorafgaand_relevante_onderwijsroute_of_doelgroep/n4.0.1.0.0.1",
+    "soort": "rule",
+    "naam": "datum_aanvang_dienstbetrekking = leeg",
+    "waarde": false,
+    "status": "nee",
+    "vergelijking": {
+     "operator": "=",
+     "operanden": [
+      {
+       "naam": "datum_aanvang_dienstbetrekking",
+       "waarde": "2026-01-01",
+       "letterlijk": false
+      },
+      {
+       "waarde": null,
+       "letterlijk": true
+      }
+     ]
+    }
+   },
+   {
+    "id": "participatiewet#voorafgaand_relevante_onderwijsroute_of_doelgroep/n4.0.1.1.0",
+    "soort": "rule",
+    "naam": "datum_laatst_persoon_7_lid_1_a_of_7a_lid_2_b ≥ berekening",
+    "waarde": true,
+    "status": "ja",
+    "vergelijking": {
+     "operator": "≥",
+     "operanden": [
+      {
+       "naam": "datum_laatst_persoon_7_lid_1_a_of_7a_lid_2_b",
+       "waarde": "2025-12-31",
+       "letterlijk": false
+      },
+      {
+       "waarde": "2025-07-01",
+       "letterlijk": false
+      }
+     ]
+    }
+   },
+   {
+    "id": "participatiewet#is_uitgesloten_lid_3",
+    "soort": "rule",
+    "naam": "is_uitgesloten_lid_3",
+    "omschrijving": "Lid 3: het eerste en tweede lid zijn niet van toepassing als de arbeid wordt verricht in een dienstbetrekking als bedoeld in de artikelen 2 en 7 van de Wet sociale werkvoorziening.",
+    "waarde": false,
+    "status": "nee"
+   },
+   {
+    "id": "law:participatiewet:10d:3",
+    "soort": "law",
+    "naam": "artikel 10d lid 3",
+    "vindplaats": {
+     "wet": "participatiewet",
+     "wetnaam": "Participatiewet",
+     "artikel": "10d",
+     "lid": "3",
+     "url": "https://wetten.overheid.nl/BWBR0015703/2026-07-01#Artikel10d",
+     "geldig_vanaf": "2026-07-01",
+     "toelichting": "Het eerste en tweede lid zijn niet van toepassing indien\nde arbeid wordt verricht in een dienstbetrekking als\nbedoeld in de artikelen 2 en 7 van de Wet sociale\nwerkvoorziening."
+    }
+   },
+   {
+    "id": "fact:is_wsw_dienstbetrekking",
+    "soort": "fact",
+    "naam": "is_wsw_dienstbetrekking",
+    "omschrijving": "Artikel 10d lid 3: uitsluitingsgrond — dienstbetrekking op grond van artikelen 2 of 7 Wsw.",
+    "waarde": false,
+    "bron": "invoer"
+   },
+   {
+    "id": "participatiewet#hoogte_lks_eurocent_per_maand",
+    "soort": "decision",
+    "naam": "hoogte_lks_eurocent_per_maand",
+    "omschrijving": "Bedrag na de evenredigheidscorrectie naar de overeengekomen arbeidsduur.",
+    "waarde": 89740.8,
+    "eenheid": "eurocent"
+   },
+   {
+    "id": "participatiewet#hoogte_lks_voltijd_eurocent_per_maand",
+    "soort": "calculation",
+    "naam": "hoogte_lks_voltijd_eurocent_per_maand",
+    "omschrijving": "De voor deze dienstbetrekking geldende rekenregel, op de normbasis van 36 uren per week: lid 5 zolang de 50%-route loopt, anders lid 4.",
+    "waarde": 100958.4,
+    "eenheid": "eurocent"
+   },
+   {
+    "id": "participatiewet#volgt_de_vijftig_procent_route",
+    "soort": "rule",
+    "naam": "volgt_de_vijftig_procent_route",
+    "omschrijving": "Lid 5, eerste zin: de subsidie van lid 1 onderdeel b bedraagt gedurende maximaal de eerste zes maanden van de dienstbetrekking 50 procent. Daarna stelt het college de loonwaarde alsnog vast en geldt lid 4 (tweede zin).",
+    "waarde": false,
+    "status": "nee"
+   },
+   {
+    "id": "participatiewet#volgt_de_vijftig_procent_route/n8.0.0.0.0",
+    "soort": "rule",
+    "naam": "vaststelling_loonwaarde_blijft_achterwege = leeg",
+    "waarde": false,
+    "status": "nee",
+    "vergelijking": {
+     "operator": "=",
+     "operanden": [
+      {
+       "naam": "vaststelling_loonwaarde_blijft_achterwege",
+       "waarde": false,
+       "letterlijk": false
+      },
+      {
+       "waarde": null,
+       "letterlijk": true
+      }
+     ]
+    }
+   },
+   {
+    "id": "fact:vaststelling_loonwaarde_blijft_achterwege",
+    "soort": "fact",
+    "naam": "vaststelling_loonwaarde_blijft_achterwege",
+    "omschrijving": "Lid 1 onderdeel b: het college heeft in overleg met de werkgever vastgesteld dat de vaststelling van de loonwaarde achterwege kan blijven. Voert naar de rekenregel van lid 5. Bron: gemeente.",
+    "waarde": false,
+    "bron": "invoer"
+   },
+   {
+    "id": "participatiewet#volgt_de_vijftig_procent_route/n8.0.0.0.1",
+    "soort": "rule",
+    "naam": "datum_aanvang_dienstbetrekking = leeg",
+    "waarde": false,
+    "status": "nee",
+    "vergelijking": {
+     "operator": "=",
+     "operanden": [
+      {
+       "naam": "datum_aanvang_dienstbetrekking",
+       "waarde": "2026-01-01",
+       "letterlijk": false
+      },
+      {
+       "waarde": null,
+       "letterlijk": true
+      }
+     ]
+    }
+   },
+   {
+    "id": "participatiewet#hoogte_lks_lid_4_voltijd_eurocent_per_maand",
+    "soort": "calculation",
+    "naam": "hoogte_lks_lid_4_voltijd_eurocent_per_maand",
+    "omschrijving": "Lid 4, eerste zin — bedrag op de normbasis van 36 uren per week, na toepassing van de 70%-cap.",
+    "waarde": 100958.4,
+    "eenheid": "eurocent"
+   },
+   {
+    "id": "participatiewet#bruto_subsidie_eurocent_per_maand",
+    "soort": "calculation",
+    "naam": "bruto_subsidie_eurocent_per_maand",
+    "omschrijving": "Lid 4 — verschil tussen WML+VB en loonwaarde+VB, vóór toepassing van de 70%-cap.",
+    "waarde": 100958.4,
+    "eenheid": "eurocent"
+   },
+   {
+    "id": "fact:minimumloon_plus_vakantiebijslag_eurocent_per_maand",
+    "soort": "fact",
+    "naam": "minimumloon_plus_vakantiebijslag_eurocent_per_maand",
+    "waarde": 252396.0,
+    "bron": "invoer"
+   },
+   {
+    "id": "participatiewet#loonwaarde_eurocent_per_maand",
+    "soort": "calculation",
+    "naam": "loonwaarde_eurocent_per_maand",
+    "omschrijving": "Lid 4: de loonwaarde vermeerderd met de naar rato geldende vakantiebijslag, als bedrag per maand: het loonwaardepercentage van het minimumloon plus vakantiebijslag.",
+    "waarde": 151437.6,
+    "eenheid": "eurocent"
+   },
+   {
+    "id": "law:participatiewet:10d:4",
+    "soort": "law",
+    "naam": "artikel 10d lid 4",
+    "vindplaats": {
+     "wet": "participatiewet",
+     "wetnaam": "Participatiewet",
+     "artikel": "10d",
+     "lid": "4",
+     "url": "https://wetten.overheid.nl/BWBR0015703/2026-07-01#Artikel10d",
+     "geldig_vanaf": "2026-07-01",
+     "toelichting": "\"de loonwaarde van die persoon vermeerderd met de voor die\npersoon naar rato van de loonwaarde rechtens geldende\nvakantiebijslag\", met artikel 6 lid 1 onderdeel g: de loonwaarde\nis een percentage van het wettelijk minimumloon."
+    }
+   },
+   {
+    "id": "fact:loonwaarde_percentage",
+    "soort": "fact",
+    "naam": "loonwaarde_percentage",
+    "omschrijving": "De vastgestelde loonwaarde. Artikel 6 lid 1 onderdeel g: \"vastgesteld percentage van het wettelijk minimumloon\". De wijze van vaststelling regelt de algemene maatregel van bestuur van artikel 10e lid 1 (vindplaats: Besluit loonkostensubsidie en minimumbedragen studietoeslag Participatiewet 2021, artikel 3); die staat buiten de scope, de loonwaarde is een aangeleverd feit. Bij lid 1 onderdeel b, zonder vaststelling, kan het nul zijn; dan geldt de 50-procentroute. Bron: college.",
+    "waarde": 60,
+    "bron": "invoer"
+   },
+   {
+    "id": "participatiewet#maximum_subsidie_eurocent_per_maand",
+    "soort": "calculation",
+    "naam": "maximum_subsidie_eurocent_per_maand",
+    "omschrijving": "Lid 4 — ten hoogste 70 procent van de grondslag, dus inclusief de vergoeding voor werkgeverslasten.",
+    "waarde": 220846.5,
+    "eenheid": "eurocent"
+   },
+   {
+    "id": "participatiewet#grondslag_maximum_eurocent_per_maand",
+    "soort": "calculation",
+    "naam": "grondslag_maximum_eurocent_per_maand",
+    "omschrijving": "Lid 4 en lid 5: \"het totale bedrag van het wettelijk minimumloon en de aanspraak op vakantiebijslag [...], vermeerderd met een bij ministeriële regeling vastgestelde vergoeding voor werkgeverslasten\". Grondslag voor zowel de 70%-bovengrens van lid 4 als de 50%-regel van lid 5.",
+    "waarde": 315495.0,
+    "eenheid": "eurocent"
+   },
+   {
+    "id": "participatiewet#werkgeverslastenvergoeding_eurocent_per_maand",
+    "soort": "calculation",
+    "naam": "werkgeverslastenvergoeding_eurocent_per_maand",
+    "omschrijving": "Lid 4 en lid 5: de bij ministeriële regeling vastgestelde vergoeding voor werkgeverslasten, als bedrag per maand bij voltijdse arbeid. Regeling loonkostensubsidie Participatiewet 2021, artikel 1: een percentage van de loonkosten waarover loonkostensubsidie wordt verstrekt, hier het minimumloon met vakantiebijslag.",
+    "waarde": 63099.0,
+    "eenheid": "eurocent"
+   },
+   {
+    "id": "law:participatiewet:1:",
+    "soort": "law",
+    "naam": "artikel 1",
+    "vindplaats": {
+     "wet": "participatiewet",
+     "wetnaam": "Regeling loonkostensubsidie Participatiewet 2021",
+     "artikel": "1",
+     "url": "https://wetten.overheid.nl/BWBR0015703/2026-07-01#Artikel1",
+     "geldig_vanaf": "2026-07-01",
+     "toelichting": "\"De vergoeding voor werkgeverslasten [...] bedraagt 25 procent\nvan de loonkosten waarover loonkostensubsidie wordt verstrekt.\"\nDe loonkosten waarover de subsidie wordt verstrekt zijn het\nminimumloon met vakantiebijslag, de term waar lid 4 de\nvergoeding bij optelt. Of \"loonkosten\" hier iets anders omvat,\nis de open vraag van de jurist aan het UWV (actieregister 1.5)."
+    }
+   },
+   {
+    "id": "wet_minimumloon_en_minimumvakantiebijslag#minimumloon_plus_vakantiebijslag_eurocent_per_maand",
+    "soort": "calculation",
+    "naam": "minimumloon_plus_vakantiebijslag_eurocent_per_maand",
+    "omschrijving": "Het minimumloon per maand vermeerderd met de vakantiebijslag daarover. Dit is de grootheid waarnaar Participatiewet 10d lid 4 en lid 5 verwijzen.",
+    "waarde": 252396.0,
+    "eenheid": "eurocent"
+   },
+   {
+    "id": "law:wet_minimumloon_en_minimumvakantiebijslag:15:1",
+    "soort": "law",
+    "naam": "artikel 15 lid 1",
+    "vindplaats": {
+     "wet": "wet_minimumloon_en_minimumvakantiebijslag",
+     "wetnaam": "Wet minimumloon en minimumvakantiebijslag",
+     "artikel": "15",
+     "lid": "1",
+     "url": "https://wetten.overheid.nl/BWBR0002638/2026-07-01#Artikel15",
+     "geldig_vanaf": "2026-07-01",
+     "toelichting": "Het minimumloon per maand plus acht procent vakantiebijslag\ndaarover. Participatiewet 10d lid 4 en lid 5 rekenen met deze\nsom; de Ziektewet gebruikt haar in artikel 29b lid 2 onderdeel e\nlangs de loonkostensubsidie."
+    }
+   },
+   {
+    "id": "wet_minimumloon_en_minimumvakantiebijslag#minimumloon_per_maand_eurocent",
+    "soort": "calculation",
+    "naam": "minimumloon_per_maand_eurocent",
+    "omschrijving": "Lid 1 onderdeel b, met inachtneming van lid 2: het bedrag per uitbetalingstermijn van een maand voor wetten die voor de berekening van uitkeringen of tegemoetkomingen naar deze wet verwijzen.",
+    "waarde": 233700,
+    "eenheid": "eurocent"
+   },
+   {
+    "id": "law:wet_minimumloon_en_minimumvakantiebijslag:8:1",
+    "soort": "law",
+    "naam": "artikel 8 lid 1",
+    "vindplaats": {
+     "wet": "wet_minimumloon_en_minimumvakantiebijslag",
+     "wetnaam": "Wet minimumloon en minimumvakantiebijslag",
+     "artikel": "8",
+     "lid": "1",
+     "url": "https://wetten.overheid.nl/BWBR0002638/2026-07-01#Artikel8",
+     "geldig_vanaf": "2026-07-01",
+     "toelichting": "\"over elke uitbetalingstermijn van een maand € 1.653,60\",\nmet inachtneming van lid 2. Dit is het bedrag waarnaar\nParticipatiewet 10d en Reintegratiebesluit 3 verwijzen."
+    }
+   },
+   {
+    "id": "fact:herzien_minimumloon_per_maand_eurocent",
+    "soort": "fact",
+    "naam": "herzien_minimumloon_per_maand_eurocent",
+    "waarde": 233700,
+    "bron": "wet"
+   },
+   {
+    "id": "fact:vakantiebijslag_percentage",
+    "soort": "fact",
+    "naam": "vakantiebijslag_percentage",
+    "waarde": 8,
+    "bron": "wet"
+   },
+   {
+    "id": "fact:werkgeverslastenvergoeding_percentage",
+    "soort": "fact",
+    "naam": "werkgeverslastenvergoeding_percentage",
+    "waarde": 25,
+    "bron": "wet"
+   },
+   {
+    "id": "fact:maximum_percentage_lid_4",
+    "soort": "fact",
+    "naam": "maximum_percentage_lid_4",
+    "waarde": 70,
+    "bron": "wet"
+   },
+   {
+    "id": "participatiewet#arbeidsduur_voor_evenredigheid_uren_per_week",
+    "soort": "calculation",
+    "naam": "arbeidsduur_voor_evenredigheid_uren_per_week",
+    "omschrijving": "Lid 4 en lid 5, derde respectievelijk vierde zin: de overeengekomen arbeidsduur, ten hoogste de arbeidsduur die in overeenkomstige dienstbetrekkingen in de regel als volledige dienstbetrekking geldt.",
+    "waarde": 32
+   },
+   {
+    "id": "participatiewet#arbeidsduur_voor_evenredigheid_uren_per_week/n17.0.0.0",
+    "soort": "rule",
+    "naam": "gebruikelijke_volledige_dienstbetrekking_uren = leeg",
+    "waarde": true,
+    "status": "ja",
+    "vergelijking": {
+     "operator": "=",
+     "operanden": [
+      {
+       "naam": "gebruikelijke_volledige_dienstbetrekking_uren",
+       "waarde": null,
+       "letterlijk": false
+      },
+      {
+       "waarde": null,
+       "letterlijk": true
+      }
+     ]
+    }
+   },
+   {
+    "id": "fact:gebruikelijke_volledige_dienstbetrekking_uren",
+    "soort": "fact",
+    "naam": "gebruikelijke_volledige_dienstbetrekking_uren",
+    "bron": "wet"
+   },
+   {
+    "id": "fact:overeengekomen_arbeidsduur_uren_per_week",
+    "soort": "fact",
+    "naam": "overeengekomen_arbeidsduur_uren_per_week",
+    "omschrijving": "Lid 4, tweede zin: de overeengekomen arbeidsduur per week. De subsidie wordt naar evenredigheid verminderd of vermeerderd als die afwijkt van 36 uren. De derde zin capt deze waarde op de arbeidsduur die in overeenkomstige dienstbetrekkingen als volledige dienstbetrekking geldt; die sectornorm kent de engine niet (zie untranslatable), dus de aanleveraar levert de reeds gecapte waarde.",
+    "waarde": 32,
+    "bron": "invoer"
+   },
+   {
+    "id": "fact:normarbeidsduur_uren_per_week",
+    "soort": "fact",
+    "naam": "normarbeidsduur_uren_per_week",
+    "waarde": 36,
+    "bron": "wet"
+   }
+  ],
+  "randen": [
+   {
+    "van": "participatiewet#aanvraag_lks_binnen_zes_maanden",
+    "naar": "law:participatiewet:10d:2",
+    "soort": "based_on"
+   },
+   {
+    "van": "participatiewet#aanvraag_lks_binnen_zes_maanden",
+    "naar": "participatiewet#heeft_recht_op_lks_lid_2",
+    "soort": "satisfied"
+   },
+   {
+    "van": "participatiewet#aanvraag_lks_binnen_zes_maanden/n5.0.0.0.0",
+    "naar": "fact:datum_aanvraag_lks",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#aanvraag_lks_binnen_zes_maanden/n5.0.0.0.0",
+    "naar": "participatiewet#aanvraag_lks_binnen_zes_maanden",
+    "soort": "failed"
+   },
+   {
+    "van": "participatiewet#aanvraag_lks_binnen_zes_maanden/n5.0.0.0.1",
+    "naar": "fact:datum_aanvang_dienstbetrekking",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#aanvraag_lks_binnen_zes_maanden/n5.0.0.0.1",
+    "naar": "participatiewet#aanvraag_lks_binnen_zes_maanden",
+    "soort": "failed"
+   },
+   {
+    "van": "participatiewet#aanvraag_lks_binnen_zes_maanden/n5.0.1.0.0",
+    "naar": "fact:datum_aanvang_dienstbetrekking",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#aanvraag_lks_binnen_zes_maanden/n5.0.1.0.0",
+    "naar": "fact:datum_aanvraag_lks",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#aanvraag_lks_binnen_zes_maanden/n5.0.1.0.0",
+    "naar": "participatiewet#aanvraag_lks_binnen_zes_maanden",
+    "soort": "satisfied"
+   },
+   {
+    "van": "participatiewet#aanvraag_lks_binnen_zes_maanden/n5.0.1.0.1",
+    "naar": "fact:datum_aanvang_dienstbetrekking",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#aanvraag_lks_binnen_zes_maanden/n5.0.1.0.1",
+    "naar": "fact:datum_aanvraag_lks",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#aanvraag_lks_binnen_zes_maanden/n5.0.1.0.1",
+    "naar": "participatiewet#aanvraag_lks_binnen_zes_maanden",
+    "soort": "satisfied"
+   },
+   {
+    "van": "participatiewet#arbeidsduur_voor_evenredigheid_uren_per_week",
+    "naar": "fact:overeengekomen_arbeidsduur_uren_per_week",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#arbeidsduur_voor_evenredigheid_uren_per_week",
+    "naar": "law:participatiewet:10d:",
+    "soort": "based_on"
+   },
+   {
+    "van": "participatiewet#arbeidsduur_voor_evenredigheid_uren_per_week",
+    "naar": "participatiewet#hoogte_lks_eurocent_per_maand",
+    "soort": "used_in"
+   },
+   {
+    "van": "participatiewet#arbeidsduur_voor_evenredigheid_uren_per_week/n17.0.0.0",
+    "naar": "fact:gebruikelijke_volledige_dienstbetrekking_uren",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#arbeidsduur_voor_evenredigheid_uren_per_week/n17.0.0.0",
+    "naar": "participatiewet#arbeidsduur_voor_evenredigheid_uren_per_week",
+    "soort": "satisfied"
+   },
+   {
+    "van": "participatiewet#bruto_subsidie_eurocent_per_maand",
+    "naar": "fact:minimumloon_plus_vakantiebijslag_eurocent_per_maand",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#bruto_subsidie_eurocent_per_maand",
+    "naar": "law:participatiewet:10d:",
+    "soort": "based_on"
+   },
+   {
+    "van": "participatiewet#bruto_subsidie_eurocent_per_maand",
+    "naar": "participatiewet#hoogte_lks_lid_4_voltijd_eurocent_per_maand",
+    "soort": "used_in"
+   },
+   {
+    "van": "participatiewet#grondslag_maximum_eurocent_per_maand",
+    "naar": "fact:minimumloon_plus_vakantiebijslag_eurocent_per_maand",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#grondslag_maximum_eurocent_per_maand",
+    "naar": "law:participatiewet:10d:4",
+    "soort": "based_on"
+   },
+   {
+    "van": "participatiewet#grondslag_maximum_eurocent_per_maand",
+    "naar": "participatiewet#maximum_subsidie_eurocent_per_maand",
+    "soort": "used_in"
+   },
+   {
+    "van": "participatiewet#heeft_recht_op_lks",
+    "naar": "law:participatiewet:10d:",
+    "soort": "based_on"
+   },
+   {
+    "van": "participatiewet#heeft_recht_op_lks",
+    "naar": "participatiewet#hoogte_lks_lid_4_voltijd_eurocent_per_maand",
+    "soort": "satisfied"
+   },
+   {
+    "van": "participatiewet#heeft_recht_op_lks_lid_2",
+    "naar": "fact:behoort_tot_doelgroep_lks",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#heeft_recht_op_lks_lid_2",
+    "naar": "fact:kan_minimumloon_niet_verdienen",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#heeft_recht_op_lks_lid_2",
+    "naar": "law:participatiewet:10d:",
+    "soort": "based_on"
+   },
+   {
+    "van": "participatiewet#heeft_recht_op_lks_lid_2",
+    "naar": "participatiewet#heeft_recht_op_lks",
+    "soort": "satisfied"
+   },
+   {
+    "van": "participatiewet#hoogte_lks_eurocent_per_maand",
+    "naar": "fact:normarbeidsduur_uren_per_week",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#hoogte_lks_eurocent_per_maand",
+    "naar": "law:participatiewet:10d:",
+    "soort": "based_on"
+   },
+   {
+    "van": "participatiewet#hoogte_lks_lid_4_voltijd_eurocent_per_maand",
+    "naar": "law:participatiewet:10d:",
+    "soort": "based_on"
+   },
+   {
+    "van": "participatiewet#hoogte_lks_lid_4_voltijd_eurocent_per_maand",
+    "naar": "participatiewet#hoogte_lks_voltijd_eurocent_per_maand",
+    "soort": "used_in"
+   },
+   {
+    "van": "participatiewet#hoogte_lks_voltijd_eurocent_per_maand",
+    "naar": "law:participatiewet:10d:",
+    "soort": "based_on"
+   },
+   {
+    "van": "participatiewet#hoogte_lks_voltijd_eurocent_per_maand",
+    "naar": "participatiewet#hoogte_lks_eurocent_per_maand",
+    "soort": "used_in"
+   },
+   {
+    "van": "participatiewet#is_uitgesloten_lid_3",
+    "naar": "fact:is_wsw_dienstbetrekking",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#is_uitgesloten_lid_3",
+    "naar": "law:participatiewet:10d:3",
+    "soort": "based_on"
+   },
+   {
+    "van": "participatiewet#is_uitgesloten_lid_3",
+    "naar": "participatiewet#heeft_recht_op_lks",
+    "soort": "failed"
+   },
+   {
+    "van": "participatiewet#is_uitgesloten_lid_3",
+    "naar": "participatiewet#heeft_recht_op_lks_lid_2",
+    "soort": "failed"
+   },
+   {
+    "van": "participatiewet#loonwaarde_eurocent_per_maand",
+    "naar": "fact:loonwaarde_percentage",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#loonwaarde_eurocent_per_maand",
+    "naar": "fact:minimumloon_plus_vakantiebijslag_eurocent_per_maand",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#loonwaarde_eurocent_per_maand",
+    "naar": "law:participatiewet:10d:4",
+    "soort": "based_on"
+   },
+   {
+    "van": "participatiewet#loonwaarde_eurocent_per_maand",
+    "naar": "participatiewet#bruto_subsidie_eurocent_per_maand",
+    "soort": "used_in"
+   },
+   {
+    "van": "participatiewet#maximum_subsidie_eurocent_per_maand",
+    "naar": "fact:maximum_percentage_lid_4",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#maximum_subsidie_eurocent_per_maand",
+    "naar": "law:participatiewet:10d:",
+    "soort": "based_on"
+   },
+   {
+    "van": "participatiewet#maximum_subsidie_eurocent_per_maand",
+    "naar": "participatiewet#hoogte_lks_lid_4_voltijd_eurocent_per_maand",
+    "soort": "used_in"
+   },
+   {
+    "van": "participatiewet#volgt_de_vijftig_procent_route",
+    "naar": "fact:vaststelling_loonwaarde_blijft_achterwege",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#volgt_de_vijftig_procent_route",
+    "naar": "law:participatiewet:10d:",
+    "soort": "based_on"
+   },
+   {
+    "van": "participatiewet#volgt_de_vijftig_procent_route",
+    "naar": "participatiewet#hoogte_lks_voltijd_eurocent_per_maand",
+    "soort": "failed"
+   },
+   {
+    "van": "participatiewet#volgt_de_vijftig_procent_route/n8.0.0.0.0",
+    "naar": "fact:vaststelling_loonwaarde_blijft_achterwege",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#volgt_de_vijftig_procent_route/n8.0.0.0.0",
+    "naar": "participatiewet#volgt_de_vijftig_procent_route",
+    "soort": "failed"
+   },
+   {
+    "van": "participatiewet#volgt_de_vijftig_procent_route/n8.0.0.0.1",
+    "naar": "fact:datum_aanvang_dienstbetrekking",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#volgt_de_vijftig_procent_route/n8.0.0.0.1",
+    "naar": "participatiewet#volgt_de_vijftig_procent_route",
+    "soort": "failed"
+   },
+   {
+    "van": "participatiewet#voorafgaand_relevante_onderwijsroute_of_doelgroep",
+    "naar": "law:participatiewet:10d:2",
+    "soort": "based_on"
+   },
+   {
+    "van": "participatiewet#voorafgaand_relevante_onderwijsroute_of_doelgroep",
+    "naar": "participatiewet#heeft_recht_op_lks_lid_2",
+    "soort": "satisfied"
+   },
+   {
+    "van": "participatiewet#voorafgaand_relevante_onderwijsroute_of_doelgroep/n4.0.1.0.0.0",
+    "naar": "fact:datum_laatst_persoon_7_lid_1_a_of_7a_lid_2_b",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#voorafgaand_relevante_onderwijsroute_of_doelgroep/n4.0.1.0.0.0",
+    "naar": "participatiewet#voorafgaand_relevante_onderwijsroute_of_doelgroep",
+    "soort": "failed"
+   },
+   {
+    "van": "participatiewet#voorafgaand_relevante_onderwijsroute_of_doelgroep/n4.0.1.0.0.1",
+    "naar": "fact:datum_aanvang_dienstbetrekking",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#voorafgaand_relevante_onderwijsroute_of_doelgroep/n4.0.1.0.0.1",
+    "naar": "participatiewet#voorafgaand_relevante_onderwijsroute_of_doelgroep",
+    "soort": "failed"
+   },
+   {
+    "van": "participatiewet#voorafgaand_relevante_onderwijsroute_of_doelgroep/n4.0.1.1.0",
+    "naar": "fact:datum_aanvang_dienstbetrekking",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#voorafgaand_relevante_onderwijsroute_of_doelgroep/n4.0.1.1.0",
+    "naar": "fact:datum_laatst_persoon_7_lid_1_a_of_7a_lid_2_b",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#voorafgaand_relevante_onderwijsroute_of_doelgroep/n4.0.1.1.0",
+    "naar": "participatiewet#voorafgaand_relevante_onderwijsroute_of_doelgroep",
+    "soort": "satisfied"
+   },
+   {
+    "van": "participatiewet#werkgeverslastenvergoeding_eurocent_per_maand",
+    "naar": "fact:werkgeverslastenvergoeding_percentage",
+    "soort": "has_fact"
+   },
+   {
+    "van": "participatiewet#werkgeverslastenvergoeding_eurocent_per_maand",
+    "naar": "law:participatiewet:1:",
+    "soort": "based_on"
+   },
+   {
+    "van": "participatiewet#werkgeverslastenvergoeding_eurocent_per_maand",
+    "naar": "participatiewet#grondslag_maximum_eurocent_per_maand",
+    "soort": "used_in"
+   },
+   {
+    "van": "wet_minimumloon_en_minimumvakantiebijslag#minimumloon_per_maand_eurocent",
+    "naar": "fact:herzien_minimumloon_per_maand_eurocent",
+    "soort": "has_fact"
+   },
+   {
+    "van": "wet_minimumloon_en_minimumvakantiebijslag#minimumloon_per_maand_eurocent",
+    "naar": "law:wet_minimumloon_en_minimumvakantiebijslag:8:1",
+    "soort": "based_on"
+   },
+   {
+    "van": "wet_minimumloon_en_minimumvakantiebijslag#minimumloon_per_maand_eurocent",
+    "naar": "wet_minimumloon_en_minimumvakantiebijslag#minimumloon_plus_vakantiebijslag_eurocent_per_maand",
+    "soort": "used_in"
+   },
+   {
+    "van": "wet_minimumloon_en_minimumvakantiebijslag#minimumloon_plus_vakantiebijslag_eurocent_per_maand",
+    "naar": "fact:vakantiebijslag_percentage",
+    "soort": "has_fact"
+   },
+   {
+    "van": "wet_minimumloon_en_minimumvakantiebijslag#minimumloon_plus_vakantiebijslag_eurocent_per_maand",
+    "naar": "law:wet_minimumloon_en_minimumvakantiebijslag:15:1",
+    "soort": "based_on"
+   },
+   {
+    "van": "wet_minimumloon_en_minimumvakantiebijslag#minimumloon_plus_vakantiebijslag_eurocent_per_maand",
+    "naar": "participatiewet#werkgeverslastenvergoeding_eurocent_per_maand",
+    "soort": "used_in"
+   }
+  ]
+ },
+ "samenvatting": [
+  "Loonkostensubsidie: de voorwaarden zijn vervuld.",
+  "Hoogte van de loonkostensubsidie: € 897,41 per maand."
+ ]
+}

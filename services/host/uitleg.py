@@ -113,13 +113,136 @@ def _herkomst_tekst(knoop: dict) -> str:
     return ""
 
 
-def graaf_geldig(graaf: object) -> bool:
-    """Is dit een beslisgraaf zoals de kern van regelrecht-uitleg die maakt?
+# De getypeerde graaf van de rekenkern (services/rekenkern, PDR-018) naar de
+# woorden van deze module. Randen die een voorwaarde of berekening naar de knoop
+# laten wijzen die hem gebruikt; `has_fact` wijst van de regel naar het gegeven.
+_REKENKERN_SOORT = {
+    "decision": "uitkomst",
+    "rule": "voorwaarde",
+    "fact": "gegeven",
+    "calculation": "berekening",
+}
+_REKENKERN_NAAR_OUDER = frozenset({"satisfied", "failed", "unknown", "used_in"})
 
-    Minimaal: een dict met `soort` en `waarde`, en `doorslaggevend` als lijst
-    (mag ontbreken). Meer eisen we niet; de graaf komt uit eigen code, niet van
-    de gebruiker, maar hij komt wel via het netwerk binnen.
+
+def is_rekenkern_graaf(graaf: object) -> bool:
+    """Heeft de graaf de vorm van de rekenkern: beslissingen, knopen en randen?"""
+    return (
+        isinstance(graaf, dict)
+        and isinstance(graaf.get("beslissingen"), list)
+        and isinstance(graaf.get("knopen"), list)
+        and isinstance(graaf.get("randen"), list)
+    )
+
+
+def _rekenkern_geldig(graaf: dict) -> bool:
+    knopen = graaf["knopen"]
+    if not all(isinstance(k, dict) and isinstance(k.get("id"), str) for k in knopen):
+        return False
+    ids = {k["id"] for k in knopen}
+    if not graaf["beslissingen"] or not all(b in ids for b in graaf["beslissingen"]):
+        return False
+    return all(
+        isinstance(r, dict) and r.get("van") in ids and r.get("naar") in ids for r in graaf["randen"]
+    )
+
+
+def _operand_waarde(waarde: object, naam: str) -> str:
+    if waarde is None:
+        return "leeg"
+    if isinstance(waarde, bool):
+        return "ja" if waarde else "nee"
+    if "eurocent" in naam and isinstance(waarde, int | float):
+        return _euro(waarde)
+    return str(waarde)
+
+
+def _vergelijking_tekst(vergelijking: dict) -> str | None:
+    """`a (waarde) ≥ b (waarde)` met de namen, waarden en letterlijke drempels uit het model."""
+    delen = []
+    for o in vergelijking.get("operanden") or []:
+        if not isinstance(o, dict):
+            return None
+        naam = str(o.get("naam") or "")
+        waarde = _operand_waarde(o.get("waarde"), naam)
+        if naam:
+            delen.append(f"{naam} ({waarde})")
+        elif o.get("letterlijk"):
+            delen.append(waarde)
+        else:
+            delen.append(f"berekening ({waarde})")
+    return f" {vergelijking.get('operator', '?')} ".join(delen) if delen else None
+
+
+def normaliseer_graaf(graaf: object) -> object:
+    """Zet een graaf van de rekenkern om naar de boom van deze module; laat de rest staan.
+
+    Elke knoop wordt een `uitkomst`, `voorwaarde`, `gegeven` of `berekening`
+    met zijn wetsgrond (de `based_on`-rand) en, als kinderen, wat hem droeg.
+    Een knoop staat één keer in de boom: een herhaling zegt het model niets en
+    kost tekens van MAX_VRAAG_TEKENS. Een vergelijking draagt de waarden van
+    haar operanden in haar eigen naam en krijgt geen kinderen.
     """
+    if not is_rekenkern_graaf(graaf) or not _rekenkern_geldig(graaf):
+        return graaf
+    knopen = {k["id"]: k for k in graaf["knopen"]}
+    onder: dict[str, list[str]] = {}
+    grond: dict[str, dict] = {}
+    for r in graaf["randen"]:
+        if r.get("soort") in _REKENKERN_NAAR_OUDER:
+            onder.setdefault(r["naar"], []).append(r["van"])
+        elif r.get("soort") == "has_fact":
+            onder.setdefault(r["van"], []).append(r["naar"])
+        elif r.get("soort") == "based_on":
+            v = knopen[r["naar"]].get("vindplaats") or {}
+            grond[r["van"]] = {
+                "wet": v.get("wetnaam") or v.get("wet", ""),
+                "artikel": v.get("artikel"),
+                "lid": v.get("lid"),
+            }
+    gezien: set[str] = set()
+
+    def boom(id_: str) -> dict | None:
+        if id_ in gezien:
+            return None
+        gezien.add(id_)
+        k = knopen[id_]
+        waarde = k.get("waarde")
+        if isinstance(waarde, dict) and waarde.get("__unknown"):
+            waarde = "onbekend"
+        naam = (_vergelijking_tekst(k["vergelijking"]) if k.get("vergelijking") else None) or k.get("naam")
+        uit = {"soort": _REKENKERN_SOORT.get(k.get("soort"), "stap"), "naam": naam, "waarde": waarde}
+        if k.get("eenheid"):
+            uit["eenheid"] = k["eenheid"]
+        if id_ in grond:
+            uit["grond"] = grond[id_]
+        if k.get("bron") == "wet":
+            uit["herkomst"] = "wet"
+        if not k.get("vergelijking"):
+            kinderen = (boom(kind) for kind in onder.get(id_, []) if kind in knopen)
+            uit["doorslaggevend"] = [kind for kind in kinderen if kind]
+        return uit
+
+    hoofd, *bedragen = graaf["beslissingen"]
+    gezien.update(bedragen)
+    wortel = boom(hoofd) or {}
+    gezien.difference_update(bedragen)
+    voor = [b for b in (boom(b) for b in bedragen) if b]
+    wortel["doorslaggevend"] = voor + wortel.get("doorslaggevend", [])
+    return wortel
+
+
+def graaf_geldig(graaf: object) -> bool:
+    """Is dit een beslisgraaf zoals de kern die maakt?
+
+    Twee vormen: de getypeerde graaf van de rekenkern (beslissingen, knopen,
+    randen; elke rand wijst naar bestaande knopen), of de boom van de kern van
+    regelrecht-uitleg (een dict met `soort` en `waarde`, en `doorslaggevend`
+    als lijst). Meer eisen we niet; de graaf komt uit eigen code, niet van de
+    gebruiker, maar hij komt wel via het netwerk binnen.
+    """
+    if is_rekenkern_graaf(graaf):
+        return _rekenkern_geldig(graaf)
     if not isinstance(graaf, dict) or "soort" not in graaf or "waarde" not in graaf:
         return False
     kinderen = graaf.get("doorslaggevend", [])
@@ -128,6 +251,7 @@ def graaf_geldig(graaf: object) -> bool:
 
 def graaf_regels(graaf: dict) -> list[str]:
     """De graaf als ingesprongen regels: diepte-eerst, alleen doorslaggevende knopen."""
+    graaf = normaliseer_graaf(graaf)
     regels: list[str] = []
 
     def loop(knoop: dict, diepte: int) -> None:

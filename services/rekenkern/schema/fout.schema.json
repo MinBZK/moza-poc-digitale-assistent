@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MinBZK/moza-poc-digitale-assistent/services/rekenkern/schema/fout.schema.json",
+  "title": "Fout van de rekenkern",
+  "description": "De code is stabiel; het bericht is voor de ontwikkelaar en gaat niet naar de ondernemer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "code",
+    "bericht"
+  ],
+  "properties": {
+    "code": {
+      "enum": [
+        "REKENKERN_VERZOEK_ONGELDIG",
+        "REKENKERN_NIET_TOEGESTAAN",
+        "REKENKERN_PEILDATUM_ONBEKEND",
+        "REKENKERN_PARAMETER_ONGELDIG",
+        "REKENKERN_WETTEN_ONGELDIG",
+        "REKENKERN_ENGINE",
+        "REKENKERN_BUNDEL_ONGELDIG"
+      ]
+    },
+    "bericht": {
+      "type": "string"
+    }
+  }
+}

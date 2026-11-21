@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MinBZK/moza-poc-digitale-assistent/services/rekenkern/schema/orientatie.schema.json",
+  "title": "Oriëntatie iemand aannemen",
+  "type": "object",
+  "required": [
+    "keuzes",
+    "antwoorden",
+    "uitkomsten"
+  ],
+  "properties": {
+    "keuzes": {
+      "$ref": "keuzes.schema.json"
+    },
+    "antwoorden": {
+      "type": "array",
+      "items": {
+        "$ref": "antwoord.schema.json"
+      }
+    },
+    "uitkomsten": {
+      "type": "object",
+      "required": [
+        "regels",
+        "overige",
+        "aannames"
+      ],
+      "properties": {
+        "regels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "bedragPerJaar"
+            ],
+            "properties": {
+              "id": {
+                "enum": [
+                  "lks",
+                  "ld",
+                  "lkv"
+                ]
+              },
+              "bedragPerJaar": {
+                "type": "integer"
+              },
+              "categorie": {
+                "type": "string"
+              },
+              "aanspraakPerUur": {
+                "type": "number"
+              },
+              "aanname": {
+                "enum": [
+                  "lks_lid4",
+                  "wia_nieuw"
+                ]
+              },
+              "voorbehoud": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "zes_maanden",
+                    "samenloop"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "overige": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "geldt"
+            ],
+            "properties": {
+              "id": {
+                "enum": [
+                  "nrp",
+                  "pp_pwet",
+                  "pp_ww",
+                  "begeleiding",
+                  "vz_wia",
+                  "vz_wajong"
+                ]
+              },
+              "geldt": {
+                "type": "boolean"
+              },
+              "duurJaren": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "aannames": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "ld_cao",
+              "wsw_zuinig",
+              "beschut_lks",
+              "geen"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,351 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/MinBZK/moza-poc-digitale-assistent/services/rekenkern/schema/antwoord.schema.json",
+  "title": "Antwoord van de rekenkern op één verzoek",
+  "type": "object",
+  "required": [
+    "wet",
+    "output",
+    "peildatum",
+    "outputs",
+    "graaf",
+    "uitleg"
+  ],
+  "properties": {
+    "wet": {
+      "type": "string"
+    },
+    "output": {
+      "type": "string"
+    },
+    "peildatum": {
+      "type": "string"
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/waarde"
+      }
+    },
+    "graaf": {
+      "$ref": "#/$defs/graaf"
+    },
+    "uitleg": {
+      "$ref": "#/$defs/uitleg"
+    }
+  },
+  "$defs": {
+    "waarde": {
+      "description": "Een waarde van de engine: boolean, getal, tekst, datum (YYYY-MM-DD), null, of onbekend.",
+      "anyOf": [
+        {
+          "type": [
+            "boolean",
+            "number",
+            "string",
+            "null"
+          ]
+        },
+        {
+          "$ref": "#/$defs/onbekend"
+        }
+      ]
+    },
+    "onbekend": {
+      "type": "object",
+      "required": [
+        "__unknown"
+      ],
+      "properties": {
+        "__unknown": {
+          "const": true
+        },
+        "missing": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "law": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "vindplaats": {
+      "type": "object",
+      "required": [
+        "wet"
+      ],
+      "properties": {
+        "wet": {
+          "type": "string"
+        },
+        "wetnaam": {
+          "type": "string"
+        },
+        "artikel": {
+          "type": "string"
+        },
+        "lid": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "geldig_vanaf": {
+          "type": "string"
+        },
+        "toelichting": {
+          "type": "string"
+        }
+      }
+    },
+    "knoop": {
+      "type": "object",
+      "required": [
+        "id",
+        "soort",
+        "naam"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "soort": {
+          "enum": [
+            "decision",
+            "rule",
+            "fact",
+            "calculation",
+            "law"
+          ]
+        },
+        "naam": {
+          "type": "string"
+        },
+        "omschrijving": {
+          "type": "string"
+        },
+        "waarde": {
+          "$ref": "#/$defs/waarde"
+        },
+        "status": {
+          "enum": [
+            "ja",
+            "nee",
+            "onbekend"
+          ]
+        },
+        "eenheid": {
+          "type": "string"
+        },
+        "vergelijking": {
+          "type": "object",
+          "required": [
+            "operator",
+            "operanden"
+          ],
+          "properties": {
+            "operator": {
+              "type": "string"
+            },
+            "operanden": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "waarde",
+                  "letterlijk"
+                ],
+                "properties": {
+                  "naam": {
+                    "type": "string"
+                  },
+                  "waarde": {
+                    "$ref": "#/$defs/waarde"
+                  },
+                  "letterlijk": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "bron": {
+          "enum": [
+            "invoer",
+            "wet"
+          ]
+        },
+        "ontbreekt": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "vindplaats": {
+          "$ref": "#/$defs/vindplaats"
+        }
+      }
+    },
+    "graaf": {
+      "type": "object",
+      "required": [
+        "beslissingen",
+        "knopen",
+        "randen",
+        "markeringen"
+      ],
+      "properties": {
+        "beslissingen": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "knopen": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/knoop"
+          }
+        },
+        "randen": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "van",
+              "naar",
+              "soort"
+            ],
+            "properties": {
+              "van": {
+                "type": "string"
+              },
+              "naar": {
+                "type": "string"
+              },
+              "soort": {
+                "enum": [
+                  "has_fact",
+                  "satisfied",
+                  "failed",
+                  "unknown",
+                  "used_in",
+                  "based_on"
+                ]
+              }
+            }
+          }
+        },
+        "markeringen": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "onderwerp",
+              "vindplaats"
+            ],
+            "properties": {
+              "onderwerp": {
+                "type": "string"
+              },
+              "toelichting": {
+                "type": "string"
+              },
+              "vindplaats": {
+                "$ref": "#/$defs/vindplaats"
+              }
+            }
+          }
+        }
+      }
+    },
+    "uitleg": {
+      "type": "object",
+      "required": [
+        "kort",
+        "motivering",
+        "volledig",
+        "voorbehouden"
+      ],
+      "properties": {
+        "kort": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "motivering": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "tekst",
+              "gegevens"
+            ],
+            "properties": {
+              "tekst": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "ja",
+                  "nee",
+                  "onbekend"
+                ]
+              },
+              "vindplaats": {
+                "$ref": "#/$defs/vindplaats"
+              },
+              "gegevens": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "volledig": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "diepte",
+              "tekst",
+              "knoop"
+            ],
+            "properties": {
+              "diepte": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "tekst": {
+                "type": "string"
+              },
+              "knoop": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "voorbehouden": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

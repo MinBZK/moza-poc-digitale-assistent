@@ -1,0 +1,10 @@
+{
+  "toelichting": "Verschillen tussen de kern (corpus regelrecht-corpus-FCV) en de portaalbundel waaruit de referentieset komt (regelrecht-corpus 42054d7d). Elk verschil heeft een reden; een verschil zonder regel laat tests/referentie.rs falen.",
+  "feiten": {
+    "was_persoon_7_lid_1_a_of_7a_in_zes_maanden_voorafgaand": "Review 25 oktober (B1): vervangen door de datum datum_laatst_persoon_7_lid_1_a_of_7a_lid_2_b.",
+    "datum_laatst_persoon_7_lid_1_a_of_7a_lid_2_b": "Review 25 oktober (B1): nieuw; bij bijstand de dag voor de aanvang (2025-12-31), anders leeg.",
+    "geen_dienstbetrekking_elders_elf_weken_voor_einde_wachttijd": "Review 25 oktober: geen parameter meer in de Ziektewet; vervangen door de datums van een dienstbetrekking elders.",
+    "ondersteuning_is_in_overwegende_mate_op_individu_gericht": "Review 25 oktober: Wia 35 lid 5 met Reintegratiebesluit 4 vraagt dit nu als verplicht gegeven; bij WIA waar, zoals in de scenario's van Koen en Sadee."
+  },
+  "outputs": []
+}

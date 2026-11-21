@@ -1,0 +1,23 @@
+{
+  "heeft_recht_op_lks": "Loonkostensubsidie",
+  "hoogte_lks_eurocent_per_maand": "Hoogte van de loonkostensubsidie",
+  "heeft_recht_op_loondispensatie": "Loondispensatie",
+  "aanspraak_beloning_per_uur_eurocent": "Wat de werkgever per uur betaalt bij loondispensatie",
+  "heeft_recht_op_lkv": "Loonkostenvoordeel",
+  "hoogte_lkv_per_jaar_eurocent": "Hoogte van het loonkostenvoordeel",
+  "categorie_lkv": "Soort loonkostenvoordeel",
+  "heeft_recht_op_no_risk_polis": "No-riskpolis",
+  "duur_no_risk_polis_jaren": "Duur van de no-riskpolis in jaren",
+  "mag_proefplaatsing_aangaan": "Proefplaatsing",
+  "heeft_aanspraak_op_begeleiding_op_de_werkplek": "Begeleiding op de werkplek",
+  "mag_jobcoaching_toekennen": "Jobcoaching",
+  "mag_werkplekaanpassing_toekennen": "Werkplekaanpassing",
+  "participatiewet": "Participatiewet",
+  "wet_arbeidsongeschiktheidsvoorziening_jonggehandicapten": "Wet arbeidsongeschiktheidsvoorziening jonggehandicapten",
+  "wet_tegemoetkomingen_loondomein": "Wet tegemoetkomingen loondomein",
+  "ziektewet": "Ziektewet",
+  "wet_werk_en_inkomen_naar_arbeidsvermogen": "Wet werk en inkomen naar arbeidsvermogen",
+  "besluit_loondispensatie_wajong": "Besluit loondispensatie Wajong",
+  "wet_minimumloon_en_minimumvakantiebijslag": "Wet minimumloon en minimumvakantiebijslag",
+  "wet_financiering_sociale_verzekeringen": "Wet financiering sociale verzekeringen"
+}
