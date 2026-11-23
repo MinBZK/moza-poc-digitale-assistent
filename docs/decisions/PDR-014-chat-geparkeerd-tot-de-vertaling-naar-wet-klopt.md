@@ -7,6 +7,32 @@
 | Beslisser(s) | Projectteam poc-moza; vaststelling door de MOZa-productgroep nog te plannen |
 | Gerelateerd | [PDR-006](PDR-006-feasibility-conclusie.md), [PDR-008](PDR-008-generieke-regelrecht-tool-en-wallet.md), [PDR-011](PDR-011-foutmeldingen-catalogus.md), [PDR-013](PDR-013-timeoutgrenzen-op-basis-van-meting.md), het sessiedocument *Classificatie van de Digitale Assistent* (juridische toets 10 augustus 2026; werkdocument van het team, niet in deze repository), notities SZW-juristvalidatie 23 juli (repo `MinBZK/regelrecht`, `docs/financieel-cv/szw/2026-07-23-juristvalidatie-notities.md`, branch `feat/financieel_cv_RVO`) |
 
+## Stand november 2026
+
+Deze PDR beschrijft de stand van 2 september 2026. Daarna is de koers verder
+ingevuld. Waar de tekst hieronder iets anders zegt, geldt deze stand:
+
+- **Het rekenen hoort bij RegelRecht.** Sinds 27 oktober is de basis de
+  regelrecht-engine met het corpus, niet de host van deze repository. De
+  routeringstabel (`regelrouting.py`) en een regelingsdefinitie in de host,
+  zoals beschreven onder [Beslissing](#beslissing) en
+  [Opschalen naar meerdere usecases](#opschalen-naar-meerdere-usecases), zijn
+  daarmee niet langer de plek waar de basis landt.
+- **Iemand aannemen is gebouwd in moza-portaal** (`personeel/iemand-aannemen`):
+  vier oriëntatievragen, een voorbeeldberekening over zeven regelingen, en
+  daarna kandidaat kiezen en controleren en versturen. Het portaal rekent in de
+  browser met de regelrecht-engine.
+- **De vragen en aannames van de oriëntatie** staan als vragenmodel naast het
+  corpus van het Financieel CV, niet in de host.
+- **Het corpus kent de aanvraag zelf.** Sinds schema v0.8 hebben de regelingen
+  een aanvraag en een bevoegd gezag.
+- **De uitleg in gewone taal** is een eigen dienst van deze host, naast het
+  gesprek: [PDR-016](PDR-016-uitleg-in-gewone-taal-uit-de-beslisgraaf.md).
+
+De vraag onder [Consequenties](#consequenties) waar de bouw van de basis landt,
+is daarmee beantwoord. De rest van dit document blijft staan als onderbouwing
+van het parkeren van de chat.
+
 ## Hoe dit document te lezen
 
 Wie alleen de uitkomst wil, leest [Context](#context), [Beslissing](#beslissing)
@@ -722,7 +748,7 @@ classifier, zoeken in KOOP), waarna het model alleen nog de invoer uitvraagt.
   werklijst en de open bevindingen uit de code-review van 24 augustus (beide
   werkdocumenten buiten deze repository) blijven open en worden alleen opgepakt als het onderzoek van augustus er een uitloop
   van vraagt. Waar de bouw van de basis en van Digitale assistent 2.0 landt, wordt bij
-  de eerste bouwstap besloten.
+  de eerste bouwstap besloten; zie [Stand november 2026](#stand-november-2026).
 
 ## Vervolgstappen
 
