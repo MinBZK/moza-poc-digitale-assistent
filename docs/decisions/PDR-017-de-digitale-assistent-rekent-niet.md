@@ -18,8 +18,8 @@ PR #78 stelde voor dat de Digitale assistent een eigen rekenkern levert: een
 bundel met de regelrecht-engine, een allowlist van uitkomsten, een vraagmodel
 en een contract. Op 27 oktober 2026 is besloten dat het rekenen bij RegelRecht
 hoort. Het portaal (moza-portaal, `personeel/iemand-aannemen`) rekent sindsdien
-in de browser met de WASM-kern van regelrecht-uitleg, op een gepinde engine en
-een gepind corpus. Het vragenmodel van de oriëntatie staat als gegevens naast
+in de browser met de regelrecht-engine (WASM), op een gepinde engine en een
+gepind corpus. Het vragenmodel van de oriëntatie staat als gegevens naast
 het corpus van het Financieel CV. PR #78 is daarom gesloten; de code staat
 onder de tag `archief/rekenkern-iemand-aannemen`.
 
@@ -51,8 +51,8 @@ onder de tag `archief/rekenkern-iemand-aannemen`.
   niet aangenomen. Dit document vervangt het deel van PDR-018 dat blijft
   gelden. Het idee van PDR-019 staat als issue, voor als het gesprek
   terugkomt.
-- De beslisgraaf en de uitleg zonder taalmodel uit PR #78 gaan als voorstel
-  naar regelrecht-uitleg.
+- De beslisgraaf en de uitleg zonder taalmodel uit PR #78 blijven bewaard
+  onder de tag `archief/rekenkern-iemand-aannemen`.
 - `/uitleg` blijft de graafvorm aannemen die het portaal nu stuurt
   (`afleiding.uitkomst`). Een tweede vorm komt er pas als een afnemer die
   nodig heeft.
