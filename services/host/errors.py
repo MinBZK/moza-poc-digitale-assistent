@@ -570,6 +570,21 @@ FOUTEN: dict[str, FoutMelding] = {
         herstelbaar=False,
         http_status=413,
     ),
+    # --- Uitleg in gewone taal (PDR-016) ---
+    "UITLEG_GRAAF_ONGELDIG": FoutMelding(
+        code="UITLEG_GRAAF_ONGELDIG",
+        bericht="De uitleg kon niet gemaakt worden: de beslisgraaf is onvolledig.",
+        actie="Open de uitkomst opnieuw. Blijft dit zo, meld het dan bij de beheerder.",
+        herstelbaar=False,
+        http_status=400,
+    ),
+    "UITLEG_GRAAF_TE_GROOT": FoutMelding(
+        code="UITLEG_GRAAF_TE_GROOT",
+        bericht="De uitleg kon niet gemaakt worden: de beslisgraaf is groter dan {maximum}.",
+        actie="Lees de afleiding stap voor stap; die staat er altijd.",
+        herstelbaar=False,
+        http_status=413,
+    ),
 }
 
 

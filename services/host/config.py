@@ -26,18 +26,28 @@ else:
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
 
-# VLAM API (UbiOps/Mistral — OpenAI-compatibele API)
-# Base URL en model-ID hebben zinvolle defaults (zie PDR-001) zodat een frontend
-# met alleen een API-key-override ook werkt als de server-env deze niet expliciet zet.
+# VLAM API (rijksbrede LLM-gateway — OpenAI-compatibele API)
+# VLAM is alleen bereikbaar via de ZAD-dienst VLAM-API: die zet VLAM_API_URL, een
+# proxy binnen het cluster die de OpenAI-compatibele API onder /v1 serveert.
+# VLAM_BASE_URL gaat voor, bijvoorbeeld voor lokaal werk via VPN.
+#
+# Bewust geen hardcoded base-URL: die zou het VLAM-project van een ander noemen,
+# en een verkeerd ingerichte omgeving zou dan stil op dát adres draaien in plaats
+# van te melden dat ze niet is ingesteld. Het model mag wel een default hebben;
+# een model-ID geeft geen toegang tot andermans budget, de sleutel wel.
 VLAM_API_KEY = os.getenv("VLAM_API_KEY", "")
-VLAM_BASE_URL = os.getenv(
-    "VLAM_BASE_URL",
-    "https://api.demo.vlam.ai/v2.1/projects/poc/openai-compatible/v1",
-)
-VLAM_MODEL_ID = os.getenv(
-    "VLAM_MODEL_ID",
-    "ubiops-deployment/bzk-dig-mistralmedium-flexibel//chat-model",
-)
+
+
+def _vlam_base_url() -> str:
+    expliciet = os.getenv("VLAM_BASE_URL", "").strip()
+    if expliciet:
+        return expliciet
+    zad_dienst = os.getenv("VLAM_API_URL", "").strip().rstrip("/")
+    return f"{zad_dienst}/v1" if zad_dienst else ""
+
+
+VLAM_BASE_URL = _vlam_base_url()
+VLAM_MODEL_ID = os.getenv("VLAM_MODEL_ID", "") or "Kimi-K3-prepaid"
 
 # MCP-servers: naam → pad naar server.py
 # Relatieve paden uit .env worden opgelost t.o.v. de host-directory (BASE_DIR)

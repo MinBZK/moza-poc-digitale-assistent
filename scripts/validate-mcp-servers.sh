@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# validate-mcp-servers.sh — draai mcp-standaard validate tegen alle vijf MCP-servers,
+# validate-mcp-servers.sh — draai mcp-standaard validate tegen alle zes MCP-servers,
 # inclusief functionele resource-checks via --test-uri. Zonder deze test-URIs blijft
 # een bug als de TextResourceContents/ReadResourceContents-mismatch onzichtbaar.
 #
@@ -50,6 +50,11 @@ echo ""
 echo "=== RVO ==="
 uv run mcp-standaard validate python "$REPO_ROOT/services/mcp/rvo/server.py" \
     --server-name rvo || failed=$((failed + 1))
+
+echo ""
+echo "=== Uitleg ==="
+uv run mcp-standaard validate python "$REPO_ROOT/services/mcp/uitleg/server.py" \
+    --server-name uitleg || failed=$((failed + 1))
 
 echo ""
 echo "=== Netbeheerder ==="

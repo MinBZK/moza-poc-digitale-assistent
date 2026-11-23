@@ -1,0 +1,1447 @@
+{
+ "heeft_recht_op_lks": {
+  "graaf": {
+   "soort": "uitkomst",
+   "naam": "heeft_recht_op_lks",
+   "operator": null,
+   "waarde": true,
+   "eenheid": null,
+   "grond": {
+    "wet": "participatiewet",
+    "artikel": "10d",
+    "lid": null
+   },
+   "herkomst": null,
+   "doorslaggevend": [
+    {
+     "soort": "voorwaarde",
+     "naam": null,
+     "operator": "AND",
+     "waarde": true,
+     "eenheid": null,
+     "grond": null,
+     "herkomst": null,
+     "doorslaggevend": [
+      {
+       "soort": "voorwaarde",
+       "naam": null,
+       "operator": "OR",
+       "waarde": true,
+       "eenheid": null,
+       "grond": null,
+       "herkomst": null,
+       "doorslaggevend": [
+        {
+         "soort": "gegeven",
+         "naam": "heeft_recht_op_lks_lid_2",
+         "operator": null,
+         "waarde": true,
+         "eenheid": null,
+         "grond": null,
+         "herkomst": {
+          "soort": "stap"
+         },
+         "doorslaggevend": [
+          {
+           "soort": "uitkomst",
+           "naam": "heeft_recht_op_lks_lid_2",
+           "operator": null,
+           "waarde": true,
+           "eenheid": null,
+           "grond": {
+            "wet": "participatiewet",
+            "artikel": "10d",
+            "lid": null
+           },
+           "herkomst": null,
+           "doorslaggevend": [
+            {
+             "soort": "voorwaarde",
+             "naam": null,
+             "operator": "AND",
+             "waarde": true,
+             "eenheid": null,
+             "grond": null,
+             "herkomst": null,
+             "doorslaggevend": [
+              {
+               "soort": "gegeven",
+               "naam": "behoort_tot_doelgroep_lks",
+               "operator": null,
+               "waarde": true,
+               "eenheid": null,
+               "grond": null,
+               "herkomst": {
+                "soort": "invoer"
+               },
+               "doorslaggevend": []
+              },
+              {
+               "soort": "gegeven",
+               "naam": "kan_minimumloon_niet_verdienen",
+               "operator": null,
+               "waarde": true,
+               "eenheid": null,
+               "grond": null,
+               "herkomst": {
+                "soort": "invoer"
+               },
+               "doorslaggevend": []
+              },
+              {
+               "soort": "gegeven",
+               "naam": "aanvraag_lks_binnen_zes_maanden",
+               "operator": null,
+               "waarde": true,
+               "eenheid": null,
+               "grond": null,
+               "herkomst": {
+                "soort": "stap"
+               },
+               "doorslaggevend": [
+                {
+                 "soort": "uitkomst",
+                 "naam": "aanvraag_lks_binnen_zes_maanden",
+                 "operator": null,
+                 "waarde": true,
+                 "eenheid": null,
+                 "grond": {
+                  "wet": "participatiewet",
+                  "artikel": "10d",
+                  "lid": null
+                 },
+                 "herkomst": null,
+                 "doorslaggevend": [
+                  {
+                   "soort": "keuze",
+                   "naam": null,
+                   "operator": "IF",
+                   "waarde": true,
+                   "eenheid": null,
+                   "grond": null,
+                   "herkomst": null,
+                   "doorslaggevend": [
+                    {
+                     "soort": "keuze",
+                     "naam": null,
+                     "operator": "CASE_0",
+                     "waarde": false,
+                     "eenheid": null,
+                     "grond": null,
+                     "herkomst": null,
+                     "doorslaggevend": [
+                      {
+                       "soort": "voorwaarde",
+                       "naam": null,
+                       "operator": "OR",
+                       "waarde": false,
+                       "eenheid": null,
+                       "grond": null,
+                       "herkomst": null,
+                       "doorslaggevend": [
+                        {
+                         "soort": "voorwaarde",
+                         "naam": null,
+                         "operator": "EQUALS",
+                         "waarde": false,
+                         "eenheid": null,
+                         "grond": null,
+                         "herkomst": null,
+                         "doorslaggevend": [
+                          {
+                           "soort": "gegeven",
+                           "naam": "datum_aanvraag_lks",
+                           "operator": null,
+                           "waarde": "2026-02-01",
+                           "eenheid": null,
+                           "grond": null,
+                           "herkomst": {
+                            "soort": "invoer"
+                           },
+                           "doorslaggevend": []
+                          },
+                          {
+                           "soort": "letterlijk",
+                           "naam": null,
+                           "operator": null,
+                           "waarde": null,
+                           "eenheid": null,
+                           "grond": null,
+                           "herkomst": null,
+                           "doorslaggevend": []
+                          }
+                         ]
+                        },
+                        {
+                         "soort": "voorwaarde",
+                         "naam": null,
+                         "operator": "EQUALS",
+                         "waarde": false,
+                         "eenheid": null,
+                         "grond": null,
+                         "herkomst": null,
+                         "doorslaggevend": [
+                          {
+                           "soort": "gegeven",
+                           "naam": "datum_aanvang_dienstbetrekking",
+                           "operator": null,
+                           "waarde": "2026-01-01",
+                           "eenheid": null,
+                           "grond": null,
+                           "herkomst": {
+                            "soort": "invoer"
+                           },
+                           "doorslaggevend": []
+                          },
+                          {
+                           "soort": "letterlijk",
+                           "naam": null,
+                           "operator": null,
+                           "waarde": null,
+                           "eenheid": null,
+                           "grond": null,
+                           "herkomst": null,
+                           "doorslaggevend": []
+                          }
+                         ]
+                        }
+                       ]
+                      }
+                     ]
+                    },
+                    {
+                     "soort": "keuze",
+                     "naam": null,
+                     "operator": "DEFAULT",
+                     "waarde": true,
+                     "eenheid": null,
+                     "grond": null,
+                     "herkomst": null,
+                     "doorslaggevend": [
+                      {
+                       "soort": "voorwaarde",
+                       "naam": null,
+                       "operator": "AND",
+                       "waarde": true,
+                       "eenheid": null,
+                       "grond": null,
+                       "herkomst": null,
+                       "doorslaggevend": [
+                        {
+                         "soort": "voorwaarde",
+                         "naam": null,
+                         "operator": "GREATER_THAN_OR_EQUAL",
+                         "waarde": true,
+                         "eenheid": null,
+                         "grond": null,
+                         "herkomst": null,
+                         "doorslaggevend": [
+                          {
+                           "soort": "gegeven",
+                           "naam": "datum_aanvraag_lks",
+                           "operator": null,
+                           "waarde": "2026-02-01",
+                           "eenheid": null,
+                           "grond": null,
+                           "herkomst": {
+                            "soort": "invoer"
+                           },
+                           "doorslaggevend": []
+                          },
+                          {
+                           "soort": "gegeven",
+                           "naam": "datum_aanvang_dienstbetrekking",
+                           "operator": null,
+                           "waarde": "2026-01-01",
+                           "eenheid": null,
+                           "grond": null,
+                           "herkomst": {
+                            "soort": "invoer"
+                           },
+                           "doorslaggevend": []
+                          }
+                         ]
+                        },
+                        {
+                         "soort": "voorwaarde",
+                         "naam": null,
+                         "operator": "LESS_THAN_OR_EQUAL",
+                         "waarde": true,
+                         "eenheid": null,
+                         "grond": null,
+                         "herkomst": null,
+                         "doorslaggevend": [
+                          {
+                           "soort": "gegeven",
+                           "naam": "datum_aanvraag_lks",
+                           "operator": null,
+                           "waarde": "2026-02-01",
+                           "eenheid": null,
+                           "grond": null,
+                           "herkomst": {
+                            "soort": "invoer"
+                           },
+                           "doorslaggevend": []
+                          },
+                          {
+                           "soort": "berekening",
+                           "naam": null,
+                           "operator": "DATE_ADD",
+                           "waarde": "2026-07-01",
+                           "eenheid": null,
+                           "grond": null,
+                           "herkomst": null,
+                           "doorslaggevend": [
+                            {
+                             "soort": "gegeven",
+                             "naam": "datum_aanvang_dienstbetrekking",
+                             "operator": null,
+                             "waarde": "2026-01-01",
+                             "eenheid": null,
+                             "grond": null,
+                             "herkomst": {
+                              "soort": "invoer"
+                             },
+                             "doorslaggevend": []
+                            },
+                            {
+                             "soort": "letterlijk",
+                             "naam": null,
+                             "operator": null,
+                             "waarde": 6,
+                             "eenheid": null,
+                             "grond": null,
+                             "herkomst": null,
+                             "doorslaggevend": []
+                            }
+                           ]
+                          }
+                         ]
+                        }
+                       ]
+                      }
+                     ]
+                    }
+                   ]
+                  }
+                 ]
+                }
+               ]
+              },
+              {
+               "soort": "gegeven",
+               "naam": "voorafgaand_relevante_onderwijsroute_of_doelgroep",
+               "operator": null,
+               "waarde": true,
+               "eenheid": null,
+               "grond": null,
+               "herkomst": {
+                "soort": "stap"
+               },
+               "doorslaggevend": [
+                {
+                 "soort": "uitkomst",
+                 "naam": "voorafgaand_relevante_onderwijsroute_of_doelgroep",
+                 "operator": null,
+                 "waarde": true,
+                 "eenheid": null,
+                 "grond": {
+                  "wet": "participatiewet",
+                  "artikel": "10d",
+                  "lid": null
+                 },
+                 "herkomst": null,
+                 "doorslaggevend": [
+                  {
+                   "soort": "voorwaarde",
+                   "naam": null,
+                   "operator": "OR",
+                   "waarde": true,
+                   "eenheid": null,
+                   "grond": null,
+                   "herkomst": null,
+                   "doorslaggevend": [
+                    {
+                     "soort": "gegeven",
+                     "naam": "was_persoon_7_lid_1_a_of_7a_in_zes_maanden_voorafgaand",
+                     "operator": null,
+                     "waarde": true,
+                     "eenheid": null,
+                     "grond": null,
+                     "herkomst": {
+                      "soort": "invoer"
+                     },
+                     "doorslaggevend": []
+                    }
+                   ]
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "soort": "voorwaarde",
+       "naam": null,
+       "operator": "NOT",
+       "waarde": true,
+       "eenheid": null,
+       "grond": null,
+       "herkomst": null,
+       "doorslaggevend": [
+        {
+         "soort": "gegeven",
+         "naam": "is_uitgesloten_lid_3",
+         "operator": null,
+         "waarde": false,
+         "eenheid": null,
+         "grond": null,
+         "herkomst": {
+          "soort": "stap"
+         },
+         "doorslaggevend": [
+          {
+           "soort": "uitkomst",
+           "naam": "is_uitgesloten_lid_3",
+           "operator": null,
+           "waarde": false,
+           "eenheid": null,
+           "grond": {
+            "wet": "participatiewet",
+            "artikel": "10d",
+            "lid": null
+           },
+           "herkomst": null,
+           "doorslaggevend": [
+            {
+             "soort": "gegeven",
+             "naam": "is_wsw_dienstbetrekking",
+             "operator": null,
+             "waarde": false,
+             "eenheid": null,
+             "grond": null,
+             "herkomst": {
+              "soort": "invoer"
+             },
+             "doorslaggevend": []
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "samenvatting": [
+   "Loonkostensubsidie: ja.",
+   "Het college heeft vastgesteld dat de werknemer tot de doelgroep loonkostensubsidie behoort en het college heeft vastgesteld dat de werknemer met voltijdse arbeid onder het wettelijk minimumloon blijft (art. 10d)."
+  ]
+ },
+ "hoogte_lks_eurocent_per_maand": {
+  "graaf": {
+   "soort": "uitkomst",
+   "naam": "hoogte_lks_eurocent_per_maand",
+   "operator": null,
+   "waarde": 89740.8,
+   "eenheid": "eurocent",
+   "grond": {
+    "wet": "participatiewet",
+    "artikel": "10d",
+    "lid": null
+   },
+   "herkomst": null,
+   "doorslaggevend": [
+    {
+     "soort": "berekening",
+     "naam": null,
+     "operator": "DIVIDE",
+     "waarde": 89740.8,
+     "eenheid": null,
+     "grond": null,
+     "herkomst": null,
+     "doorslaggevend": [
+      {
+       "soort": "berekening",
+       "naam": null,
+       "operator": "MULTIPLY",
+       "waarde": 3230668.8,
+       "eenheid": null,
+       "grond": null,
+       "herkomst": null,
+       "doorslaggevend": [
+        {
+         "soort": "gegeven",
+         "naam": "hoogte_lks_voltijd_eurocent_per_maand",
+         "operator": null,
+         "waarde": 100958.4,
+         "eenheid": null,
+         "grond": null,
+         "herkomst": {
+          "soort": "stap"
+         },
+         "doorslaggevend": [
+          {
+           "soort": "uitkomst",
+           "naam": "hoogte_lks_voltijd_eurocent_per_maand",
+           "operator": null,
+           "waarde": 100958.4,
+           "eenheid": "eurocent",
+           "grond": {
+            "wet": "participatiewet",
+            "artikel": "10d",
+            "lid": null
+           },
+           "herkomst": null,
+           "doorslaggevend": [
+            {
+             "soort": "keuze",
+             "naam": null,
+             "operator": "IF",
+             "waarde": 100958.4,
+             "eenheid": null,
+             "grond": null,
+             "herkomst": null,
+             "doorslaggevend": [
+              {
+               "soort": "keuze",
+               "naam": null,
+               "operator": "CASE_0",
+               "waarde": false,
+               "eenheid": null,
+               "grond": null,
+               "herkomst": null,
+               "doorslaggevend": [
+                {
+                 "soort": "gegeven",
+                 "naam": "volgt_de_vijftig_procent_route",
+                 "operator": null,
+                 "waarde": false,
+                 "eenheid": null,
+                 "grond": null,
+                 "herkomst": {
+                  "soort": "stap"
+                 },
+                 "doorslaggevend": [
+                  {
+                   "soort": "uitkomst",
+                   "naam": "volgt_de_vijftig_procent_route",
+                   "operator": null,
+                   "waarde": false,
+                   "eenheid": null,
+                   "grond": {
+                    "wet": "participatiewet",
+                    "artikel": "10d",
+                    "lid": null
+                   },
+                   "herkomst": null,
+                   "doorslaggevend": [
+                    {
+                     "soort": "keuze",
+                     "naam": null,
+                     "operator": "IF",
+                     "waarde": false,
+                     "eenheid": null,
+                     "grond": null,
+                     "herkomst": null,
+                     "doorslaggevend": [
+                      {
+                       "soort": "keuze",
+                       "naam": null,
+                       "operator": "CASE_1",
+                       "waarde": false,
+                       "eenheid": null,
+                       "grond": null,
+                       "herkomst": null,
+                       "doorslaggevend": [
+                        {
+                         "soort": "voorwaarde",
+                         "naam": null,
+                         "operator": "AND",
+                         "waarde": false,
+                         "eenheid": null,
+                         "grond": null,
+                         "herkomst": null,
+                         "doorslaggevend": [
+                          {
+                           "soort": "gegeven",
+                           "naam": "vaststelling_loonwaarde_blijft_achterwege",
+                           "operator": null,
+                           "waarde": false,
+                           "eenheid": null,
+                           "grond": null,
+                           "herkomst": {
+                            "soort": "invoer"
+                           },
+                           "doorslaggevend": []
+                          }
+                         ]
+                        }
+                       ]
+                      },
+                      {
+                       "soort": "keuze",
+                       "naam": null,
+                       "operator": "DEFAULT",
+                       "waarde": false,
+                       "eenheid": null,
+                       "grond": null,
+                       "herkomst": null,
+                       "doorslaggevend": [
+                        {
+                         "soort": "letterlijk",
+                         "naam": null,
+                         "operator": null,
+                         "waarde": false,
+                         "eenheid": null,
+                         "grond": null,
+                         "herkomst": null,
+                         "doorslaggevend": []
+                        }
+                       ]
+                      }
+                     ]
+                    }
+                   ]
+                  }
+                 ]
+                }
+               ]
+              },
+              {
+               "soort": "keuze",
+               "naam": null,
+               "operator": "DEFAULT",
+               "waarde": 100958.4,
+               "eenheid": null,
+               "grond": null,
+               "herkomst": null,
+               "doorslaggevend": [
+                {
+                 "soort": "gegeven",
+                 "naam": "hoogte_lks_lid_4_voltijd_eurocent_per_maand",
+                 "operator": null,
+                 "waarde": 100958.4,
+                 "eenheid": null,
+                 "grond": null,
+                 "herkomst": {
+                  "soort": "stap"
+                 },
+                 "doorslaggevend": [
+                  {
+                   "soort": "uitkomst",
+                   "naam": "hoogte_lks_lid_4_voltijd_eurocent_per_maand",
+                   "operator": null,
+                   "waarde": 100958.4,
+                   "eenheid": "eurocent",
+                   "grond": {
+                    "wet": "participatiewet",
+                    "artikel": "10d",
+                    "lid": null
+                   },
+                   "herkomst": null,
+                   "doorslaggevend": [
+                    {
+                     "soort": "keuze",
+                     "naam": null,
+                     "operator": "IF",
+                     "waarde": 100958.4,
+                     "eenheid": null,
+                     "grond": null,
+                     "herkomst": null,
+                     "doorslaggevend": [
+                      {
+                       "soort": "keuze",
+                       "naam": null,
+                       "operator": "CASE_0",
+                       "waarde": true,
+                       "eenheid": null,
+                       "grond": null,
+                       "herkomst": null,
+                       "doorslaggevend": [
+                        {
+                         "soort": "gegeven",
+                         "naam": "heeft_recht_op_lks",
+                         "operator": null,
+                         "waarde": true,
+                         "eenheid": null,
+                         "grond": null,
+                         "herkomst": {
+                          "soort": "stap"
+                         },
+                         "doorslaggevend": [
+                          {
+                           "soort": "uitkomst",
+                           "naam": "heeft_recht_op_lks",
+                           "operator": null,
+                           "waarde": true,
+                           "eenheid": null,
+                           "grond": {
+                            "wet": "participatiewet",
+                            "artikel": "10d",
+                            "lid": null
+                           },
+                           "herkomst": null,
+                           "doorslaggevend": [
+                            {
+                             "soort": "voorwaarde",
+                             "naam": null,
+                             "operator": "AND",
+                             "waarde": true,
+                             "eenheid": null,
+                             "grond": null,
+                             "herkomst": null,
+                             "doorslaggevend": [
+                              {
+                               "soort": "voorwaarde",
+                               "naam": null,
+                               "operator": "OR",
+                               "waarde": true,
+                               "eenheid": null,
+                               "grond": null,
+                               "herkomst": null,
+                               "doorslaggevend": [
+                                {
+                                 "soort": "gegeven",
+                                 "naam": "heeft_recht_op_lks_lid_2",
+                                 "operator": null,
+                                 "waarde": true,
+                                 "eenheid": null,
+                                 "grond": null,
+                                 "herkomst": {
+                                  "soort": "stap"
+                                 },
+                                 "doorslaggevend": [
+                                  {
+                                   "soort": "uitkomst",
+                                   "naam": "heeft_recht_op_lks_lid_2",
+                                   "operator": null,
+                                   "waarde": true,
+                                   "eenheid": null,
+                                   "grond": {
+                                    "wet": "participatiewet",
+                                    "artikel": "10d",
+                                    "lid": null
+                                   },
+                                   "herkomst": null,
+                                   "doorslaggevend": [
+                                    {
+                                     "soort": "voorwaarde",
+                                     "naam": null,
+                                     "operator": "AND",
+                                     "waarde": true,
+                                     "eenheid": null,
+                                     "grond": null,
+                                     "herkomst": null,
+                                     "doorslaggevend": [
+                                      {
+                                       "soort": "gegeven",
+                                       "naam": "behoort_tot_doelgroep_lks",
+                                       "operator": null,
+                                       "waarde": true,
+                                       "eenheid": null,
+                                       "grond": null,
+                                       "herkomst": {
+                                        "soort": "invoer"
+                                       },
+                                       "doorslaggevend": []
+                                      },
+                                      {
+                                       "soort": "gegeven",
+                                       "naam": "kan_minimumloon_niet_verdienen",
+                                       "operator": null,
+                                       "waarde": true,
+                                       "eenheid": null,
+                                       "grond": null,
+                                       "herkomst": {
+                                        "soort": "invoer"
+                                       },
+                                       "doorslaggevend": []
+                                      },
+                                      {
+                                       "soort": "gegeven",
+                                       "naam": "aanvraag_lks_binnen_zes_maanden",
+                                       "operator": null,
+                                       "waarde": true,
+                                       "eenheid": null,
+                                       "grond": null,
+                                       "herkomst": {
+                                        "soort": "stap"
+                                       },
+                                       "doorslaggevend": [
+                                        {
+                                         "soort": "uitkomst",
+                                         "naam": "aanvraag_lks_binnen_zes_maanden",
+                                         "operator": null,
+                                         "waarde": true,
+                                         "eenheid": null,
+                                         "grond": {
+                                          "wet": "participatiewet",
+                                          "artikel": "10d",
+                                          "lid": null
+                                         },
+                                         "herkomst": null,
+                                         "doorslaggevend": [
+                                          {
+                                           "soort": "keuze",
+                                           "naam": null,
+                                           "operator": "IF",
+                                           "waarde": true,
+                                           "eenheid": null,
+                                           "grond": null,
+                                           "herkomst": null,
+                                           "doorslaggevend": [
+                                            {
+                                             "soort": "keuze",
+                                             "naam": null,
+                                             "operator": "CASE_0",
+                                             "waarde": false,
+                                             "eenheid": null,
+                                             "grond": null,
+                                             "herkomst": null,
+                                             "doorslaggevend": [
+                                              {
+                                               "soort": "voorwaarde",
+                                               "naam": null,
+                                               "operator": "OR",
+                                               "waarde": false,
+                                               "eenheid": null,
+                                               "grond": null,
+                                               "herkomst": null,
+                                               "doorslaggevend": [
+                                                {
+                                                 "soort": "voorwaarde",
+                                                 "naam": null,
+                                                 "operator": "EQUALS",
+                                                 "waarde": false,
+                                                 "eenheid": null,
+                                                 "grond": null,
+                                                 "herkomst": null,
+                                                 "doorslaggevend": [
+                                                  {
+                                                   "soort": "gegeven",
+                                                   "naam": "datum_aanvraag_lks",
+                                                   "operator": null,
+                                                   "waarde": "2026-02-01",
+                                                   "eenheid": null,
+                                                   "grond": null,
+                                                   "herkomst": {
+                                                    "soort": "invoer"
+                                                   },
+                                                   "doorslaggevend": []
+                                                  },
+                                                  {
+                                                   "soort": "letterlijk",
+                                                   "naam": null,
+                                                   "operator": null,
+                                                   "waarde": null,
+                                                   "eenheid": null,
+                                                   "grond": null,
+                                                   "herkomst": null,
+                                                   "doorslaggevend": []
+                                                  }
+                                                 ]
+                                                },
+                                                {
+                                                 "soort": "voorwaarde",
+                                                 "naam": null,
+                                                 "operator": "EQUALS",
+                                                 "waarde": false,
+                                                 "eenheid": null,
+                                                 "grond": null,
+                                                 "herkomst": null,
+                                                 "doorslaggevend": [
+                                                  {
+                                                   "soort": "gegeven",
+                                                   "naam": "datum_aanvang_dienstbetrekking",
+                                                   "operator": null,
+                                                   "waarde": "2026-01-01",
+                                                   "eenheid": null,
+                                                   "grond": null,
+                                                   "herkomst": {
+                                                    "soort": "invoer"
+                                                   },
+                                                   "doorslaggevend": []
+                                                  },
+                                                  {
+                                                   "soort": "letterlijk",
+                                                   "naam": null,
+                                                   "operator": null,
+                                                   "waarde": null,
+                                                   "eenheid": null,
+                                                   "grond": null,
+                                                   "herkomst": null,
+                                                   "doorslaggevend": []
+                                                  }
+                                                 ]
+                                                }
+                                               ]
+                                              }
+                                             ]
+                                            },
+                                            {
+                                             "soort": "keuze",
+                                             "naam": null,
+                                             "operator": "DEFAULT",
+                                             "waarde": true,
+                                             "eenheid": null,
+                                             "grond": null,
+                                             "herkomst": null,
+                                             "doorslaggevend": [
+                                              {
+                                               "soort": "voorwaarde",
+                                               "naam": null,
+                                               "operator": "AND",
+                                               "waarde": true,
+                                               "eenheid": null,
+                                               "grond": null,
+                                               "herkomst": null,
+                                               "doorslaggevend": [
+                                                {
+                                                 "soort": "voorwaarde",
+                                                 "naam": null,
+                                                 "operator": "GREATER_THAN_OR_EQUAL",
+                                                 "waarde": true,
+                                                 "eenheid": null,
+                                                 "grond": null,
+                                                 "herkomst": null,
+                                                 "doorslaggevend": [
+                                                  {
+                                                   "soort": "gegeven",
+                                                   "naam": "datum_aanvraag_lks",
+                                                   "operator": null,
+                                                   "waarde": "2026-02-01",
+                                                   "eenheid": null,
+                                                   "grond": null,
+                                                   "herkomst": {
+                                                    "soort": "invoer"
+                                                   },
+                                                   "doorslaggevend": []
+                                                  },
+                                                  {
+                                                   "soort": "gegeven",
+                                                   "naam": "datum_aanvang_dienstbetrekking",
+                                                   "operator": null,
+                                                   "waarde": "2026-01-01",
+                                                   "eenheid": null,
+                                                   "grond": null,
+                                                   "herkomst": {
+                                                    "soort": "invoer"
+                                                   },
+                                                   "doorslaggevend": []
+                                                  }
+                                                 ]
+                                                },
+                                                {
+                                                 "soort": "voorwaarde",
+                                                 "naam": null,
+                                                 "operator": "LESS_THAN_OR_EQUAL",
+                                                 "waarde": true,
+                                                 "eenheid": null,
+                                                 "grond": null,
+                                                 "herkomst": null,
+                                                 "doorslaggevend": [
+                                                  {
+                                                   "soort": "gegeven",
+                                                   "naam": "datum_aanvraag_lks",
+                                                   "operator": null,
+                                                   "waarde": "2026-02-01",
+                                                   "eenheid": null,
+                                                   "grond": null,
+                                                   "herkomst": {
+                                                    "soort": "invoer"
+                                                   },
+                                                   "doorslaggevend": []
+                                                  },
+                                                  {
+                                                   "soort": "berekening",
+                                                   "naam": null,
+                                                   "operator": "DATE_ADD",
+                                                   "waarde": "2026-07-01",
+                                                   "eenheid": null,
+                                                   "grond": null,
+                                                   "herkomst": null,
+                                                   "doorslaggevend": [
+                                                    {
+                                                     "soort": "gegeven",
+                                                     "naam": "datum_aanvang_dienstbetrekking",
+                                                     "operator": null,
+                                                     "waarde": "2026-01-01",
+                                                     "eenheid": null,
+                                                     "grond": null,
+                                                     "herkomst": {
+                                                      "soort": "invoer"
+                                                     },
+                                                     "doorslaggevend": []
+                                                    },
+                                                    {
+                                                     "soort": "letterlijk",
+                                                     "naam": null,
+                                                     "operator": null,
+                                                     "waarde": 6,
+                                                     "eenheid": null,
+                                                     "grond": null,
+                                                     "herkomst": null,
+                                                     "doorslaggevend": []
+                                                    }
+                                                   ]
+                                                  }
+                                                 ]
+                                                }
+                                               ]
+                                              }
+                                             ]
+                                            }
+                                           ]
+                                          }
+                                         ]
+                                        }
+                                       ]
+                                      },
+                                      {
+                                       "soort": "gegeven",
+                                       "naam": "voorafgaand_relevante_onderwijsroute_of_doelgroep",
+                                       "operator": null,
+                                       "waarde": true,
+                                       "eenheid": null,
+                                       "grond": null,
+                                       "herkomst": {
+                                        "soort": "stap"
+                                       },
+                                       "doorslaggevend": [
+                                        {
+                                         "soort": "uitkomst",
+                                         "naam": "voorafgaand_relevante_onderwijsroute_of_doelgroep",
+                                         "operator": null,
+                                         "waarde": true,
+                                         "eenheid": null,
+                                         "grond": {
+                                          "wet": "participatiewet",
+                                          "artikel": "10d",
+                                          "lid": null
+                                         },
+                                         "herkomst": null,
+                                         "doorslaggevend": [
+                                          {
+                                           "soort": "voorwaarde",
+                                           "naam": null,
+                                           "operator": "OR",
+                                           "waarde": true,
+                                           "eenheid": null,
+                                           "grond": null,
+                                           "herkomst": null,
+                                           "doorslaggevend": [
+                                            {
+                                             "soort": "gegeven",
+                                             "naam": "was_persoon_7_lid_1_a_of_7a_in_zes_maanden_voorafgaand",
+                                             "operator": null,
+                                             "waarde": true,
+                                             "eenheid": null,
+                                             "grond": null,
+                                             "herkomst": {
+                                              "soort": "invoer"
+                                             },
+                                             "doorslaggevend": []
+                                            }
+                                           ]
+                                          }
+                                         ]
+                                        }
+                                       ]
+                                      }
+                                     ]
+                                    }
+                                   ]
+                                  }
+                                 ]
+                                }
+                               ]
+                              },
+                              {
+                               "soort": "voorwaarde",
+                               "naam": null,
+                               "operator": "NOT",
+                               "waarde": true,
+                               "eenheid": null,
+                               "grond": null,
+                               "herkomst": null,
+                               "doorslaggevend": [
+                                {
+                                 "soort": "gegeven",
+                                 "naam": "is_uitgesloten_lid_3",
+                                 "operator": null,
+                                 "waarde": false,
+                                 "eenheid": null,
+                                 "grond": null,
+                                 "herkomst": {
+                                  "soort": "stap"
+                                 },
+                                 "doorslaggevend": [
+                                  {
+                                   "soort": "uitkomst",
+                                   "naam": "is_uitgesloten_lid_3",
+                                   "operator": null,
+                                   "waarde": false,
+                                   "eenheid": null,
+                                   "grond": {
+                                    "wet": "participatiewet",
+                                    "artikel": "10d",
+                                    "lid": null
+                                   },
+                                   "herkomst": null,
+                                   "doorslaggevend": [
+                                    {
+                                     "soort": "gegeven",
+                                     "naam": "is_wsw_dienstbetrekking",
+                                     "operator": null,
+                                     "waarde": false,
+                                     "eenheid": null,
+                                     "grond": null,
+                                     "herkomst": {
+                                      "soort": "invoer"
+                                     },
+                                     "doorslaggevend": []
+                                    }
+                                   ]
+                                  }
+                                 ]
+                                }
+                               ]
+                              }
+                             ]
+                            }
+                           ]
+                          }
+                         ]
+                        }
+                       ]
+                      },
+                      {
+                       "soort": "keuze",
+                       "naam": null,
+                       "operator": "THEN",
+                       "waarde": 100958.4,
+                       "eenheid": null,
+                       "grond": null,
+                       "herkomst": null,
+                       "doorslaggevend": [
+                        {
+                         "soort": "berekening",
+                         "naam": null,
+                         "operator": "MAX",
+                         "waarde": 100958.4,
+                         "eenheid": null,
+                         "grond": null,
+                         "herkomst": null,
+                         "doorslaggevend": [
+                          {
+                           "soort": "berekening",
+                           "naam": null,
+                           "operator": "MIN",
+                           "waarde": 100958.4,
+                           "eenheid": null,
+                           "grond": null,
+                           "herkomst": null,
+                           "doorslaggevend": [
+                            {
+                             "soort": "gegeven",
+                             "naam": "bruto_subsidie_eurocent_per_maand",
+                             "operator": null,
+                             "waarde": 100958.4,
+                             "eenheid": null,
+                             "grond": null,
+                             "herkomst": {
+                              "soort": "stap"
+                             },
+                             "doorslaggevend": [
+                              {
+                               "soort": "uitkomst",
+                               "naam": "bruto_subsidie_eurocent_per_maand",
+                               "operator": null,
+                               "waarde": 100958.4,
+                               "eenheid": "eurocent",
+                               "grond": {
+                                "wet": "participatiewet",
+                                "artikel": "10d",
+                                "lid": null
+                               },
+                               "herkomst": null,
+                               "doorslaggevend": [
+                                {
+                                 "soort": "berekening",
+                                 "naam": null,
+                                 "operator": "SUBTRACT",
+                                 "waarde": 100958.4,
+                                 "eenheid": null,
+                                 "grond": null,
+                                 "herkomst": null,
+                                 "doorslaggevend": [
+                                  {
+                                   "soort": "gegeven",
+                                   "naam": "minimumloon_plus_vakantiebijslag_eurocent_per_maand",
+                                   "operator": null,
+                                   "waarde": 252396.0,
+                                   "eenheid": null,
+                                   "grond": null,
+                                   "herkomst": {
+                                    "soort": "niet_te_volgen"
+                                   },
+                                   "doorslaggevend": []
+                                  },
+                                  {
+                                   "soort": "gegeven",
+                                   "naam": "loonwaarde_eurocent_per_maand",
+                                   "operator": null,
+                                   "waarde": 151437.6,
+                                   "eenheid": null,
+                                   "grond": null,
+                                   "herkomst": {
+                                    "soort": "stap"
+                                   },
+                                   "doorslaggevend": [
+                                    {
+                                     "soort": "uitkomst",
+                                     "naam": "loonwaarde_eurocent_per_maand",
+                                     "operator": null,
+                                     "waarde": 151437.6,
+                                     "eenheid": "eurocent",
+                                     "grond": {
+                                      "wet": "participatiewet",
+                                      "artikel": "10d",
+                                      "lid": null
+                                     },
+                                     "herkomst": null,
+                                     "doorslaggevend": [
+                                      {
+                                       "soort": "berekening",
+                                       "naam": null,
+                                       "operator": "DIVIDE",
+                                       "waarde": 151437.6,
+                                       "eenheid": null,
+                                       "grond": null,
+                                       "herkomst": null,
+                                       "doorslaggevend": [
+                                        {
+                                         "soort": "berekening",
+                                         "naam": null,
+                                         "operator": "MULTIPLY",
+                                         "waarde": 15143760.0,
+                                         "eenheid": null,
+                                         "grond": null,
+                                         "herkomst": null,
+                                         "doorslaggevend": [
+                                          {
+                                           "soort": "gegeven",
+                                           "naam": "minimumloon_plus_vakantiebijslag_eurocent_per_maand",
+                                           "operator": null,
+                                           "waarde": 252396.0,
+                                           "eenheid": null,
+                                           "grond": null,
+                                           "herkomst": {
+                                            "soort": "niet_te_volgen"
+                                           },
+                                           "doorslaggevend": []
+                                          },
+                                          {
+                                           "soort": "gegeven",
+                                           "naam": "loonwaarde_percentage",
+                                           "operator": null,
+                                           "waarde": 60,
+                                           "eenheid": null,
+                                           "grond": null,
+                                           "herkomst": {
+                                            "soort": "invoer"
+                                           },
+                                           "doorslaggevend": []
+                                          }
+                                         ]
+                                        },
+                                        {
+                                         "soort": "letterlijk",
+                                         "naam": null,
+                                         "operator": null,
+                                         "waarde": 100,
+                                         "eenheid": null,
+                                         "grond": null,
+                                         "herkomst": null,
+                                         "doorslaggevend": []
+                                        }
+                                       ]
+                                      }
+                                     ]
+                                    }
+                                   ]
+                                  }
+                                 ]
+                                }
+                               ]
+                              }
+                             ]
+                            }
+                           ]
+                          }
+                         ]
+                        }
+                       ]
+                      }
+                     ]
+                    }
+                   ]
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "soort": "gegeven",
+         "naam": "arbeidsduur_voor_evenredigheid_uren_per_week",
+         "operator": null,
+         "waarde": 32,
+         "eenheid": null,
+         "grond": null,
+         "herkomst": {
+          "soort": "stap"
+         },
+         "doorslaggevend": [
+          {
+           "soort": "uitkomst",
+           "naam": "arbeidsduur_voor_evenredigheid_uren_per_week",
+           "operator": null,
+           "waarde": 32,
+           "eenheid": null,
+           "grond": {
+            "wet": "participatiewet",
+            "artikel": "10d",
+            "lid": null
+           },
+           "herkomst": null,
+           "doorslaggevend": [
+            {
+             "soort": "keuze",
+             "naam": null,
+             "operator": "IF",
+             "waarde": 32,
+             "eenheid": null,
+             "grond": null,
+             "herkomst": null,
+             "doorslaggevend": [
+              {
+               "soort": "keuze",
+               "naam": null,
+               "operator": "CASE_0",
+               "waarde": true,
+               "eenheid": null,
+               "grond": null,
+               "herkomst": null,
+               "doorslaggevend": [
+                {
+                 "soort": "voorwaarde",
+                 "naam": null,
+                 "operator": "EQUALS",
+                 "waarde": true,
+                 "eenheid": null,
+                 "grond": null,
+                 "herkomst": null,
+                 "doorslaggevend": [
+                  {
+                   "soort": "gegeven",
+                   "naam": "gebruikelijke_volledige_dienstbetrekking_uren",
+                   "operator": null,
+                   "waarde": null,
+                   "eenheid": null,
+                   "grond": {
+                    "wet": "participatiewet",
+                    "artikel": "10d",
+                    "lid": null
+                   },
+                   "herkomst": {
+                    "soort": "open_term"
+                   },
+                   "doorslaggevend": []
+                  },
+                  {
+                   "soort": "letterlijk",
+                   "naam": null,
+                   "operator": null,
+                   "waarde": null,
+                   "eenheid": null,
+                   "grond": null,
+                   "herkomst": null,
+                   "doorslaggevend": []
+                  }
+                 ]
+                }
+               ]
+              },
+              {
+               "soort": "keuze",
+               "naam": null,
+               "operator": "THEN",
+               "waarde": 32,
+               "eenheid": null,
+               "grond": null,
+               "herkomst": null,
+               "doorslaggevend": [
+                {
+                 "soort": "gegeven",
+                 "naam": "overeengekomen_arbeidsduur_uren_per_week",
+                 "operator": null,
+                 "waarde": 32,
+                 "eenheid": null,
+                 "grond": null,
+                 "herkomst": {
+                  "soort": "invoer"
+                 },
+                 "doorslaggevend": []
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "soort": "grens",
+       "naam": "normarbeidsduur_uren_per_week",
+       "operator": null,
+       "waarde": 36,
+       "eenheid": null,
+       "grond": {
+        "wet": "participatiewet",
+        "artikel": "10d",
+        "lid": null
+       },
+       "herkomst": {
+        "soort": "definitie"
+       },
+       "doorslaggevend": []
+      }
+     ]
+    }
+   ]
+  },
+  "samenvatting": [
+   "Loonkostensubsidie per maand: € 897,41.",
+   "Minimumloon met vakantiebijslag per maand (€ 2.523,96) min vastgestelde loonwaarde per maand (€ 1.514,38) is € 1.009,58, blijft onder de maximale loonkostensubsidie (€ 2.208,47), naar evenredigheid van de arbeidsduur in uren per week (32) op de normarbeidsduur in uren per week (36), dat is € 897,41."
+  ]
+ }
+}

@@ -12,6 +12,7 @@ import uuid
 from contextlib import aclosing, asynccontextmanager
 from pathlib import Path
 
+import uitleg as uitleg_module
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -192,6 +193,28 @@ class ChatResponse(BaseModel):
     session_id: str
     mode: str
     has_tools: bool
+
+
+class UitlegRequest(BaseModel):
+    """Een beslisgraaf van de regelrecht-engine die in gewone taal moet (PDR-016)."""
+
+    regeling: str
+    # `afleiding.uitkomst` uit de kern van regelrecht-uitleg: uitkomst bovenaan,
+    # daaronder de doorslaggevende voorwaarden, gegevens en berekening.
+    graaf: dict
+    # De korte, niet-technische regels van de kern; het model gebruikt
+    # dezelfde woorden.
+    samenvatting: list[str] = []
+    mode: str = "claude"  # "claude" of "vlam"; beide zonder tools
+
+
+class UitlegResponse(BaseModel):
+    """De tekst van het model en de toets ervan tegen de graaf."""
+
+    tekst: str
+    toets: dict
+    regels: int
+    mode: str
 
 
 class ToolInfo(BaseModel):
@@ -553,6 +576,42 @@ async def chat_stream(body: ChatRequest, request: Request):
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         },
+    )
+
+
+@app.post("/uitleg", response_model=UitlegResponse)
+async def uitleg(body: UitlegRequest, request: Request):
+    """Zet een beslisgraaf om in een uitleg in gewone taal, en toets die.
+
+    Eén aanroep zonder tools, bronnen of gespreksgeschiedenis: het model krijgt
+    alleen de graaf (PDR-016). Zelfde sessie- en sleutelregels als `/chat`:
+    zonder sessie geen aanroep (PDR-009), de sleutel leeft één verzoek (PDR-010).
+    """
+    session_kvk = _resolve_session_kvk(request)
+    if not session_kvk:
+        return _fout_respons(_geen_sessie_fout())
+    if not body.regeling.strip() or not uitleg_module.graaf_geldig(body.graaf):
+        return _fout_respons(maak_fout("UITLEG_GRAAF_ONGELDIG"))
+    try:
+        api_keys = _extract_api_keys(request)
+    except InvalidApiKey:
+        raise HTTPException(status_code=400, detail=INVALID_API_KEY_MESSAGE) from None
+    mode = "vlam" if body.mode == "vlam" else "claude"
+    resultaat = await uitleg_module.verwoord(
+        host,
+        graaf=body.graaf,
+        regeling=body.regeling.strip()[:120],
+        samenvatting=[str(z)[:400] for z in body.samenvatting[:12]],
+        mode=mode,
+        **api_keys,
+    )
+    if isinstance(resultaat, FoutMelding):
+        return _fout_respons(resultaat)
+    return UitlegResponse(
+        tekst=resultaat.tekst,
+        toets=resultaat.toets.als_dict(),
+        regels=resultaat.regels,
+        mode=resultaat.mode,
     )
 
 
