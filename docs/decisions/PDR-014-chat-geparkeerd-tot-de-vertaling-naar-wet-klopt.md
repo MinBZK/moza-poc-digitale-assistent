@@ -60,6 +60,26 @@ waargenomen gevallen, uit de code, de metingen en de twee juristensessies,
 waarop de beslissing rust. Alles wat uit een sessie komt is samengevat door
 het team; het zijn geen juridische oordelen.
 
+De beweringen in dit document rusten op verschillende soorten bewijs. De
+meting is die van 2 september
+(`docs/superpowers/plans/2026-09-02-toets-pdr-014.md`): alleen Claude, één
+bedrijf, vijf doorlopen, op de host van 25 augustus.
+
+| Bewering | Rust op | Kanttekening |
+|---|---|---|
+| De regeltoets is deterministisch en kost ongeveer 60 milliseconden | meting | 60 van 60 aanroepen identiek |
+| `"250.000"` wordt 250 en `-65000` geeft geen uitkomst | meting en code | alleen de engine gemeten, niet het gesprek |
+| Het model roept een bron aan vóór toestemming; de poort weigert | meting | 14 van 14; sinds PDR-015 zijn prompt en toollijst anders |
+| Het model start een regel op eigen initiatief | meting | de host-log met de tellingen staat niet in de repository |
+| Een beurt duurt mediaan 16 seconden | meting | gemeten onder gedeelde belasting; een bovengrens |
+| Toezeggingen vóór de toets | twee gevallen uit augustus | in de meting niet teruggevonden (0 van 37 eerste beurten) |
+| De vertaling van vraag naar wet en formele begrippen (B4 en B5) is de bron van de fouten | sessie van 10 augustus en het werk aan de host in augustus | niet gemeten: de assistent weigerde elke vraag over de arbeidsmarkt |
+| De zwaarte onder de AI-verordening ligt bij B5 | sessie van 10 augustus | lezing van het team; het sessiedocument staat niet in de repository |
+| Eén invoerwaarde scheelt elf procent; dezelfde voorziening staat in een andere wet | juristsessie van 23 juli | notities in `MinBZK/regelrecht` |
+| Een vooringevulde concept-aanvraag past beter dan een gesprek | hypothese | nog niet met ondernemers getoetst |
+
+De zwaarste bewering, over B4 en B5, heeft daarmee de lichtste onderbouwing.
+
 ## Context
 
 De Digitale Assistent is gebouwd als chat: de ondernemer stelt een vraag, een
@@ -836,6 +856,21 @@ bron per veld liggen vast, de uitvoerder draait dezelfde regelset, en de
 berekening vooraf geeft op dezelfde feiten aantoonbaar dezelfde uitkomst als
 de beoordeling achteraf. Dan
 kiezen we de vorm waarin we het doortrekken naar de ondernemer.
+
+Of aan het criterium is voldaan, stellen we vast met een meting in dezelfde
+vorm als die van 2 september: per onderdeel een oordeel, met de ruwe gegevens
+en de scripts in de repository.
+
+| Onderdeel van het criterium | Hoe we het vaststellen |
+|---|---|
+| De wet, de velden en de bron per veld liggen vast | de scenario's van de regeling in het corpus slagen, tegen een genoemde revisie van engine en corpus |
+| De uitvoerder draait dezelfde regelset | de uitvoerder noemt dezelfde revisie, vastgelegd in de afspraak over het schaduwdraaien |
+| De berekening vooraf geeft dezelfde uitkomst als de beoordeling achteraf | een vaste set dossiers, door portaal en uitvoerder op dezelfde feiten doorgerekend; elk verschil is verklaard |
+| De vertaling van vraag naar wet en invoer klopt, als de chat terugkomt | een vaste set vragen met per vraag de vastgestelde wet en invoer; de vertaling van het model ernaast |
+
+Het aantal dossiers en vragen en het verschil dat we aanvaarden, leggen we
+vast vóór de meting. Zonder drempel vooraf is achteraf niet te zeggen welke
+uitkomst het besluit had veranderd; dat ontbrak bij de meting van 2 september.
 
 1. Oordelen van 10 augustus aanvullen in sectie B en deze PDR ter
    vaststelling voorleggen.
