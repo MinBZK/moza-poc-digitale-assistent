@@ -56,13 +56,17 @@ van het parkeren van de chat.
 
 Wie alleen de uitkomst wil, leest [Context](#context), [Beslissing](#beslissing)
 en [Consequenties](#consequenties). De [Onderbouwing](#onderbouwing) bevat de
-waargenomen gevallen, uit de code, de metingen en de twee juristensessies,
-waarop de beslissing rust. Alles wat uit een sessie komt is samengevat door
+waargenomen gevallen, uit het gebruikersonderzoek, de code, de metingen en de
+twee juristensessies, waarop de beslissing rust. Alles wat uit een sessie komt is samengevat door
 het team; het zijn geen juridische oordelen.
 
-De beslissing rust op vier gronden, uitgewerkt onder
+De beslissing rust op vijf gronden, uitgewerkt onder
 [Onderbouwing](#onderbouwing):
 
+- **E. Het gebruikersonderzoek van 25 en 27 augustus.** Ondernemers waarderen
+  wat de assistent oplevert en vertrouwen het antwoord, maar geen van de zes
+  kon navertellen welke vervolgstap bij welke instantie hoort. De knelpunten
+  zitten in de gespreksvorm.
 - **A. De code en de metingen.** Wat het werk aan de host in augustus liet
   zien: elke stap die van het model naar de host verhuisde werd betrouwbaarder.
 - **B. De juridische toets van 10 augustus.** De zwaarte ligt bij de stappen
@@ -88,7 +92,8 @@ bewering waar die op rust.
 | Een beurt duurt mediaan 16 seconden | meting | gemeten onder gedeelde belasting; een bovengrens |
 | Toezeggingen vóór de toets | twee gevallen uit augustus | in de meting niet teruggevonden (0 van 37 eerste beurten) |
 | De vertaling van vraag naar wet en formele begrippen (B4 en B5) is de bron van de fouten | het werk aan de host in augustus, de sessie van 10 augustus en de juristvalidatie van 23 juli | niet met doorlopen te toetsen: de assistent weigerde elke vraag over de arbeidsmarkt |
-| Een gesprek geeft geen overzicht, geen vaste uitkomst en geen bruikbare onderbouwing | de notitie over de koerswijziging van 1 september | alle vier de gevolgen zijn waargenomen in augustus; zie grond D |
+| Een gesprek geeft geen overzicht, geen vaste uitkomst en geen bruikbare onderbouwing | de notitie over de koerswijziging van 1 september en het gebruikersonderzoek | alle vier de gevolgen zijn waargenomen in augustus; zie grond D en E |
+| Ondernemers vertrouwen het antwoord zonder de vervolgstap te kunnen navertellen | het gebruikersonderzoek van 25 en 27 augustus | zes respondenten, kwalitatief; de rapportage staat niet in de repository |
 | De zwaarte onder de AI-verordening ligt bij B5 | sessie van 10 augustus | lezing van het team; het sessiedocument staat niet in de repository |
 | Eén invoerwaarde scheelt elf procent; dezelfde voorziening staat in een andere wet | juristsessie van 23 juli | notities in `MinBZK/regelrecht` |
 | Een vooringevulde concept-aanvraag past beter dan een gesprek | hypothese | nog niet met ondernemers getoetst |
@@ -761,6 +766,49 @@ chat af te dwingen), geen bruikbare onderbouwing (het gesprek mag niets
 toevoegen aan of afwijken van de trace van de regel; proza naast een trace is
 geen onderbouwing bij bezwaar), en de regelstructuur verdwijnt (de
 traceerbaarheid die RegelRecht biedt lost op in het gesprek).
+
+### E. Wat het gebruikersonderzoek van augustus liet zien
+
+Het UX Research-team van Logius testte het prototype op 25 en 27 augustus met
+zes ondernemers (twee zzp'ers en vier mkb-ondernemers), op de informatieplicht
+energiebesparing. De rapportage (*Gebruikersonderzoek Digitale Assistent,
+usability test rapportage*) is een werkdocument en staat niet in deze
+repository. Het onderzoek is kwalitatief en verkennend; de aantallen hieronder
+zijn geen meting.
+
+- **De waardering is groot.** Vijf van de zes respondenten waren positief en
+  zouden de assistent gebruiken. Ze waarderen dat het antwoord op hun bedrijf
+  is toegespitst, dat regels van verschillende instanties bij elkaar komen en
+  dat de stappen hen door de regelgeving heen helpen.
+- **Het vertrouwen is groter dan het begrip.** Vier van de zes vertrouwden het
+  antwoord genoeg om ernaar te handelen, en de meesten zouden het rapport niet
+  meer controleren. De reden die ze geven is de afzender: een assistent van de
+  overheid, achter de inlog. Geen van de zes kon met zekerheid navertellen
+  welke vervolgstap bij welke instantie hoort. Eén respondent ging akkoord met
+  een term die hij niet begreep. Respondenten konden niet uitleggen waar hun
+  antwoord heen ging; ze vertrouwden erop dat het goed terechtkwam.
+- **Formulier en gesprek zitten elkaar in de weg.** Respondenten typten in de
+  chat waar een formulier klaarstond, zagen de verzendknop niet en dwaalden af.
+  De assistent vroeg dan opnieuw om dezelfde invoer. Twee van de zes gebruikten
+  het keuzemenu anders dan bedoeld. Sommigen voelden zich vastgezet, omdat ze
+  alleen ja of nee konden antwoorden.
+- **De ondernemer wil vooraf overzicht.** Welke gegevens nodig zijn, hoeveel
+  vragen er komen en hoe lang het duurt, was vooraf niet duidelijk. Sommigen
+  verwachtten een advies en geen formulier dat wordt verstuurd.
+- **Een gesprek met een taalmodel is niet voor iedereen.** Eén respondent wees
+  de assistent principieel af en noemde privacy als drempel. De onderzoekers
+  bevelen een volwaardig alternatief naast de chat aan, zoals een formulier.
+- **De nieuwe usecase kwam uit het onderzoek zelf.** Eén respondent noemde
+  ongevraagd het aannemen van iemand met een afstand tot de arbeidsmarkt als
+  vraag voor de assistent.
+
+Wat dit voor de beslissing betekent. De waardering gaat over wat de assistent
+oplevert: een antwoord dat op het bedrijf is toegespitst, uit regels van
+verschillende instanties. Dat blijft de opdracht. De knelpunten zitten in de
+gespreksvorm: geen overzicht vooraf, formulier en gesprek door elkaar, en een
+vervolgstap die niemand kon navertellen. Respondenten vertrouwen het antwoord
+om de afzender en controleren het niet. Een fout in de vertaling van vraag
+naar wet en invoer (grond A en B) blijft daardoor onopgemerkt.
 
 ## Alternatieven overwogen
 
