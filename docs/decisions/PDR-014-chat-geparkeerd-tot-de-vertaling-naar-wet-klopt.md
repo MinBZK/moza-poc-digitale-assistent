@@ -88,7 +88,7 @@ bewering waar die op rust.
 | Een beurt duurt mediaan 16 seconden | meting | gemeten onder gedeelde belasting; een bovengrens |
 | Toezeggingen vóór de toets | twee gevallen uit augustus | in de meting niet teruggevonden (0 van 37 eerste beurten) |
 | De vertaling van vraag naar wet en formele begrippen (B4 en B5) is de bron van de fouten | het werk aan de host in augustus, de sessie van 10 augustus en de juristvalidatie van 23 juli | niet met doorlopen te toetsen: de assistent weigerde elke vraag over de arbeidsmarkt |
-| Een gesprek geeft geen overzicht, geen vaste uitkomst en geen bruikbare onderbouwing | de notitie over de koerswijziging van 1 september en het gebruikersonderzoek van augustus | alle vier de gevolgen zijn waargenomen; zie grond D |
+| Een gesprek geeft geen overzicht, geen vaste uitkomst en geen bruikbare onderbouwing | de notitie over de koerswijziging van 1 september | alle vier de gevolgen zijn waargenomen in augustus; zie grond D |
 | De zwaarte onder de AI-verordening ligt bij B5 | sessie van 10 augustus | lezing van het team; het sessiedocument staat niet in de repository |
 | Eén invoerwaarde scheelt elf procent; dezelfde voorziening staat in een andere wet | juristsessie van 23 juli | notities in `MinBZK/regelrecht` |
 | Een vooringevulde concept-aanvraag past beter dan een gesprek | hypothese | nog niet met ondernemers getoetst |
