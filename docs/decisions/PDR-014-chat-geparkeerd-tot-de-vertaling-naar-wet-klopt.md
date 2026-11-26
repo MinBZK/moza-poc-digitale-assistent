@@ -2,7 +2,7 @@
 
 | Veld | Waarde |
 |---|---|
-| Status | Voorgesteld (concept, nog niet vastgesteld) |
+| Status | Voorgesteld (concept, nog niet vastgesteld). De koers wordt sinds september 2026 gevolgd; de vaststelling staat nog open. |
 | Datum | 2026-09-02 |
 | Beslisser(s) | Projectteam poc-moza; vaststelling door de MOZa-productgroep nog te plannen |
 | Gerelateerd | [PDR-006](PDR-006-feasibility-conclusie.md), [PDR-008](PDR-008-generieke-regelrecht-tool-en-wallet.md), [PDR-011](PDR-011-foutmeldingen-catalogus.md), [PDR-013](PDR-013-timeoutgrenzen-op-basis-van-meting.md), het sessiedocument *Classificatie van de Digitale Assistent* (juridische toets 10 augustus 2026; werkdocument van het team, niet in deze repository), notities SZW-juristvalidatie 23 juli (repo `MinBZK/regelrecht`, `docs/financieel-cv/szw/2026-07-23-juristvalidatie-notities.md`, branch `feat/financieel_cv_RVO`) |
@@ -28,6 +28,25 @@ ingevuld. Waar de tekst hieronder iets anders zegt, geldt deze stand:
   een aanvraag en een bevoegd gezag.
 - **De uitleg in gewone taal** is een eigen dienst van deze host, naast het
   gesprek: [PDR-016](PDR-016-uitleg-in-gewone-taal-uit-de-beslisgraaf.md).
+- **De gegevens komen van de werkgever.** De werkgever beantwoordt de vier
+  vragen. Wat de regelingen verder nodig hebben, vult het portaal aan met
+  aannames, en die staan bij de uitkomst. De koppeling met het
+  doelgroepregister bij UWV en de loonwaarde bij de gemeente, zoals beschreven
+  onder [Consequenties](#consequenties), is niet gebouwd. Komt die koppeling
+  er alsnog, dan hoort daarbij wat de kandidaat ziet: wie diens gegevens
+  gebruikt en waarvoor.
+- **De ingang is de taak van de ondernemer.** Het portaal begint bij "iemand
+  aannemen" en toont de regelingen die daarbij horen naast elkaar. De lijst
+  "Mijn regelingen" uit [Het schaalpad](#het-schaalpad) en de proef met eerst
+  één regeling zijn niet uitgevoerd.
+- **De uitkomst is een berekening.** Geen uitvoerder draait dezelfde regelset
+  en er is niet schaduwgedraaid. De uitkomst in het portaal is een
+  voorbeeldberekening op de antwoorden van de werkgever. Wat de uitvoerder
+  zelf vaststelt, zoals de doelgroep en de loonwaarde, blijft een vaststelling
+  van de uitvoerder.
+- **De chat blijft geparkeerd.** Aan het criterium onder
+  [Vervolgstappen](#vervolgstappen) is niet voldaan, omdat geen uitvoerder
+  dezelfde regelset draait.
 
 De vraag onder [Consequenties](#consequenties) waar de bouw van de basis landt,
 is daarmee beantwoord. De rest van dit document blijft staan als onderbouwing
@@ -283,7 +302,7 @@ vaste bouwvorm per regeling, met per onderdeel een eigenaar.
 | **Velden** | welke invoer de regel nodig heeft, met vraagtekst en type | volgt uit de regel: de engine meldt zelf wat hij mist, de `description` per parameter is de vraag (PDR-008, punt 3) | werkt live | ongewijzigd; geen handwerk per regeling |
 | **Veld → bron** | per veld: waar de waarde vandaan komt, welke soort (registratie, attestatie, opgave, wetsconstante), of toestemming nodig is, of de ondernemer mag corrigeren | portaalbeheer (MOZa), in overleg met de bronhouder | met de hand in Python, acht velden | een **bronnenregister** los van de regeling: per gegevenssoort één keer vastgelegd, hergebruikt door elke regeling die dat gegeven vraagt |
 | **Bronnen** | een koppeling per bronhouder, met herkomst en toestemmingsscope | bronhouder | KvK, KOOP, RegelRecht, RVO, netbeheerder-mock | elke nieuwe bron één keer aansluiten (UWV: doelgroepregister; gemeente: loonwaarde); daarna beschikbaar voor elke regeling |
-| **Uitvoerder** | de afspraak dat beoordelaar en portaal dezelfde regelset-versie draaien | uitvoerder en MOZa | geen | per regeling een schaduwdraai-afspraak; zonder die afspraak geen groene toets vooraf |
+| **Uitvoerder** | de afspraak dat beoordelaar en portaal dezelfde regelset-versie draaien | uitvoerder en MOZa | geen | per regeling een schaduwdraai-afspraak; zonder die afspraak geen belofte dat de berekening vooraf en de beoordeling achteraf op dezelfde feiten hetzelfde geven |
 | **Scherm** | de concept-aanvraag: gegevens met bron en datum, uitkomst met artikel, bevestigen of tegenspreken | MOZa | formulierbouwer uit de routeringstabel en een rapport-event met herkomst bestaan al | één generieke weergave die uit de regelingsdefinitie wordt opgebouwd; geen scherm per regeling |
 | **Toets** | scenario's met persona's die de uitkomst per regeling vastleggen | regelhouder en MOZa samen | BDD-scenario's in het corpus (Koen, Sadee); onderzoeksflow-script voor één flow | scenario's in het corpus zijn de maatstaf; het meetscript wordt generiek over de regelingsdefinitie |
 
@@ -724,8 +743,10 @@ classifier, zoeken in KOOP), waarna het model alleen nog de invoer uitvraagt.
   worden vastgesteld, inclusief wie die publiceert en beheert. Met UWV en één
   gemeente wordt dezelfde regelset eerst náást hun beoordelingsproces gedraaid
   (schaduwdraaien), niet erin. Zonder de afspraak dat portaal en uitvoerder
-  dezelfde regelset draaien vervalt de belofte dat een groene toets groen
-  blijft.
+  dezelfde regelset draaien vervalt de belofte dat de berekening vooraf en de
+  beoordeling achteraf op dezelfde feiten hetzelfde geven. Die belofte gaat
+  over de berekening. Wat de uitvoerder zelf vaststelt, zoals de doelgroep en
+  de loonwaarde, blijft een vaststelling van de uitvoerder.
 - **De gegevens komen uit bronnen, niet uit het gesprek.** Doelgroepregister
   en loonwaarde worden vooringevuld opgehaald bij UWV en gemeente, met
   toestemming en met bron en ophaaldatum per gegeven. Wat de overheid niet
@@ -753,8 +774,9 @@ classifier, zoeken in KOOP), waarna het model alleen nog de invoer uitvraagt.
 ## Vervolgstappen
 
 De parkeerstand eindigt zodra voor één regeling geldt: de wet, de velden en de
-bron per veld liggen vast, de uitvoerder draait dezelfde regelset, en de toets
-vooraf geeft aantoonbaar dezelfde uitkomst als de beoordeling achteraf. Dan
+bron per veld liggen vast, de uitvoerder draait dezelfde regelset, en de
+berekening vooraf geeft op dezelfde feiten aantoonbaar dezelfde uitkomst als
+de beoordeling achteraf. Dan
 kiezen we de vorm waarin we het doortrekken naar de ondernemer.
 
 1. Oordelen van 10 augustus aanvullen in sectie B en deze PDR ter
