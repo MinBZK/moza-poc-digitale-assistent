@@ -5,15 +5,17 @@
 | Status | Voorgesteld (concept, nog niet vastgesteld). De koers wordt sinds september 2026 gevolgd; de vaststelling staat nog open. |
 | Datum | 2026-09-02 |
 | Beslisser(s) | Projectteam poc-moza; vaststelling door de MOZa-productgroep nog te plannen |
-| Gerelateerd | [PDR-006](PDR-006-feasibility-conclusie.md), [PDR-008](PDR-008-generieke-regelrecht-tool-en-wallet.md), [PDR-011](PDR-011-foutmeldingen-catalogus.md), [PDR-013](PDR-013-timeoutgrenzen-op-basis-van-meting.md), het sessiedocument *Classificatie van de Digitale Assistent* (juridische toets 10 augustus 2026; werkdocument van het team, niet in deze repository), notities SZW-juristvalidatie 23 juli (repo `MinBZK/regelrecht`, `docs/financieel-cv/szw/2026-07-23-juristvalidatie-notities.md`, branch `feat/financieel_cv_RVO`) |
+| Gerelateerd | [PDR-006](PDR-006-feasibility-conclusie.md), [PDR-008](PDR-008-generieke-regelrecht-tool-en-wallet.md), [PDR-011](PDR-011-foutmeldingen-catalogus.md), [PDR-013](PDR-013-timeoutgrenzen-op-basis-van-meting.md), [PDR-015](PDR-015-bronnen-standaard-aan-en-tools-na-akkoord.md), [PDR-016](PDR-016-uitleg-in-gewone-taal-uit-de-beslisgraaf.md), [PDR-017](PDR-017-de-digitale-assistent-rekent-niet.md), het sessiedocument *Classificatie van de Digitale Assistent* (juridische toets 10 augustus 2026; werkdocument van het team, niet in deze repository), notities SZW-juristvalidatie 23 juli (repo `MinBZK/regelrecht`, `docs/financieel-cv/szw/2026-07-23-juristvalidatie-notities.md`, branch `feat/financieel_cv_RVO`) |
 
 ## Stand november 2026
 
 Deze PDR beschrijft de stand van 2 september 2026. Daarna is de koers verder
 ingevuld. Waar de tekst hieronder iets anders zegt, geldt deze stand:
 
-- **Het rekenen hoort bij RegelRecht.** Sinds 27 oktober is de basis de
-  regelrecht-engine met het corpus, niet de host van deze repository. De
+- **Het rekenen hoort bij RegelRecht**
+  ([PDR-017](PDR-017-de-digitale-assistent-rekent-niet.md)). Sinds 27 oktober
+  is de basis de regelrecht-engine met het corpus, niet de host van deze
+  repository. De
   routeringstabel (`regelrouting.py`) en een regelingsdefinitie in de host,
   zoals beschreven onder [Beslissing](#beslissing) en
   [Opschalen naar meerdere usecases](#opschalen-naar-meerdere-usecases), zijn
@@ -44,6 +46,11 @@ ingevuld. Waar de tekst hieronder iets anders zegt, geldt deze stand:
   voorbeeldberekening op de antwoorden van de werkgever. Wat de uitvoerder
   zelf vaststelt, zoals de doelgroep en de loonwaarde, blijft een vaststelling
   van de uitvoerder.
+- **Bronnen en akkoord zijn anders geregeld.** Sinds
+  [PDR-015](PDR-015-bronnen-standaard-aan-en-tools-na-akkoord.md) staat een
+  tool die akkoord vergt pas na het akkoord in de lijst van het model. De
+  weigeringen onder [Onderbouwing](#onderbouwing) A (figuur 5) en de
+  promptregels die daar worden aangehaald, beschrijven de host van 25 augustus.
 - **De chat blijft geparkeerd.** Aan het criterium onder
   [Vervolgstappen](#vervolgstappen) is niet voldaan, omdat geen uitvoerder
   dezelfde regelset draait.
