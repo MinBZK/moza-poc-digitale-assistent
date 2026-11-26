@@ -71,7 +71,13 @@ in het gebruikersonderzoek van augustus (proefronde 20 augustus, sessies 25 en
 27 augustus) hebben respondenten de informatieplicht-flow van vraag tot
 ingediende rapportage doorlopen.
 
-![De toets ligt bij RegelRecht, niet bij het taalmodel](assets/pdr-014/fig1-toets-bij-regelrecht.png)
+```mermaid
+flowchart LR
+  O["Ondernemer"] <--> DA["Digitale Assistent<br/>taalmodel: stelt de vraag samen"]
+  DA -- "ophalen" --> K["KvK"]
+  DA -- "toetsen" --> R["RegelRecht<br/>hier valt de uitkomst,<br/>met wetsartikel en peildatum"]
+  DA -- "indienen, na akkoord" --> V["RVO"]
+```
 
 *Figuur 1. Waar de juridische toets valt: bij de gemodelleerde regel. Het
 taalmodel zit ervoor en erna. Schema uit de sessie van 10 augustus.*
@@ -86,11 +92,22 @@ taak van het taalmodel:
    ondernemer zegt in de termen van de regel (B5).
 3. **Welke gegevens** moeten nog worden uitgevraagd, en bij wie (B6).
 
-![De tien beslismomenten; B4, B5 en B6 zijn stappen van het taalmodel](assets/pdr-014/fig2-beslismomenten.png)
+| Beslismoment | Wie zet de stap |
+|---|---|
+| B1 Intentie en scope | het taalmodel |
+| B2 Identiteit | de host; staat vast vóór het gesprek |
+| B3 Toestemming | de host |
+| B4 Bron en wet | het taalmodel |
+| B5 Invoerwaarden | het taalmodel |
+| B6 Ontbrekende gegevens | het taalmodel; kan terugleiden naar B5 |
+| B7 De regeltoets | de gemodelleerde regel |
+| B8 Formulering | het taalmodel |
+| B9 Indienen | de host |
+| B10 Loggen en redigeren | de host, doorlopend |
 
-*Figuur 2. De tien beslismomenten uit de sessie van 10 augustus. Blauw is het
-taalmodel, amber de gemodelleerde regel, wit de host. De drie stappen hierboven
-zijn B4, B5 en B6.*
+*Figuur 2. De tien beslismomenten uit de sessie van 10 augustus, met wie de
+stap zet: het taalmodel infereert, de gemodelleerde regel rekent, de host voert
+deterministisch uit. De drie stappen hierboven zijn B4, B5 en B6.*
 
 In augustus is vrijwel al het werk aan de host besteed aan het inperken van
 precies deze drie stappen: een feitenkaart zodat het model geen bedrijfsgegevens
@@ -384,14 +401,27 @@ verkeerd.**
   ontbrekend veld maar `requirements_met = false` zonder uitkomst, en dat
   toonde de host als "de plicht geldt niet" (commit `cdde0e0`, 19 augustus).
   Een tikfout `-5000` deed hetzelfde (`4b13a2f`, 20 augustus). Nagemeten op
-  2 september: 10 van 10 identiek (`docs/superpowers/plans/toets-pdr-014/engine-runs.json`;
+  2 september, met `"250.000"` en met de tikfout `-65000`: 10 van 10 identiek
+  (`docs/superpowers/plans/toets-pdr-014/engine-runs.json`;
   één reeks van vier aanroepen in figuur 3).
   Beide gerepareerd met normalisatie in de host, vóór de wet. Geen van beide is
   iets dat een taalmodel betrouwbaar afvangt; het zijn regels over het veld.
 
-  ![Engine-log: "250.000" wordt 250 en -65000 geeft geen uitkomst](assets/pdr-014/fig3-log-250000-engine.png)
+  ```text
+  (2) de opgave zoals de ondernemer hem typte ('250.000'), ongewijzigd doorgegeven
+  parameters = {..., "JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": "250.000", "JAARLIJKS_GASVERBRUIK_M3": "90.000"}
+  <<< requirements_met = False   heeft_energiebesparingsplicht = (geen uitkomst)
+  input zoals de engine hem las = {"$JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": 250, "$JAARLIJKS_GASVERBRUIK_M3": 90}
+  toets elektriciteit: 250 >= 50000 -> False
 
-  *Figuur 3. Nagemeten op 2 september tegen de draaiende engine, zonder
+  (4) hetzelfde bedrijf met een tikfout: -65000, ongewijzigd doorgegeven
+  parameters = {..., "JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": -65000, "JAARLIJKS_GASVERBRUIK_M3": 20000}
+  <<< requirements_met = False   heeft_energiebesparingsplicht = (geen uitkomst)
+  input zoals de engine hem las = {"$JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": -65000, "$JAARLIJKS_GASVERBRUIK_M3": 20000}
+  toets elektriciteit: -65000 >= 50000 -> False
+  ```
+
+  *Figuur 3. Aanroep 2 en 4 uit de log, ingekort. Nagemeten op 2 september tegen de draaiende engine, zonder
   taalmodel (`assets/pdr-014/log3-250000-engine.txt`). Aanroep 2: de opgave
   `"250.000"` komt bij de engine binnen als 250, de toets `250 >= 50000` faalt
   en er komt geen uitkomst. Aanroep 4: een bedrijf boven de
@@ -417,9 +447,13 @@ moment.**
   (`40134ac`, 25 augustus). Antwoord: een regel die de host deze beurt al klaar
   had, gaat niet opnieuw naar de engine.
 
-  ![Host-log: het model roept de regel zelf aan terwijl de regelloop hem al heeft bepaald](assets/pdr-014/fig4-hostlog-maatregelen-eigen-aanroep.png)
+  ```text
+  11:47:15  [vlam.host] INFO: Tool-aanroep [claude]: regelrecht__execute_law (velden: law, overrides, parameters)
+  11:47:15  [vlam.host] INFO: Regel al bepaald door de regelloop; uitkomst hergebruikt
+  ```
 
-  *Figuur 4. Host-log van 2 september, na de fix: het model roept
+  *Figuur 4. Host-log van 2 september, na de fix
+  (`assets/pdr-014/log4-hostlog-model-roept-regel-zelf.txt`): het model roept
   `regelrecht__execute_law` zelf aan (9 keer in 5 doorlopen) terwijl de
   regelloop de regel deze beurt al heeft bepaald; de host vangt dat af en
   hergebruikt de uitkomst (6 keer). Vóór 25 augustus ging die aanroep met
@@ -442,9 +476,15 @@ moment.**
   model vertaalt de weigering vervolgens in "geef toestemming via Delen en
   stel uw vraag daarna opnieuw", een extra beurt voor de ondernemer.
 
-  ![Host-log: de poort weigert een wallet-aanroep van het model vóór toestemming](assets/pdr-014/fig5-hostlog-toestemming-vereist.png)
+  ```text
+  11:54:55  [vlam.host] INFO: Tool-aanroep [claude]: kvk__mijn_bedrijf (velden: kvk_nummer)
+  11:54:55  [vlam.host] WARNING: Bron kvk geweigerd zonder vastgelegde toestemming
+  11:54:55  [vlam.host] INFO: Tool-aanroep [claude]: netbeheerder__verbruik (velden: kvk_nummer)
+  11:54:55  [vlam.host] WARNING: Bron netbeheerder geweigerd zonder vastgelegde toestemming
+  ```
 
-  *Figuur 5. Host-log van 2 september: het model probeert `kvk__mijn_bedrijf`
+  *Figuur 5. Host-log van 2 september
+  (`assets/pdr-014/log5-hostlog-toestemming-geweigerd.txt`): het model probeert `kvk__mijn_bedrijf`
   en `netbeheerder__verbruik` aan te roepen voordat het akkoord voor die bron
   is vastgelegd; de poort weigert. Voor de wallet staat er een harde
   promptregel ("roep `netbeheerder__verbruik` NOOIT zelf aan") en die hield
@@ -509,7 +549,7 @@ moment.**
 - Een beurt kost 5 tot 45 seconden op de onderzoeksomgeving (rooktest vóór de
   sessie van 25 augustus, werkdocument buiten deze repository); in de
   lokale meting van 24 augustus, met prompt-caching, was de zwaarste beurt
-  20 seconden (PDR-013). Op 2 september, met de regelloop in elke beurt en
+  20,6 seconden (PDR-013). Op 2 september, met de regelloop in elke beurt en
   twee hosts tegelijk op dezelfde sleutel, is de mediaan 16 seconden en de
   zwaarste 43. Een
   staart ging op 20 augustus twee keer over de grens van 60 seconden: lang
@@ -528,8 +568,8 @@ besloten.** Het ontwerp van 13 augustus ("de regel stuurt de flow") vertrekt
 van drie uitgangspunten van de opdrachtgever: waarden komen uit RegelRecht,
 RegelRecht wordt zo vroeg mogelijk ingezet, en zo min mogelijk stappen die het
 model bepaalt. Het resultaat is een lus die vóór het model draait, een
-routeringstabel van zes velden met per veld de bron en of er toestemming nodig
-is, en de regel uit het ontwerp: "Wat er níét in de tabel staat, komt er
+routeringstabel met per veld de bron en of er toestemming nodig is (zes velden
+in het ontwerp, acht in de code), en de regel uit het ontwerp: "Wat er níét in de tabel staat, komt er
 niet in" en "Geen raden, geen doorschuiven naar het model". Die tabel ís het vooringevulde formulier.
 
 Binnen die ene flow doet het model nog de vraag herkennen (B1) en het
@@ -573,11 +613,16 @@ tafel lag, met de open vragen die zijn meegegeven.
 > akkoord / nader uit te zoeken), in het bijzonder voor B1, B4, B5 en B6, en
 > de afgesproken eigenaren van de open punten.
 
-![De classificatieroute met B5 als aangrijpingspunt](assets/pdr-014/fig6-route-b5.png)
+```mermaid
+flowchart LR
+  A["Artikel 5<br/>verboden praktijk"] --- B["Bijlage III, punt 4 of 5a<br/>werving en selectie · toegang tot voorzieningen"]
+  B --- C["Artikel 6, lid 3<br/>beperkte voorbereidende taak"]
+  C --- D["Uitkomst<br/>artikel 50 of bijlage III"]
+```
 
 *Figuur 6. B5 op de classificatieroute: bijlage III en de uitzondering van
-artikel 6, lid 3, die vervalt bij profilering. Schema uit de sessie van
-10 augustus.*
+artikel 6, lid 3. Ontstaat bij B5 profilering, dan vervalt die uitzondering.
+Schema uit de sessie van 10 augustus.*
 
 - **De zwaarte zit bij de invoer, niet bij de uitkomst.** "Afstand tot de
   arbeidsmarkt" bestaat niet als juridische categorie; in de uitvoering zijn
@@ -622,18 +667,31 @@ de assistent. Ze is hier relevant omdat ze laat zien hoeveel er zit in de stap
 "welke wet en welke invoer", zelfs als de regel al gemodelleerd is en een
 jurist ernaast zit.
 
-![Casus Sadee: zeven regelingen, uitkomsten met grondslag](assets/pdr-014/fig7-sadee-financieel-cv.png)
+De feiten in de casus: 28 jaar, Wajong-uitkering, banenafspraak, loonwaarde
+70 procent van het minimumloon, 1664 verloonde uren. Daaruit volgen vier
+statussen: arbeidsprestatie onder het minimumloon, geen doelgroep
+Participatiewet en geen WW, Wajong-gerechtigd, en opgenomen in het
+doelgroepregister banenafspraak (Wfsv 38b).
 
-*Figuur 7. De casus Sadee in het Financieel CV (`persona-sadee.png` uit
-`MinBZK/regelrecht`, branch `feat/financieel_cv_RVO`, stand 24 juli): vier
-statussen links, rechts de uitkomsten per regeling met wetsartikel, waaronder
+| Regeling | Grondslag | Uitkomst |
+|---|---|---|
+| Loondispensatie | Wajong 2:20 | recht; loonbeding nietig (UWV) |
+| No-riskpolis | Ziektewet 29b, lid 2 onder a en e | recht; duur onbeperkt (UWV) |
+| Loonkostensubsidie | Participatiewet 10c en 10d | geen recht; geen doelgroep Participatiewet |
+| Proefplaatsing | WW 76a | geen recht; geen WW-uitkering |
+| Loonkostenvoordeel | Wtl, categorie b | recht; € 5.075,20 per jaar (de hoogste categorie telt, artikel 4.1 lid 3) |
+| Jobcoach en werkplekaanpassing | Wet WIA 35 | geen recht; lid 4 onder a sluit Wajong uit. Verwijst door naar Wajong 2:22 en verder |
+| Lage-inkomensvoordeel | Wtl, hoofdstuk 3 | bestaat niet meer; afgeschaft in 2025 |
+
+*Figuur 7. De casus Sadee in het Financieel CV, overgenomen uit
+`persona-sadee.png` in `MinBZK/regelrecht`, branch `feat/financieel_cv_RVO`,
+stand 24 juli: vier statussen en de uitkomsten per regeling met wetsartikel, waaronder
 één die toen nog niet gemodelleerd was (Wajong 2:22; op 19 augustus alsnog
 gemodelleerd in `regelrecht-corpus`, branch
 `traject/financieel-cv-validatie-df48ddd1`, commit `aa04ff3`) en
 één die niet meer bestaat (LIV). Welke wet je aanroept en met welke status
 bepaalt de uitkomst; de vertaling van "afstand tot de arbeidsmarkt" naar deze
-statussen is de stap die deze PDR buiten het model legt. Eén label in het
-beeld overlapt een kader; het beeld komt zo uit de bronrepository.*
+statussen is de stap die deze PDR buiten het model legt.*
 
 - **Zelfde voorziening, andere vindplaats.** Wet WIA artikel 35, lid 4 sluit
   Wajong-gerechtigden uit van jobcoaching en werkplekaanpassing, maar de Wajong

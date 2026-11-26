@@ -1,16 +1,13 @@
-"""Maakt log3-250000-engine.txt en fig3-log-250000-engine.png voor PDR-014.
+"""Maakt log3-250000-engine.txt voor PDR-014.
 
 Vier aanroepen van de informatieplicht-regel tegen de echte engine, zonder
 taalmodel: getallen zoals de host ze normaliseert, de opgave zoals de
 ondernemer hem typte ("250.000"), een bedrijf boven de elektriciteitsdrempel,
-en datzelfde bedrijf met een tikfout (-65000). De txt is de log; de png is
-diezelfde log gerenderd, voor in de PDR.
+en datzelfde bedrijf met een tikfout (-65000). De PDR citeert aanroep 2 en 4.
 
     uv run python docs/decisions/assets/pdr-014/maak-log3.py
 
-Vereist netwerktoegang; geen API-keys. Voor de png is Pillow nodig (staat niet
-in de projectomgeving; val dan terug op `python3` van het systeem, of maak een
-terminal-screenshot van de txt).
+Vereist netwerktoegang; geen API-keys.
 """
 
 import datetime
@@ -24,7 +21,6 @@ URL = os.getenv("REGELRECHT_RPC_URL", "https://ui.lac.projects.digilab.network/m
 LAW = "omgevingswet/energiebesparing/informatieplicht"
 HIER = Path(__file__).parent
 TXT = HIER / "log3-250000-engine.txt"
-PNG = HIER / "fig3-log-250000-engine.png"
 
 
 def _zoek(node: dict, naam: str) -> dict | None:
@@ -86,37 +82,6 @@ def maak_log() -> list[str]:
     return regels
 
 
-def render(regels: list[str]) -> None:
-    try:
-        from PIL import Image, ImageDraw, ImageFont
-    except ImportError:
-        print("Pillow ontbreekt; txt is geschreven, png niet.")
-        return
-    import glob
-
-    fonts = glob.glob("/usr/share/fonts/**/DejaVuSansMono.ttf", recursive=True) or glob.glob(
-        "/usr/share/fonts/**/*Mono*.ttf", recursive=True
-    )
-    font = ImageFont.truetype(fonts[0], 22) if fonts else ImageFont.load_default(size=22)
-    pad, lh = 28, 30
-    w = int(max(font.getlength(r) for r in regels) + 2 * pad)
-    h = len(regels) * lh + 2 * pad
-    img = Image.new("RGB", (w, h), (24, 26, 30))
-    d = ImageDraw.Draw(img)
-    for i, r in enumerate(regels):
-        kleur = (220, 222, 226)
-        if ">>>" in r:
-            kleur = (140, 190, 255)
-        if "requirements_met = False" in r or "-> False" in r:
-            kleur = (255, 120, 110)
-        if "requirements_met = True" in r:
-            kleur = (140, 220, 150)
-        d.text((pad, pad + i * lh), r, font=font, fill=kleur)
-    img.save(PNG)
-    print(f"{PNG.name}: {img.size}")
-
-
 if __name__ == "__main__":
     regels = maak_log()
     print("\n".join(regels))
-    render(regels)
