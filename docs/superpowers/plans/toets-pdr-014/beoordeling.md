@@ -71,7 +71,7 @@ python3 nageteld in de JSON; waar ik afwijk van het rapport staat dat erbij.
 3. **De vage vragen zijn niet vaag genoeg of buiten scope.** Eén van de drie is vaag, en die weigert de prompt in 6/6 runs; de andere twee zijn de flowvraag in andere woorden. Het PDR-voorbeeld "hoe zit dat dan met die verplichting" is niet getest. B4/B5-vertaling is in geen enkele run in beeld gekomen; "niet bevestigd" betekent hier "niet getoetst".
 4. **Het vergelijk main versus f22f063 is niet gelijkwaardig.** Andere scripts (7 tegen 6 beurten, 44 tegen 30-32 controles), ander toestemmingsmodel (twee akkoorden tegen één), andere verwachte mockdata. Het verschil 125 tegen 59 s per run bevat dus een extra beurt, een extra toestemmingsronde en het draaien van de regelloop in elke beurt; het rapport noemt de beurt wel, de rest niet.
 5. **Twee tellingen kloppen niet.** `TOESTEMMING_VEREIST` op main is 7, niet 8. "Stel uw vraag opnieuw" staat in 4/5 eerste beurten en 0/5 tweede beurten van de flow (dus 4/10, geen "8/8"); op de vage vragen met weigering wel 6/6.
-6. **Eén persona, één backend.** Alleen `claude`/sonnet-4-6, alleen een bedrijf met volledige wallet. De paden "ondernemer typt verbruik als tekst" (`af6924d`) en de hostnormalisatie (`cdde0e0`) zijn in de chat niet gemeten; C1 zegt alleen iets over de engine.
+6. **Eén persona, één backend.** Alleen `claude`/sonnet-4-6, alleen een bedrijf met volledige wallet. De paden "ondernemer typt verbruik als tekst" en de hostnormalisatie (`cdde0e0`) zijn in de chat niet gemeten; C1 zegt alleen iets over de engine.
 
 ## E. Eindoordeel
 

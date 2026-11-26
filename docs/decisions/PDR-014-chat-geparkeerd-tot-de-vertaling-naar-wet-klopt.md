@@ -381,9 +381,9 @@ verkeerd.**
 - Een respondent typte zijn verbruik als tekst in plaats van via het
   formulier. Alleen formulierantwoorden werden een feit, de regelloop bleef
   wachten en de assistent vroeg het verbruik opnieuw terwijl het net was
-  gegeven (`af6924d`, 25 augustus, op de branch `fix/verbruik-uit-de-chattekst`,
-  nog niet gemerged). Antwoord: een parser die getallen met een eenheid uit de
-  chattekst haalt. Dat is het formulier nabouwen in de chat.
+  gegeven (gebruikersonderzoek, 25 augustus). Een parser die getallen met een
+  eenheid uit de chattekst haalt is voorgesteld en niet doorgevoerd: zo'n
+  parser bouwt het formulier na in de chat.
 
 **Het model kiest de verkeerde wet, de verkeerde bron of het verkeerde
 moment.**
