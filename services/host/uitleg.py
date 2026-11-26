@@ -68,11 +68,16 @@ def _temperature_uit(waarde: str) -> float | None:
         return None
 
 
-# Lage temperature zoals in de Graph-conditie van het paper: minder variatie
-# tussen twee uitleggen van dezelfde graaf. Alleen voor VLAM: de huidige
-# Claude-modellen weigeren `temperature` met een 400. Leeg zetten voor een
-# VLAM-model dat de parameter niet accepteert.
-VLAM_TEMPERATURE = _temperature_uit(os.getenv("UITLEG_VLAM_TEMPERATURE", "0.2"))
+def _vlam_temperature() -> float | None:
+    """Lage temperature zoals in de Graph-conditie van het paper.
+
+    Minder variatie tussen twee uitleggen van dezelfde graaf. Alleen voor VLAM:
+    de huidige Claude-modellen weigeren `temperature` met een 400. Leeg zetten
+    voor een VLAM-model dat de parameter niet accepteert. Gelezen bij de
+    aanroep: `.env` wordt geladen door `config`, en dat is na de import van deze
+    module nog niet gebeurd.
+    """
+    return _temperature_uit(os.getenv("UITLEG_VLAM_TEMPERATURE", "0.2"))
 
 # Woorden die een graaf-knoop beschrijven; alles daarbuiten in een knoop is
 # data van de engine en gaat niet mee (geen url's, geen citaties).
@@ -109,6 +114,48 @@ _ZELFDE_EENHEID = frozenset({
     "EQUALS", "NOT_EQUALS", "GREATER_THAN", "GREATER_THAN_OR_EQUAL",
     "LESS_THAN", "LESS_THAN_OR_EQUAL", "MIN", "MAX", "ADD", "SUBTRACT",
 })
+# Daarvan de operatoren waarvan ook de uitkomst die eenheid heeft. Een
+# vergelijking geeft ja of nee; een verschil van twee bedragen is een bedrag.
+_UITKOMST_ZELFDE_EENHEID = frozenset({"MIN", "MAX", "ADD", "SUBTRACT"})
+# De takken van een keuze die de waarde leveren van de knoop erboven. Een
+# CASE draagt de voorwaarde van de keuze, niet de waarde.
+_LEVERT_DE_WAARDE = frozenset({"IF", "THEN", "DEFAULT"})
+
+
+def _eenheid_van_operand(knoop: dict) -> str | None:
+    """De eenheid van een operand, ook als het een berekening zonder naam is."""
+    eenheid = _eenheid(knoop)
+    if eenheid or knoop.get("operator") not in _UITKOMST_ZELFDE_EENHEID:
+        return eenheid
+    return _eenheid_van_operanden(knoop)
+
+
+def _eenheid_van_operanden(knoop: dict) -> str | None:
+    kinderen = (_vouw(k) for k in knoop.get("doorslaggevend") or [])
+    return next(
+        (e for k in kinderen if k.get("soort") != "letterlijk" and (e := _eenheid_van_operand(k))),
+        None,
+    )
+
+
+def _eenheid_voor_kinderen(knoop: dict, geerfd: str | None) -> str | None:
+    """De eenheid die een vaste waarde direct onder deze knoop heeft, of None.
+
+    Een vaste waarde uit de wet draagt zelf geen eenheid. Ze heeft die van de
+    operanden naast haar, of van de uitkomst waarvan ze via een keuze de waarde
+    levert. In elk ander geval is ze een kaal getal: liever geen eenheid dan
+    een verkeerde.
+    """
+    operator = knoop.get("operator")
+    if operator in _UITKOMST_ZELFDE_EENHEID:
+        return _eenheid(knoop) or geerfd or _eenheid_van_operanden(knoop)
+    if operator in _ZELFDE_EENHEID:
+        return _eenheid_van_operanden(knoop)
+    if operator in _LEVERT_DE_WAARDE:
+        return _eenheid(knoop) or geerfd
+    if operator is None:
+        return _eenheid(knoop)
+    return None
 
 
 def _waarde_tekst(knoop: dict, eenheid: str | None = None) -> str | None:
@@ -222,8 +269,11 @@ def _regels_tot(graaf: dict, max_diepte: int) -> list[str]:
         if len(regels) > MAX_REGELS or diepte > max_diepte:
             return
         knoop = _vouw(knoop)
-        if knoop.get("soort") == "keuze" and knoop.get("operator") == "IF":
-            # De IF zelf zegt niets wat de gekozen tak eronder niet zegt.
+        kaal = not knoop.get("naam") and not knoop.get("grond")
+        if diepte > 0 and kaal and knoop.get("soort") == "keuze" and knoop.get("operator") == "IF":
+            # Een IF zonder naam en grond zegt niets wat de gekozen tak eronder
+            # niet zegt. Met een naam of grond is ze zelf de uitkomst of draagt
+            # ze het artikel, en dan valt ze niet weg.
             for kind in knoop.get("doorslaggevend") or []:
                 loop(kind, diepte, buur_eenheid)
             return
@@ -236,14 +286,8 @@ def _regels_tot(graaf: dict, max_diepte: int) -> list[str]:
             kop = f"- {soort}: {naam}{'' if waarde is None else f' = {waarde}'}"
         regels.append(f"{'  ' * diepte}{kop}{_grond_tekst(knoop)}{_herkomst_tekst(knoop)}")
 
-        kinderen = [_vouw(k) for k in knoop.get("doorslaggevend") or []]
-        eenheid = None
-        if knoop.get("operator") in _ZELFDE_EENHEID:
-            eenheid = next(
-                (e for k in kinderen if k.get("soort") != "letterlijk" and (e := _eenheid(k))),
-                None,
-            )
-        for kind in kinderen:
+        eenheid = _eenheid_voor_kinderen(knoop, buur_eenheid)
+        for kind in knoop.get("doorslaggevend") or []:
             loop(kind, diepte + 1, eenheid)
 
     loop(graaf, 0, None)
@@ -458,7 +502,8 @@ async def verwoord(
         if backend == "vlam":
             if not vlam:
                 return _geen_sleutel_fout("vlam")
-            sampling = {} if VLAM_TEMPERATURE is None else {"temperature": VLAM_TEMPERATURE}
+            temperature = _vlam_temperature()
+            sampling = {} if temperature is None else {"temperature": temperature}
             aanroep = partial(
                 vlam.chat.completions.create,
                 model=VLAM_MODEL_ID,

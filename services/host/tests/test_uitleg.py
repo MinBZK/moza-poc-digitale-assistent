@@ -114,6 +114,104 @@ def test_graaf_regels_geeft_een_vaste_waarde_de_eenheid_van_haar_buren(operator,
     assert regels[-1].strip() == verwacht
 
 
+def test_graaf_regels_geeft_een_drempel_de_eenheid_van_een_berekening_zonder_naam():
+    verschil = {
+        "soort": "berekening", "operator": "SUBTRACT", "waarde": 98562,
+        "doorslaggevend": [
+            {"soort": "gegeven", "naam": "loon_eurocent", "waarde": 250000},
+            {"soort": "gegeven", "naam": "loonwaarde_eurocent", "waarde": 151438},
+        ],
+    }
+    graaf = {
+        "soort": "voorwaarde", "operator": "GREATER_THAN", "waarde": False,
+        "doorslaggevend": [verschil, {"soort": "letterlijk", "waarde": 100000}],
+    }
+    assert uitleg.graaf_regels(graaf)[-1].strip() == "- letterlijk = € 1.000,00"
+
+
+def _keuze(naam: str, tak: str, waarde: dict) -> dict:
+    """Een gegeven met een keuze eronder, zoals de engine die vastlegt."""
+    return {
+        "soort": "uitkomst", "naam": naam, "waarde": waarde.get("waarde"),
+        "doorslaggevend": [{
+            "soort": "keuze", "operator": "IF", "waarde": waarde.get("waarde"),
+            "doorslaggevend": [
+                {"soort": "keuze", "operator": tak, "waarde": waarde.get("waarde"), "doorslaggevend": [waarde]},
+            ],
+        }],
+    }
+
+
+@pytest.mark.parametrize("tak", ["THEN", "DEFAULT"])
+@pytest.mark.parametrize(
+    ("naam", "verwacht"),
+    [
+        ("subsidie_eurocent", "- letterlijk = € 500,00"),
+        ("korting_percentage", "- letterlijk = 50000%"),
+        # Geen eenheid in de naam: er valt niets te erven.
+        ("aantal_maanden", "- letterlijk = 50000"),
+    ],
+)
+def test_graaf_regels_geeft_een_vaste_waarde_onder_een_keuze_de_eenheid_van_de_uitkomst(tak, naam, verwacht):
+    graaf = _keuze(naam, tak, {"soort": "letterlijk", "waarde": 50000})
+    assert uitleg.graaf_regels(graaf)[-1].strip() == verwacht
+
+
+def test_graaf_regels_laat_een_factor_onder_een_keuze_een_factor():
+    product = {
+        "soort": "berekening", "operator": "MULTIPLY", "waarde": 100000,
+        "doorslaggevend": [
+            {"soort": "gegeven", "naam": "basis_eurocent", "waarde": 50000},
+            {"soort": "letterlijk", "waarde": 2},
+        ],
+    }
+    assert uitleg.graaf_regels(_keuze("subsidie_eurocent", "THEN", product))[-1].strip() == "- letterlijk = 2"
+
+
+def test_graaf_regels_geeft_de_voorwaarde_van_een_keuze_niet_de_eenheid_van_de_uitkomst():
+    voorwaarde = {
+        "soort": "voorwaarde", "operator": "EQUALS", "waarde": True,
+        "doorslaggevend": [
+            {"soort": "gegeven", "naam": "uren_per_week", "waarde": 36},
+            {"soort": "letterlijk", "waarde": 36},
+        ],
+    }
+    assert uitleg.graaf_regels(_keuze("subsidie_eurocent", "CASE_0", voorwaarde))[-1].strip() == "- letterlijk = 36"
+
+
+GROND = {"wet": "participatiewet", "artikel": "10e"}
+
+
+@pytest.mark.parametrize(
+    ("extra", "zichtbaar"),
+    [
+        ({}, False),
+        ({"naam": "hoogte_subsidie_eurocent"}, True),
+        ({"grond": GROND}, True),
+        ({"naam": "hoogte_subsidie_eurocent", "grond": GROND}, True),
+    ],
+)
+def test_graaf_regels_slaat_alleen_een_keuze_zonder_eigen_inhoud_over(extra, zichtbaar):
+    keuze = {
+        "soort": "keuze", "operator": "IF", "waarde": True, **extra,
+        "doorslaggevend": [{"soort": "keuze", "operator": "CASE_0", "waarde": True, "doorslaggevend": []}],
+    }
+    graaf = {"soort": "uitkomst", "naam": "heeft_recht", "waarde": True, "doorslaggevend": [keuze]}
+    regels = uitleg.graaf_regels(graaf)
+    assert any("IF" in r or "hoogte_subsidie_eurocent" in r for r in regels) is zichtbaar
+    assert ("art. 10e" in "\n".join(regels)) is ("grond" in extra)
+
+
+def test_graaf_regels_houdt_een_keuze_als_wortel():
+    graaf = {
+        "soort": "keuze", "operator": "IF", "waarde": True, "naam": "hoogte_subsidie_eurocent", "grond": GROND,
+        "doorslaggevend": [{"soort": "keuze", "operator": "CASE_0", "waarde": True, "doorslaggevend": []}],
+    }
+    regels = uitleg.graaf_regels(graaf)
+    assert "hoogte_subsidie_eurocent" in regels[0] and "art. 10e" in regels[0]
+    assert uitleg.graaf_regels({"soort": "keuze", "operator": "IF", "waarde": True, "doorslaggevend": []}) != []
+
+
 @pytest.mark.parametrize(
     ("waarde", "verwacht"),
     [(None, "- letterlijk = geen waarde"), (True, "- letterlijk = ja"), ("2026-01-01", "- letterlijk = 2026-01-01")],
@@ -353,11 +451,18 @@ def _met_nep_vlam(monkeypatch, tekst: str) -> _NepVlam:
     return nep
 
 
-@pytest.mark.parametrize(("instelling", "verwacht"), [(0.2, 0.2), (None, None)])
+@pytest.mark.parametrize(("instelling", "verwacht"), [("0.2", 0.2), ("0.7", 0.7), ("", None), (None, 0.2)])
 @pytest.mark.asyncio
 async def test_verwoord_stuurt_de_lage_temperature_naar_vlam(monkeypatch, instelling, verwacht):
-    """Lage temperature zoals in de Graph-conditie; uit te zetten voor een model dat haar weigert."""
-    monkeypatch.setattr(uitleg, "VLAM_TEMPERATURE", instelling)
+    """Lage temperature zoals in de Graph-conditie; uit te zetten voor een model dat haar weigert.
+
+    De omgeving wordt bij de aanroep gelezen: een waarde uit `.env` is er pas
+    nadat `config` is geladen, en dat is na de import van deze module.
+    """
+    if instelling is None:
+        monkeypatch.delenv("UITLEG_VLAM_TEMPERATURE", raising=False)
+    else:
+        monkeypatch.setenv("UITLEG_VLAM_TEMPERATURE", instelling)
     nep = _met_nep_vlam(monkeypatch, "U krijgt € 897,41 per maand (artikel 10d).")
     resultaat = await uitleg.verwoord(
         api.host, graaf=BEDRAG["graaf"], regeling="Loonkostensubsidie",
