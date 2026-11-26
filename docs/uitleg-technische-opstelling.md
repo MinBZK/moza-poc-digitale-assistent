@@ -1,6 +1,6 @@
 # Technische opstelling: "Waarom deze uitkomst?"
 
-*Stand 23 november 2026. moza-portaal `main`, moza-poc-digitale-assistent `main`, draft-PR #80.*
+*Stand 26 november 2026. moza-portaal `main` en moza-poc-digitale-assistent `main`.*
 
 ## Opstelling
 
@@ -14,7 +14,7 @@ De uitleg heeft twee lagen boven één berekening.
 flowchart LR
   A["antwoorden<br/>+ aannames"] --> E["RegelRecht-engine<br/>(WASM, browser)"]
   E -- "afleiding per uitkomst" --> L1["Laag 1<br/>deterministische uitleg"]
-  E -- "beslisgraaf + samenvatting" --> U["POST /uitleg<br/>graaf → regels (≤60, diepte ≤6)<br/>→ prompt → taalmodel"]
+  E -- "beslisgraaf + samenvatting" --> U["POST /uitleg<br/>graaf → regels (≤60, zo diep als past)<br/>→ prompt → taalmodel"]
   U --> T["toets<br/>bedragen, percentages,<br/>artikel, MAX/MIN"]
   T -- "tekst + toetsuitslag" --> L2["Laag 2<br/>tekst in gewone taal"]
 ```
@@ -24,11 +24,11 @@ flowchart LR
 - de beslisgraaf van de laatste uitkomst;
 - de korte samenvatting van de engine.
 
-**Uitvoer:** `{ tekst, toets, mode }`. Een tekst die de toets niet haalt, gaat ook terug, met `geslaagd: false`.
+**Uitvoer:** `{ tekst, toets, regels, mode }`; `regels` is het aantal regels dat het model kreeg. Een tekst die de toets niet haalt, gaat ook terug, met `geslaagd: false`.
 
 ## Beperkingen
 
-1. **De toets controleert alleen getallen en het artikel.** Bij een meting met tien bewust foute zinnen miste hij er vier:
+1. **De toets controleert alleen getallen, het artikel en de richting van MAX en MIN.** Bij een meting met tien bewust foute zinnen miste hij er vier:
    - verwisselde getallen;
    - een omgedraaide ontkenning;
    - een getal bij het verkeerde label;
