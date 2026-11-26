@@ -1,0 +1,16 @@
+# host-log main, 2026-09-02: het model roept regelrecht__execute_law zelf aan terwijl de regelloop de regel deze beurt al heeft bepaald
+2026-09-02 11:47:15  [httpx] INFO: HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-09-02 11:47:15  [vlam.host] INFO: TOKENS [claude] input=20494 output=200 total=20694
+2026-09-02 11:47:15  [vlam.host] INFO: Tool-aanroep [claude]: regelrecht__execute_law (velden: law, overrides, parameters)
+2026-09-02 11:47:15  [vlam.host] INFO: Regel al bepaald door de regelloop; uitkomst hergebruikt
+…
+2026-09-02 11:47:51  [httpx] INFO: HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-09-02 11:47:52  [vlam.host] INFO: TOKENS [claude] input=26811 output=271 total=27082
+2026-09-02 11:47:52  [vlam.host] INFO: Tool-aanroep [claude]: regelrecht__execute_law (velden: law, overrides, parameters)
+2026-09-02 11:47:52  [vlam.host] INFO: Regel al bepaald door de regelloop; uitkomst hergebruikt
+…
+2026-09-02 11:49:27  [httpx] INFO: HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2026-09-02 11:49:27  [vlam.host] INFO: TOKENS [claude] input=18572 output=188 total=18760
+2026-09-02 11:49:27  [vlam.host] INFO: Tool-aanroep [claude]: regelrecht__execute_law (velden: law, overrides, parameters)
+2026-09-02 11:49:27  [vlam.host] INFO: Regel al bepaald door de regelloop; uitkomst hergebruikt
+…

@@ -1,0 +1,128 @@
+{
+ "E1 genormaliseerd 250000/90000": {
+  "runs": 10,
+  "identiek": true,
+  "uitkomst": {
+   "input": {
+    "$JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": 250000,
+    "$JAARLIJKS_GASVERBRUIK_M3": 90000
+   },
+   "missing": [],
+   "plicht": true,
+   "requirements_met": true
+  },
+  "ms_mediaan": 56,
+  "ms_max": 139
+ },
+ "E2 string '250.000'/'90.000'": {
+  "runs": 10,
+  "identiek": true,
+  "uitkomst": {
+   "input": {
+    "$JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": 250,
+    "$JAARLIJKS_GASVERBRUIK_M3": 90
+   },
+   "missing": [],
+   "plicht": null,
+   "requirements_met": false
+  },
+  "ms_mediaan": 54,
+  "ms_max": 152
+ },
+ "E3 65000/20000": {
+  "runs": 10,
+  "identiek": true,
+  "uitkomst": {
+   "input": {
+    "$JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": 65000,
+    "$JAARLIJKS_GASVERBRUIK_M3": 20000
+   },
+   "missing": [],
+   "plicht": true,
+   "requirements_met": true
+  },
+  "ms_mediaan": 61,
+  "ms_max": 146
+ },
+ "E4 tikfout -65000/20000": {
+  "runs": 10,
+  "identiek": true,
+  "uitkomst": {
+   "input": {
+    "$JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": -65000,
+    "$JAARLIJKS_GASVERBRUIK_M3": 20000
+   },
+   "missing": [],
+   "plicht": null,
+   "requirements_met": false
+  },
+  "ms_mediaan": 62,
+  "ms_max": 154
+ },
+ "E5 leeg {}": {
+  "runs": 10,
+  "identiek": true,
+  "uitkomst": {
+   "input": {},
+   "missing": [
+    {
+     "message": "Required parameters are missing for RVO/omgevingswet/energiebesparing/informatieplicht",
+     "missing_fields": [
+      {
+       "description": "KvK-nummer van de organisatie",
+       "name": "KVK_NUMMER"
+      },
+      {
+       "description": "Of het pand uitsluitend een woonfunctie heeft",
+       "name": "IS_WOONFUNCTIE"
+      }
+     ],
+     "provided_parameters": [
+      "none"
+     ],
+     "status": "missing_required_parameters",
+     "suggestion": "Provide the missing parameters: KVK_NUMMER, IS_WOONFUNCTIE"
+    }
+   ],
+   "plicht": null,
+   "requirements_met": false
+  },
+  "ms_mediaan": 63,
+  "ms_max": 148
+ },
+ "E6 alleen KVK+woonfunctie": {
+  "runs": 10,
+  "identiek": true,
+  "uitkomst": {
+   "input": {
+    "$JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH": null,
+    "$JAARLIJKS_GASVERBRUIK_M3": null
+   },
+   "missing": [
+    {
+     "message": "Required parameters are missing for RVO/omgevingswet/energiebesparing/informatieplicht",
+     "missing_fields": [
+      {
+       "description": "Jaarlijks elektriciteitsverbruik in kWh",
+       "name": "JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH"
+      },
+      {
+       "description": "Jaarlijks gasverbruik in m\u00b3 aardgasequivalenten",
+       "name": "JAARLIJKS_GASVERBRUIK_M3"
+      }
+     ],
+     "provided_parameters": [
+      "KVK_NUMMER",
+      "IS_WOONFUNCTIE"
+     ],
+     "status": "missing_required_parameters",
+     "suggestion": "Provide the missing parameters: JAARLIJKS_ELEKTRICITEITSVERBRUIK_KWH, JAARLIJKS_GASVERBRUIK_M3"
+    }
+   ],
+   "plicht": null,
+   "requirements_met": false
+  },
+  "ms_mediaan": 56,
+  "ms_max": 139
+ }
+}
