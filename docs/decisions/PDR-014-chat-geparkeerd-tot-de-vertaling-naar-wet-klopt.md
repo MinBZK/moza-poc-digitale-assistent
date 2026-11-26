@@ -60,10 +60,24 @@ waargenomen gevallen, uit de code, de metingen en de twee juristensessies,
 waarop de beslissing rust. Alles wat uit een sessie komt is samengevat door
 het team; het zijn geen juridische oordelen.
 
-De beweringen in dit document rusten op verschillende soorten bewijs. De
-meting is die van 2 september
-(`docs/superpowers/plans/2026-09-02-toets-pdr-014.md`): alleen Claude, één
-bedrijf, vijf doorlopen, op de host van 25 augustus.
+De beslissing rust op vier gronden, uitgewerkt onder
+[Onderbouwing](#onderbouwing):
+
+- **A. De code en de metingen.** Wat het werk aan de host in augustus liet
+  zien: elke stap die van het model naar de host verhuisde werd betrouwbaarder.
+- **B. De juridische toets van 10 augustus.** De zwaarte ligt bij de stappen
+  die het taalmodel zet, met de invoerwaarden als zwaarste moment.
+- **C. De juristvalidatie van 23 juli.** Hoeveel er zit in de keuze van wet en
+  invoer, ook als de regel al gemodelleerd is.
+- **D. De vorm.** Een gesprek geeft geen overzicht, geen vaste uitkomst bij
+  dezelfde situatie en geen onderbouwing die bij bezwaar bruikbaar is, en de
+  structuur van de regel verdwijnt erin.
+
+De meting van 2 september
+(`docs/superpowers/plans/2026-09-02-toets-pdr-014.md`) is een deel van grond A.
+Ze toetst de beweringen die met doorlopen te toetsen zijn: alleen Claude, één
+bedrijf, vijf doorlopen, op de host van 25 augustus. De tabel zegt per
+bewering waar die op rust.
 
 | Bewering | Rust op | Kanttekening |
 |---|---|---|
@@ -73,12 +87,11 @@ bedrijf, vijf doorlopen, op de host van 25 augustus.
 | Het model start een regel op eigen initiatief | meting | de host-log met de tellingen staat niet in de repository |
 | Een beurt duurt mediaan 16 seconden | meting | gemeten onder gedeelde belasting; een bovengrens |
 | Toezeggingen vóór de toets | twee gevallen uit augustus | in de meting niet teruggevonden (0 van 37 eerste beurten) |
-| De vertaling van vraag naar wet en formele begrippen (B4 en B5) is de bron van de fouten | sessie van 10 augustus en het werk aan de host in augustus | niet gemeten: de assistent weigerde elke vraag over de arbeidsmarkt |
+| De vertaling van vraag naar wet en formele begrippen (B4 en B5) is de bron van de fouten | het werk aan de host in augustus, de sessie van 10 augustus en de juristvalidatie van 23 juli | niet met doorlopen te toetsen: de assistent weigerde elke vraag over de arbeidsmarkt |
+| Een gesprek geeft geen overzicht, geen vaste uitkomst en geen bruikbare onderbouwing | de notitie over de koerswijziging van 1 september en het gebruikersonderzoek van augustus | alle vier de gevolgen zijn waargenomen; zie grond D |
 | De zwaarte onder de AI-verordening ligt bij B5 | sessie van 10 augustus | lezing van het team; het sessiedocument staat niet in de repository |
 | Eén invoerwaarde scheelt elf procent; dezelfde voorziening staat in een andere wet | juristsessie van 23 juli | notities in `MinBZK/regelrecht` |
 | Een vooringevulde concept-aanvraag past beter dan een gesprek | hypothese | nog niet met ondernemers getoetst |
-
-De zwaarste bewering, over B4 en B5, heeft daarmee de lichtste onderbouwing.
 
 ## Context
 
