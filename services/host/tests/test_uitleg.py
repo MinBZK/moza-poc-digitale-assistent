@@ -149,6 +149,25 @@ def test_graaf_regels_blijft_binnen_de_grenzen():
     assert len(uitleg.graaf_regels(breed)) == uitleg.MAX_REGELS
 
 
+def test_graaf_regels_kapt_geen_tak_af_om_dieper_te_gaan():
+    def tak(naam: str, kinderen: list[dict]) -> dict:
+        return {"soort": "voorwaarde", "naam": naam, "waarde": True, "doorslaggevend": kinderen}
+
+    # Tien takken van drie niveaus: 11, 41 en 131 regels per diepte. Het derde
+    # niveau past niet binnen MAX_REGELS; dan hoort het tweede te blijven staan.
+    graaf = {
+        "soort": "uitkomst",
+        "waarde": True,
+        "doorslaggevend": [
+            tak(f"tak{i}", [tak(f"tak{i}_{j}", [tak(f"tak{i}_{j}_{k}", []) for k in range(3)]) for j in range(3)])
+            for i in range(10)
+        ],
+    }
+    regels = uitleg.graaf_regels(graaf)
+    assert len(regels) == 41
+    assert all(any(f"voorwaarde: tak{i} " in r for r in regels) for i in range(10))
+
+
 @pytest.mark.parametrize(
     "graaf",
     [None, "tekst", {}, {"soort": "uitkomst"}, {"soort": "x", "waarde": 1, "doorslaggevend": "nee"},

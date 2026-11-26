@@ -197,7 +197,7 @@ def graaf_regels(graaf: dict, samenvatting: Sequence[str] = ()) -> list[str]:
     ruimte er voor de graaf overblijft.
     """
     ruimte = MAX_VRAAG_TEKENS - MAX_REGELING_TEKENS - len(bouw_prompt([], "", samenvatting))
-    beste = _regels_tot(graaf, 1)
+    beste = _regels_tot(graaf, 1)[:MAX_REGELS]
     for diepte in range(2, MAX_DIEPTE + 1):
         regels = _regels_tot(graaf, diepte)
         if len(regels) > MAX_REGELS or sum(len(r) + 1 for r in regels) > ruimte:
@@ -210,10 +210,16 @@ def graaf_regels(graaf: dict, samenvatting: Sequence[str] = ()) -> list[str]:
 
 
 def _regels_tot(graaf: dict, max_diepte: int) -> list[str]:
+    """De regels tot en met `max_diepte`, met hoogstens één regel boven MAX_REGELS.
+
+    Die ene regel te veel laat de aanroeper zien dat deze diepte niet past. Op
+    MAX_REGELS zelf stoppen zou een lijst geven waaruit de laatste takken zijn
+    weggevallen, en die is niet te onderscheiden van een lijst die precies past.
+    """
     regels: list[str] = []
 
     def loop(knoop: dict, diepte: int, buur_eenheid: str | None) -> None:
-        if len(regels) >= MAX_REGELS or diepte > max_diepte:
+        if len(regels) > MAX_REGELS or diepte > max_diepte:
             return
         knoop = _vouw(knoop)
         if knoop.get("soort") == "keuze" and knoop.get("operator") == "IF":
